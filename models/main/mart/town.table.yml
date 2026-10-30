@@ -51,11 +51,14 @@ fields:
     title: 効力発生日
   - name: lng
     title: 経度
-    description: "代表点の経度。元データ (ABR 位置参照拡張) のまま。代表点の無い行は NULL"
+    description: "代表点の経度。元データ (ABR 位置参照拡張) のまま。出どころは point_level"
   - name: lat
     title: 緯度
-    description: "代表点の緯度。元データ (ABR 位置参照拡張) のまま。代表点の無い行は NULL"
+    description: "代表点の緯度。元データ (ABR 位置参照拡張) のまま。出どころは point_level"
+  - name: point_level
+    title: 代表点の出どころ
+    description: "town は町字自身の代表点、parent_town は代表点の無い小字などに同じ大字・町の代表点を使ったもの。どちらも無い町字は NULL"
   - name: small_area_code
     title: 小地域コード
-    description: "町字の代表点が入る国勢調査の小地域 (KEY_CODE)。町字と小地域は 1 対 1 ではなく、これは代表点 1 点で決めたもの。代表点の無い町字は NULL"
+    description: "lng / lat の点が入る国勢調査の小地域 (KEY_CODE)。町字と小地域は 1 対 1 ではなく、これは代表点 1 点で決めたもの。代表点の無い町字は NULL"
     semantic: { role: entity, name: small_area }
