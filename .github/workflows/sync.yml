@@ -1,0 +1,21 @@
+name: Sync
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "*.md"
+  schedule:
+    - cron: "0 19 2 * *" # address_br の Sync（0 19 1 * *）の翌日に、その更新を受けて作り直す
+  workflow_dispatch:
+
+concurrency:
+  group: sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    uses: queria-io/dataset-shared/.github/workflows/sync.yml@main
+    with:
+      dataset_name: geocoder
+    secrets: inherit

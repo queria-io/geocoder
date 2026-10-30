@@ -1,2 +1,23 @@
 # dataset-geocoder
-ジオコーダー用の住所・地域コードのデータマート
+
+住所の文字列と座標・地域コードを相互に引くための表を作る、Queria のデータセット。
+
+元にするのは Queria の公開データセット [address_br](https://github.com/queria-io/dataset-address-br)（アドレス・ベース・レジストリ）と e_stat（国勢調査の小地域境界）。取得はせず、それを読んで次の表を作る。
+
+| 表 | 中身 |
+|---|---|
+| `town` | 町字の名前・別名・代表点と、代表点が入る小地域 |
+| `rsdtdsp_blk` | 住居表示の街区（「○番」）の代表点 |
+| `rsdtdsp_rsdt` | 住居表示の住居（「○号」）の代表点 |
+
+どの表も `lg_code` の順に並べ、行グループを 32,768 行にしてある。市区町村で絞って読むと、Parquet のフッターの統計から 1〜2 個の行グループだけを読めばよい。座標は `geometry` ではなく `lng` / `lat` の数値の列で持つ。
+
+## ビルド
+
+```bash
+git submodule update --init
+uv sync
+scripts/build.sh   # queria sync で公開まで行う
+```
+
+address_br の更新（毎月）の翌日に、`.github/workflows/sync.yml` が作り直す。

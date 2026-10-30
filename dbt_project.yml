@@ -1,0 +1,22 @@
+name: "geocoder"
+version: "1.0.0"
+
+profile: "geocoder"
+
+model-paths: ["models"]
+macro-paths: ["macros", "shared/macros"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  geocoder:
+    +database: geocoder
+    main:
+      # ジオコーダーは市区町村 (lg_code) で絞って読む。表を lg_code の順に並べ、行グループを
+      # 小さくして、1 市区町村で読む量を数百 KB に抑える。設定はスキーマに付く
+      # (dbt は __dbt_tmp に書いてから改名するので、テーブルに付けても効かない)
+      +pre-hook: "CALL geocoder.set_option('parquet_row_group_size', 32768, schema => 'main')"
+      mart:
+        +materialized: table
