@@ -14,9 +14,10 @@ c.sql("""CREATE TABLE areas AS
 c.sql(f"""
 COPY (
   WITH picked AS (SELECT * FROM areas USING SAMPLE {n} ROWS (reservoir, 7)),
+  parts AS (SELECT code, geometry, unnest(ST_Dump(geometry)) AS part FROM picked),
   rings AS (
-    SELECT code, geometry, ST_ExteriorRing(unnest(ST_Dump(geometry)).geom) AS ring FROM picked
-    QUALIFY row_number() OVER (PARTITION BY code ORDER BY ST_Length(ring) DESC) = 1
+    SELECT code, geometry, ST_ExteriorRing(part.geom) AS ring FROM parts
+    QUALIFY row_number() OVER (PARTITION BY code ORDER BY ST_Length(ST_ExteriorRing(part.geom)) DESC) = 1
   ),
   edge AS (SELECT code, ST_LineInterpolatePoint(ring, random()) AS e, random() * 3 AS d,
     random() * 2 * pi() AS a FROM rings),
