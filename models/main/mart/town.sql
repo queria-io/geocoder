@@ -3,9 +3,15 @@
 -- 町字ごとの名前・別名・代表点と、代表点が入る国勢調査の小地域。
 -- lg_code で絞って読むので、その順に並べる
 WITH town AS (
-    SELECT * FROM address_br.main.mart_town
-    -- 同じ町字 ID の行が複数ある (address_br では約 1,200 組)。効力発生日の新しい方を残す
-    QUALIFY row_number() OVER (PARTITION BY lg_code, machiaza_id ORDER BY efct_date DESC NULLS LAST) = 1
+    SELECT
+        *,
+        -- 一部だけ住居表示を実施した町字は、同じ町字 ID に住居表示 ('1') と地番 ('0') の
+        -- 2 行がある (約 1,200 組、ほかの列は同じ)。1 行にまとめ、地番の住所もあることを残す
+        count(DISTINCT rsdt_addr_flg) OVER (PARTITION BY lg_code, machiaza_id) > 1 AS rsdt_addr_partial
+    FROM address_br.main.mart_town
+    QUALIFY row_number() OVER (
+        PARTITION BY lg_code, machiaza_id ORDER BY rsdt_addr_flg DESC, efct_date DESC NULLS LAST
+    ) = 1
 ),
 -- 町字 ID の頭 4 桁が大字・町、末尾 3 桁が丁目・小字。代表点の無い小字 (大半がそう) は、
 -- 同じ大字・町 (末尾 000) の代表点を使う
@@ -40,6 +46,7 @@ SELECT
     t.alias_oaza,
     t.alias_koaza,
     t.rsdt_addr_flg,
+    t.rsdt_addr_partial,
     t.post_code,
     t.efct_date,
     ST_X(t.point) AS lng,

@@ -45,6 +45,9 @@ fields:
   - name: rsdt_addr_flg
     title: 住居表示フラグ
     description: "'1' は住居表示の町字で、rsdtdsp_blk・rsdtdsp_rsdt まで引ける"
+  - name: rsdt_addr_partial
+    title: 一部だけ住居表示
+    description: "true は住居表示の町字の中に地番で表す住所も残っているもの。rsdt_addr_flg は '1'"
   - name: post_code
     title: 郵便番号
   - name: efct_date

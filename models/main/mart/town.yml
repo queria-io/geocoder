@@ -34,6 +34,8 @@ models:
         data_type: varchar
       - name: rsdt_addr_flg
         data_type: varchar
+      - name: rsdt_addr_partial
+        data_type: boolean
       - name: post_code
         data_type: varchar
       - name: efct_date
