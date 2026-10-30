@@ -36,7 +36,10 @@ const readTile = async ({ z, x, y }: TilePoint) => {
 const pct = (xs: number[], p: number) =>
   [...xs].sort((a, b) => a - b)[Math.floor((xs.length - 1) * p)];
 const buckets = [
-  ["< 5m", 0, 5],
+  ["< 0.5m", 0, 0.5],
+  ["0.5-1m", 0.5, 1],
+  ["1-2m", 1, 2],
+  ["2-5m", 2, 5],
   ["5-20m", 5, 20],
   ["20-50m", 20, 50],
   ["50-200m", 50, 200],

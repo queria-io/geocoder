@@ -25,6 +25,9 @@ GET /v1/reverse?lat=35.6812&lng=139.7671
 ```bash
 uv run --with 'duckdb>=1.4,<2' python bench/truth.py 2000 > bench/points.csv
 pnpm tsx bench/run.ts bench/points.csv
+# 境目から 3m 以内の点だけで測る
+uv run --with 'duckdb>=1.4,<2' python bench/truth-border.py 3000 > bench/border.csv
+pnpm tsx bench/run.ts bench/border.csv
 ```
 
 ## 開発
