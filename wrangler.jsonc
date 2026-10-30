@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "queria-geocoder",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-12-01",
+  "account_id": "57c6a116efc637fc3f21d0affea15508",
+  // 試作の間は workers.dev で測る。出すときに route を決める
+  "workers_dev": true,
+  "preview_urls": false,
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "queria-assets" }],
+  "vars": { "BOUNDARY_TILES_FILE": "boundaries-20261027.pmtiles" },
+  "observability": { "enabled": true },
+}

@@ -1,0 +1,88 @@
+import { env, exports } from "cloudflare:workers";
+import { beforeAll, describe, expect, it } from "vitest";
+
+import { contains, tilePoint } from "../src/lookup";
+// 東京駅の入るタイルにだけ形を置いた PMTiles (test/make-fixture.py)
+import fixture from "./fixture.pmtiles";
+
+const BASE = "https://geocoder.test/v1/reverse";
+
+/** z13 のタイル (7276, 3225) の中の位置 (0〜1) を経緯度に戻す */
+const at = (fx: number, fy: number) => {
+  const n = 2 ** 13;
+  const lng = ((7276 + fx) / n) * 360 - 180;
+  const lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * (3225 + fy)) / n))) * 180) / Math.PI;
+  return `lat=${lat}&lng=${lng}`;
+};
+
+const reverse = async (query: string) => {
+  const response = await exports.default.fetch(`${BASE}?${query}`);
+  return { status: response.status, body: await response.json() };
+};
+
+beforeAll(async () => {
+  await env.BUCKET.put(`boundaries/${env.BOUNDARY_TILES_FILE}`, fixture);
+});
+
+describe("tilePoint", () => {
+  it("東京駅は z13 の (7276, 3225)", () => {
+    const t = tilePoint(139.7671, 35.6812, 13);
+    expect([t.x, t.y]).toEqual([7276, 3225]);
+  });
+});
+
+describe("contains", () => {
+  const square = [
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+    { x: 10, y: 10 },
+    { x: 0, y: 10 },
+  ];
+  const hole = [
+    { x: 4, y: 4 },
+    { x: 6, y: 4 },
+    { x: 6, y: 6 },
+    { x: 4, y: 6 },
+  ];
+  it("穴の中は外", () => {
+    expect(contains([square, hole], { x: 2, y: 2 })).toBe(true);
+    expect(contains([square, hole], { x: 5, y: 5 })).toBe(false);
+    expect(contains([square], { x: 11, y: 5 })).toBe(false);
+  });
+});
+
+describe("/v1/reverse", () => {
+  it("町丁目に入る点は 3 つのコードを返す", async () => {
+    const { status, body } = await reverse(at(0.25, 0.75));
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ prefecture: "13", city: "13101", small_area: "131010010" });
+  });
+
+  it("町丁目の穴の中は市区町村まで", async () => {
+    const { body } = await reverse(at(0.18, 0.18));
+    expect(body).toMatchObject({ prefecture: "13", city: "13101", small_area: null });
+  });
+
+  it("町丁目の外 (タイルの右半分) も市区町村まで", async () => {
+    const { body } = await reverse(at(0.75, 0.5));
+    expect(body).toMatchObject({ city: "13101", small_area: null });
+  });
+
+  it("形の無いところは全部 null", async () => {
+    const { body } = await reverse("lat=34.7&lng=135.5");
+    expect(body).toMatchObject({ prefecture: null, city: null, small_area: null });
+  });
+
+  it.each(["", "lat=35", "lat=abc&lng=139", "lat=95&lng=139"])(
+    "座標がおかしい %s は 400",
+    async (q) => {
+      const { status } = await reverse(q);
+      expect(status).toBe(400);
+    },
+  );
+
+  it("ほかのパスは 404", async () => {
+    const response = await exports.default.fetch("https://geocoder.test/v1/forward");
+    expect(response.status).toBe(404);
+  });
+});
