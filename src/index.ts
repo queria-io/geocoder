@@ -11,7 +11,7 @@ import {
   type Source,
 } from "pmtiles";
 
-import { resolveAreas, type TilePoint } from "./lookup";
+import { type Level, resolveAreas, type TilePoint } from "./lookup";
 
 export interface Env {
   BUCKET: R2Bucket;
@@ -57,6 +57,14 @@ const archive = (env: Env): PMTiles => {
   return found;
 };
 
+// 境界タイルの元データ (scripts/build-boundary-tiles.sh)。町丁目が当たったときは上の階層のコードも
+// 町丁目のコードから取るので、出典は当たった階層の 1 つだけ
+const ATTRIBUTION: Record<Level, string> = {
+  small_area: "「国勢調査 境界データ（小地域）」（総務省統計局、e-Stat）を加工して作成",
+  city: "「国土数値情報（行政区域データ）」（国土交通省）を加工して作成",
+  prefecture: "「国土数値情報（行政区域データ）」（国土交通省）を加工して作成",
+};
+
 const json = (status: number, body: unknown, cacheControl: string): Response =>
   new Response(JSON.stringify(body), {
     status,
@@ -73,8 +81,22 @@ const parseCoord = (value: string | null, min: number, max: number): number | nu
 const reverse = async (lat: number, lng: number, env: Env): Promise<Response> => {
   const readTile = async ({ z, x, y }: TilePoint) =>
     (await archive(env).getZxy(z, x, y))?.data ?? null;
-  const areas = await resolveAreas(lng, lat, readTile);
-  return json(200, { lat, lng, ...areas }, "public, max-age=86400");
+  const { level, ...codes } = await resolveAreas(lng, lat, readTile);
+  return json(
+    200,
+    {
+      lat,
+      lng,
+      country: "JP",
+      ...codes,
+      match: { level, method: "polygon" },
+      source: {
+        boundaries: env.BOUNDARY_TILES_FILE,
+        attribution: level === null ? [] : [ATTRIBUTION[level]],
+      },
+    },
+    "public, max-age=86400",
+  );
 };
 
 export default {

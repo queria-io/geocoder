@@ -61,22 +61,40 @@ describe("/v1/reverse", () => {
   it("町丁目に入る点は 3 つのコードを返す", async () => {
     const { status, body } = await reverse(at(0.25, 0.75));
     expect(status).toBe(200);
-    expect(body).toMatchObject({ prefecture: "13", city: "13101", small_area: "131010010" });
+    expect(body).toMatchObject({
+      country: "JP",
+      prefecture_code: "13",
+      city_code: "13101",
+      estat_small_area_code: "131010010",
+      match: { level: "small_area", method: "polygon" },
+      source: { boundaries: env.BOUNDARY_TILES_FILE },
+    });
   });
 
   it("町丁目の穴の中は市区町村まで", async () => {
     const { body } = await reverse(at(0.18, 0.18));
-    expect(body).toMatchObject({ prefecture: "13", city: "13101", small_area: null });
+    expect(body).toMatchObject({
+      prefecture_code: "13",
+      city_code: "13101",
+      estat_small_area_code: null,
+      match: { level: "city" },
+    });
   });
 
   it("町丁目の外 (タイルの右半分) も市区町村まで", async () => {
     const { body } = await reverse(at(0.75, 0.5));
-    expect(body).toMatchObject({ city: "13101", small_area: null });
+    expect(body).toMatchObject({ city_code: "13101", estat_small_area_code: null });
   });
 
   it("形の無いところは全部 null", async () => {
     const { body } = await reverse("lat=34.7&lng=135.5");
-    expect(body).toMatchObject({ prefecture: null, city: null, small_area: null });
+    expect(body).toMatchObject({
+      prefecture_code: null,
+      city_code: null,
+      estat_small_area_code: null,
+      match: { level: null },
+      source: { attribution: [] },
+    });
   });
 
   it.each(["", "lat=35", "lat=abc&lng=139", "lat=95&lng=139"])(

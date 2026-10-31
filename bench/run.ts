@@ -60,15 +60,17 @@ for (const row of rows) {
 
 const report = buckets.map(([label, lo, hi]) => {
   const xs = results.filter((r) => r.border >= lo && r.border < hi);
-  const ok = xs.filter((r) => r.got.small_area === r.code).length;
-  const city = xs.filter((r) => r.got.city === r.code.slice(0, 5)).length;
+  const ok = xs.filter((r) => r.got.estat_small_area_code === r.code).length;
+  const city = xs.filter((r) => r.got.city_code === r.code.slice(0, 5)).length;
   return { label, n: xs.length, small_area: `${ok}/${xs.length}`, city: `${city}/${xs.length}` };
 });
-const all = results.filter((r) => r.got.small_area === r.code).length;
+const all = results.filter((r) => r.got.estat_small_area_code === r.code).length;
 console.log(
   `点 ${results.length}、町丁目一致 ${all} (${((all / results.length) * 100).toFixed(2)}%)`,
 );
-console.log(`町丁目に入らず null: ${results.filter((r) => r.got.small_area === null).length}`);
+console.log(
+  `町丁目に入らず null: ${results.filter((r) => r.got.estat_small_area_code === null).length}`,
+);
 console.table(report);
 console.log(
   `タイル取得 ${fetchMs.length} 回: 中央 ${pct(fetchMs, 0.5).toFixed(0)}ms / 95% ${pct(fetchMs, 0.95).toFixed(0)}ms、` +
@@ -77,11 +79,11 @@ console.log(
 console.log(
   `判定 (タイル手元): 中央 ${pct(cpuMs, 0.5).toFixed(2)}ms / 95% ${pct(cpuMs, 0.95).toFixed(2)}ms / 最大 ${Math.max(...cpuMs).toFixed(2)}ms`,
 );
-const misses = results.filter((r) => r.got.small_area !== r.code).slice(0, 15);
+const misses = results.filter((r) => r.got.estat_small_area_code !== r.code).slice(0, 15);
 console.table(
   misses.map((r) => ({
     code: r.code,
-    got: r.got.small_area,
+    got: r.got.estat_small_area_code,
     lng: r.lng,
     lat: r.lat,
     border_m: r.border,

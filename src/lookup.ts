@@ -52,7 +52,13 @@ export const codeAt = (tile: ArrayBuffer, layer: Level, fx: number, fy: number):
   return null;
 };
 
-export type Areas = { prefecture: string | null; city: string | null; small_area: string | null };
+export type Areas = {
+  prefecture_code: string | null;
+  city_code: string | null;
+  estat_small_area_code: string | null;
+  /** 点が実際に入った多角形の階層。上の階層のコードはそのコードの頭から取る。どこにも入らなければ null */
+  level: Level | null;
+};
 
 /**
  * 町丁目のコードは頭 5 桁が市区町村、頭 2 桁が都道府県なので、町丁目が当たればそれだけで
@@ -69,8 +75,28 @@ export const resolveAreas = async (
     return tile ? codeAt(tile, level, t.fx, t.fy) : null;
   };
   const small = await at("small_area");
-  if (small) return { prefecture: small.slice(0, 2), city: small.slice(0, 5), small_area: small };
+  if (small) {
+    return {
+      prefecture_code: small.slice(0, 2),
+      city_code: small.slice(0, 5),
+      estat_small_area_code: small,
+      level: "small_area",
+    };
+  }
   const city = await at("city");
-  if (city) return { prefecture: city.slice(0, 2), city, small_area: null };
-  return { prefecture: await at("prefecture"), city: null, small_area: null };
+  if (city) {
+    return {
+      prefecture_code: city.slice(0, 2),
+      city_code: city,
+      estat_small_area_code: null,
+      level: "city",
+    };
+  }
+  const pref = await at("prefecture");
+  return {
+    prefecture_code: pref,
+    city_code: null,
+    estat_small_area_code: null,
+    level: pref ? "prefecture" : null,
+  };
 };
