@@ -1,5 +1,5 @@
 {
-  "name": "@queria/geocoder",
+  "name": "geocoder",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,9 @@
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check": "oxlint && oxfmt --check .",
+    "fix": "oxlint --fix && oxfmt ."
   },
   "dependencies": {
     "@mapbox/vector-tile": "^3.0.0",
@@ -17,8 +19,11 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.23.0",
     "@cloudflare/workers-types": "^5.20261014.1",
+    "oxfmt": "^0.73.0",
+    "oxlint": "^1.76.0",
     "typescript": "^5.7.4",
     "vitest": "^4.1.0",
     "wrangler": "^4.151.0"
-  }
+  },
+  "packageManager": "pnpm@10.17.1"
 }

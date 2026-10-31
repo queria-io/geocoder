@@ -1,4 +1,4 @@
-// 座標 → 地域コードの判定。境界タイル (scripts/build-boundary-tiles.sh) の 1 枚を読み、
+// 座標 → 地域コードの判定。境界タイル (queria-web の scripts/build-boundary-tiles.sh) の 1 枚を読み、
 // 点を含む多角形の code を返す。R2 や Worker に依らない純関数だけを置く
 import { VectorTile } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";

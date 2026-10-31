@@ -21,7 +21,7 @@ export interface Env {
 
 const CORS = { "Access-Control-Allow-Origin": "*" };
 
-/** R2 のオブジェクトを PMTiles の Source として読む (workers/basemap と同じ) */
+/** R2 のオブジェクトを PMTiles の Source として読む (queria-web の workers/basemap と同じ) */
 class R2Source implements Source {
   constructor(
     private readonly bucket: R2Bucket,
@@ -57,7 +57,7 @@ const archive = (env: Env): PMTiles => {
   return found;
 };
 
-// 境界タイルの元データ (scripts/build-boundary-tiles.sh)。町丁目が当たったときは上の階層のコードも
+// 境界タイルの元データ (queria-web の scripts/build-boundary-tiles.sh)。町丁目が当たったときは上の階層のコードも
 // 町丁目のコードから取るので、出典は当たった階層の 1 つだけ
 const ATTRIBUTION: Record<Level, string> = {
   small_area: "「国勢調査 境界データ（小地域）」（総務省統計局、e-Stat）を加工して作成",

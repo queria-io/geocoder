@@ -19,5 +19,5 @@
 
 ```bash
 upstream/sync.sh
-pnpm --filter @queria/geocoder test
+pnpm test
 ```
