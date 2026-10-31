@@ -1,0 +1,67 @@
+schema: main
+name: town
+title: 町字
+description: |
+  全国の町字の名前・別名・代表点と、代表点が入る国勢調査の小地域。住所の文字列を町字に当てるのに使う。
+  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
+  小地域は「国勢調査 町丁・字等別境界データ」（総務省統計局）（https://www.e-stat.go.jp/gis）を使用。
+keywords:
+  - 住所
+  - 町字
+  - ジオコーディング
+  - 小地域
+published: true
+sources:
+  - path: https://dataset.address-br.digital.go.jp/
+  - path: https://www.e-stat.go.jp/gis
+fields:
+  - name: lg_code
+    title: 全国地方公共団体コード
+    description: "6桁（検査数字あり）"
+    semantic: { role: entity, name: city }
+  - name: machiaza_id
+    title: 町字ID
+  - name: machiaza_type
+    title: 町字区分コード
+  - name: pref_name
+    title: 都道府県名
+  - name: county_name
+    title: 郡名
+  - name: city_name
+    title: 市区町村名
+  - name: ward_name
+    title: 政令市区名
+  - name: oaza_cho
+    title: 大字・町名
+  - name: chome
+    title: 丁目名
+    description: "「１丁目」のような全角数字"
+  - name: koaza
+    title: 小字名
+  - name: alias_oaza
+    title: 大字・町名の別名
+  - name: alias_koaza
+    title: 小字名の別名
+  - name: rsdt_addr_flg
+    title: 住居表示フラグ
+    description: "'1' は住居表示の町字で、rsdtdsp_blk・rsdtdsp_rsdt まで引ける"
+  - name: rsdt_addr_partial
+    title: 一部だけ住居表示
+    description: "true は住居表示の町字の中に地番で表す住所も残っているもの。rsdt_addr_flg は '1'"
+  - name: post_code
+    title: 郵便番号
+  - name: efct_date
+    title: 効力発生日
+  - name: lng
+    title: 経度
+    description: "代表点の経度。元データ (ABR 位置参照拡張) のまま。出どころは point_level"
+  - name: lat
+    title: 緯度
+    description: "代表点の緯度。元データ (ABR 位置参照拡張) のまま。出どころは point_level"
+  - name: point_level
+    title: 代表点の出どころ
+    description: "town は町字自身の代表点、parent_town は代表点の無い小字などに同じ大字・町の代表点を使ったもの。どちらも無い町字は NULL"
+  - name: small_area_code
+    title: 小地域コード
+    description: "lng / lat の点が入る国勢調査の小地域 (KEY_CODE)。町字と小地域は 1 対 1 ではなく、これは代表点 1 点で決めたもの。代表点の無い町字は NULL"
+    semantic: { role: entity, name: small_area }
