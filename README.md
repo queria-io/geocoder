@@ -5,6 +5,9 @@
 - 直下: ジオコーダーが読む表を作る Queria のデータセット `geocoder`（このページの以下）
 - [`api/`](api/README.md): その表と境界タイルを読む API（Cloudflare Workers）
 
+API は geocoder.queria.io で出す。試せる画面（LP とデモ）は queria-web が queria.io/geocoder に置き、この API をふつうの利用者と同じ形で呼ぶ。画面のコードはこのリポジトリに置かない。
+queria-web との境目は、公開の API 仕様（OpenAPI）と、API キー・プランの確認の 2 つだけにする。
+
 ## データセット
 
 元にするのは Queria の公開データセット [address_br](https://github.com/queria-io/dataset-address-br)（アドレス・ベース・レジストリ）と e_stat（国勢調査の小地域境界）。取得はせず、それを読んで次の表を作る。

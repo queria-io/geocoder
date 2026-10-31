@@ -10,6 +10,12 @@ Queria のジオコーダー。住所と座標・地域コードを相互に引�
 
 表の列・並び・行グループは `api/` の読み方に合わせて決めている。片方だけ変えない。
 
+## queria-web との境目
+
+- API は geocoder.queria.io。LP とデモの画面は queria-web (queria.io/geocoder) にあり、この API を外から呼ぶ。画面のコードをここに書かない
+- つながりは公開の API 仕様 (OpenAPI) と、API キー・プランの確認の 2 本だけ。queria-web の D1 の表や画面の部品をこれ以上読まない
+- API の形を変えるときは OpenAPI の差分として PR に出す。決済・アカウント・利用規約は Queria の 1 組を使う
+
 ## コマンド
 
 ```bash
