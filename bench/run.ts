@@ -46,13 +46,11 @@ const buckets = [
   [">= 200m", 200, Infinity],
 ] as const;
 
-const results = [];
-for (const row of rows) await readTileFirst(row);
-async function readTileFirst(row: (typeof rows)[number]) {
-  await resolveAreas(row.lng, row.lat, readTile); // タイルを先に取っておく
-}
+// タイルを先に取っておく
+for (const row of rows) await resolveAreas(row.lng, row.lat, readTile);
 // 2 周目はタイルが手元にあるので、判定 (デコード + 多角形の内外) だけの時間になる
 const cpuMs: number[] = [];
+const results = [];
 for (const row of rows) {
   const t0 = performance.now();
   const got = await resolveAreas(row.lng, row.lat, readTile);

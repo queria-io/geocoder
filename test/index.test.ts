@@ -29,6 +29,12 @@ describe("tilePoint", () => {
     const t = tilePoint(139.7671, 35.6812, 13);
     expect([t.x, t.y]).toEqual([7276, 3225]);
   });
+
+  it("メルカトルの範囲外の緯度は端のタイルに寄せる", () => {
+    // 寄せないと y が負になり、zxyToTileId が日本のタイルの番号を返す
+    expect(tilePoint(127.65, 89.87, 13).y).toBe(0);
+    expect(tilePoint(127.65, -89.87, 13).y).toBe(2 ** 13 - 1);
+  });
 });
 
 describe("contains", () => {

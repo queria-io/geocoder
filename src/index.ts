@@ -49,8 +49,11 @@ const archives = new Map<string, PMTiles>();
 
 const archive = (env: Env): PMTiles => {
   const key = `boundaries/${env.BOUNDARY_TILES_FILE}`;
-  const found = archives.get(key) ?? new PMTiles(new R2Source(env.BUCKET, key), cache);
-  archives.set(key, found);
+  let found = archives.get(key);
+  if (!found) {
+    found = new PMTiles(new R2Source(env.BUCKET, key), cache);
+    archives.set(key, found);
+  }
   return found;
 };
 
@@ -67,12 +70,7 @@ const parseCoord = (value: string | null, min: number, max: number): number | nu
   return Number.isFinite(n) && n >= min && n <= max ? Math.round(n * 1e6) / 1e6 : null;
 };
 
-const reverse = async (url: URL, env: Env): Promise<Response> => {
-  const lat = parseCoord(url.searchParams.get("lat"), -90, 90);
-  const lng = parseCoord(url.searchParams.get("lng"), -180, 180);
-  if (lat === null || lng === null) {
-    return json(400, { error: "lat と lng を数値で渡してください" }, "no-store");
-  }
+const reverse = async (lat: number, lng: number, env: Env): Promise<Response> => {
   const readTile = async ({ z, x, y }: TilePoint) =>
     (await archive(env).getZxy(z, x, y))?.data ?? null;
   const areas = await resolveAreas(lng, lat, readTile);
@@ -90,11 +88,23 @@ export default {
     const url = new URL(request.url);
     if (url.pathname !== "/v1/reverse") return json(404, { error: "not found" }, "no-store");
 
-    const cached = await caches.default.match(request);
+    const lat = parseCoord(url.searchParams.get("lat"), -90, 90);
+    const lng = parseCoord(url.searchParams.get("lng"), -180, 180);
+    if (lat === null || lng === null) {
+      return json(400, { error: "lat と lng を数値で渡してください" }, "no-store");
+    }
+    // 鍵は丸めた座標と境界タイルのファイル名から作る。元の URL のままだと書き方の違う同じ座標や
+    // 余計なクエリで項目が割れ、タイルを向け替えても古い答えが 1 日残る
+    const cacheUrl = new URL(url.origin + url.pathname);
+    cacheUrl.searchParams.set("lat", String(lat));
+    cacheUrl.searchParams.set("lng", String(lng));
+    cacheUrl.searchParams.set("tiles", env.BOUNDARY_TILES_FILE);
+    const cacheKey = new Request(cacheUrl, { method: "GET" });
+    const cached = await caches.default.match(cacheKey);
     if (cached) return cached;
     try {
-      const response = await reverse(url, env);
-      if (response.status === 200) ctx.waitUntil(caches.default.put(request, response.clone()));
+      const response = await reverse(lat, lng, env);
+      ctx.waitUntil(caches.default.put(cacheKey, response.clone()));
       return response;
     } catch (e) {
       console.error("geocoder: reverse", e);

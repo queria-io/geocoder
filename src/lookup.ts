@@ -16,8 +16,11 @@ export const tilePoint = (lng: number, lat: number, z: number): TilePoint => {
   const rad = (lat * Math.PI) / 180;
   const gx = ((lng + 180) / 360) * n;
   const gy = ((1 - Math.asinh(Math.tan(rad)) / Math.PI) / 2) * n;
-  const x = Math.min(Math.floor(gx), n - 1);
-  const y = Math.min(Math.floor(gy), n - 1);
+  // メルカトルの範囲 (緯度 ±85.05°) の外は gy が 0〜n をはみ出す。y を負のまま渡すと
+  // zxyToTileId は弾かずに別のタイルの番号を返す (北極近くの点が沖縄のタイルに化ける)。
+  // 端のタイルに寄せれば fy が 0〜1 を大きく外れ、どの多角形にも入らず null になる
+  const x = Math.min(Math.max(Math.floor(gx), 0), n - 1);
+  const y = Math.min(Math.max(Math.floor(gy), 0), n - 1);
   return { z, x, y, fx: gx - x, fy: gy - y };
 };
 
