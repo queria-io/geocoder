@@ -11,15 +11,18 @@ import {
   type Source,
 } from "pmtiles";
 
+import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
+import { cors } from "hono/cors";
+
 import { type Level, resolveAreas, type TilePoint } from "./lookup";
+import { tryCatchAsync } from "./result";
 
 export interface Env {
   BUCKET: R2Bucket;
   /** R2 の boundaries/ に置いた境界タイルのファイル名 (queria-web の src/lib/gis/boundary-tiles.ts と同じ) */
   BOUNDARY_TILES_FILE: string;
 }
-
-const CORS = { "Access-Control-Allow-Origin": "*" };
 
 /** R2 のオブジェクトを PMTiles の Source として読む (queria-web の workers/basemap と同じ) */
 class R2Source implements Source {
@@ -65,72 +68,130 @@ const ATTRIBUTION: Record<Level, string> = {
   prefecture: "「国土数値情報（行政区域データ）」（国土交通省）を加工して作成",
 };
 
-const json = (status: number, body: unknown, cacheControl: string): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", "Cache-Control": cacheControl, ...CORS },
-  });
+const json = (
+  c: Context,
+  status: 200 | 400 | 404 | 405 | 502,
+  body: unknown,
+  cacheControl: string,
+) => c.json(body, status, { "Cache-Control": cacheControl });
 
-/** 小数 6 桁 (約 10cm) より細かい差は答えを変えないので、キャッシュの鍵をそろえる */
-const parseCoord = (value: string | null, min: number, max: number): number | null => {
-  if (value === null || value.trim() === "") return null;
-  const n = Number(value);
-  return Number.isFinite(n) && n >= min && n <= max ? Math.round(n * 1e6) / 1e6 : null;
-};
+/**
+ * 緯度・経度の文字列。空や数値でないものは弾き、小数 6 桁 (約 10cm) に丸める。
+ * それより細かい差は答えを変えないので、キャッシュの鍵がそろう
+ */
+const coord = (name: string, min: number, max: number, example: string) =>
+  z
+    .string()
+    .trim()
+    .min(1)
+    .transform(Number)
+    .pipe(z.number().min(min).max(max))
+    .transform((n) => Math.round(n * 1e6) / 1e6)
+    .openapi({ param: { name, in: "query" }, example });
 
-const reverse = async (lat: number, lng: number, env: Env): Promise<Response> => {
+const Level = z.enum(["prefecture", "city", "small_area"]).nullable();
+
+const ReverseResult = z
+  .object({
+    lat: z.number(),
+    lng: z.number(),
+    country: z.literal("JP"),
+    prefecture_code: z.string().nullable().openapi({ description: "都道府県コード (2 桁)" }),
+    city_code: z.string().nullable().openapi({ description: "全国地方公共団体コードの頭 5 桁" }),
+    estat_small_area_code: z
+      .string()
+      .nullable()
+      .openapi({ description: "国勢調査の小地域コード。ABR の町字ではない" }),
+    match: z.object({
+      level: Level.openapi({
+        description: "点が実際に入った多角形の階層。どこにも入らなければ null",
+      }),
+      method: z.literal("polygon"),
+    }),
+    source: z.object({
+      boundaries: z.string().openapi({ description: "判定に使った境界タイルのファイル名" }),
+      attribution: z.array(z.string()),
+    }),
+  })
+  .openapi("ReverseResult");
+
+const ErrorBody = z.object({ error: z.string() }).openapi("Error");
+
+const reverseRoute = createRoute({
+  method: "get",
+  path: "/v1/reverse",
+  summary: "座標から都道府県・市区町村・小地域のコードを返す",
+  request: {
+    query: z.object({
+      lat: coord("lat", -90, 90, "35.6812"),
+      lng: coord("lng", -180, 180, "139.7671"),
+    }),
+  },
+  responses: {
+    200: { content: { "application/json": { schema: ReverseResult } }, description: "判定の結果" },
+    400: { content: { "application/json": { schema: ErrorBody } }, description: "座標がおかしい" },
+    502: {
+      content: { "application/json": { schema: ErrorBody } },
+      description: "境界タイルを読めない",
+    },
+  },
+});
+
+const reverse = async (lat: number, lng: number, env: Env) => {
   const readTile = async ({ z, x, y }: TilePoint) =>
     (await archive(env).getZxy(z, x, y))?.data ?? null;
   const { level, ...codes } = await resolveAreas(lng, lat, readTile);
-  return json(
-    200,
-    {
-      lat,
-      lng,
-      country: "JP",
-      ...codes,
-      match: { level, method: "polygon" },
-      source: {
-        boundaries: env.BOUNDARY_TILES_FILE,
-        attribution: level === null ? [] : [ATTRIBUTION[level]],
-      },
+  return {
+    lat,
+    lng,
+    country: "JP" as const,
+    ...codes,
+    match: { level, method: "polygon" as const },
+    source: {
+      boundaries: env.BOUNDARY_TILES_FILE,
+      attribution: level === null ? [] : [ATTRIBUTION[level]],
     },
-    "public, max-age=86400",
-  );
+  };
 };
 
-export default {
-  async fetch(request, env, ctx): Promise<Response> {
-    if (request.method !== "GET") {
-      return new Response("Method Not Allowed", {
-        status: 405,
-        headers: { Allow: "GET", ...CORS },
-      });
-    }
-    const url = new URL(request.url);
-    if (url.pathname !== "/v1/reverse") return json(404, { error: "not found" }, "no-store");
+const app = new OpenAPIHono<{ Bindings: Env }>({
+  defaultHook: (result, c) =>
+    result.success
+      ? undefined
+      : json(c, 400, { error: "lat と lng を数値で渡してください" }, "no-store"),
+});
 
-    const lat = parseCoord(url.searchParams.get("lat"), -90, 90);
-    const lng = parseCoord(url.searchParams.get("lng"), -180, 180);
-    if (lat === null || lng === null) {
-      return json(400, { error: "lat と lng を数値で渡してください" }, "no-store");
-    }
-    // 鍵は丸めた座標と境界タイルのファイル名から作る。元の URL のままだと書き方の違う同じ座標や
-    // 余計なクエリで項目が割れ、タイルを向け替えても古い答えが 1 日残る
-    const cacheUrl = new URL(url.origin + url.pathname);
-    cacheUrl.searchParams.set("lat", String(lat));
-    cacheUrl.searchParams.set("lng", String(lng));
-    cacheUrl.searchParams.set("tiles", env.BOUNDARY_TILES_FILE);
-    const cacheKey = new Request(cacheUrl, { method: "GET" });
-    const cached = await caches.default.match(cacheKey);
-    if (cached) return cached;
-    try {
-      const response = await reverse(lat, lng, env);
-      ctx.waitUntil(caches.default.put(cacheKey, response.clone()));
-      return response;
-    } catch (e) {
-      console.error("geocoder: reverse", e);
-      return json(502, { error: "境界タイルを読めませんでした" }, "no-store");
-    }
-  },
-} satisfies ExportedHandler<Env>;
+app.use("*", cors({ origin: "*", allowMethods: ["GET"] }));
+
+app.openapi(reverseRoute, async (c) => {
+  const { lat, lng } = c.req.valid("query");
+  // 鍵は丸めた座標と境界タイルのファイル名から作る。元の URL のままだと書き方の違う同じ座標や
+  // 余計なクエリで項目が割れ、タイルを向け替えても古い答えが 1 日残る
+  const url = new URL(c.req.url);
+  const cacheUrl = new URL(url.origin + url.pathname);
+  cacheUrl.searchParams.set("lat", String(lat));
+  cacheUrl.searchParams.set("lng", String(lng));
+  cacheUrl.searchParams.set("tiles", c.env.BOUNDARY_TILES_FILE);
+  const cacheKey = new Request(cacheUrl, { method: "GET" });
+  const cached = await caches.default.match(cacheKey);
+  // 置いてあるのは下で 200 として返したものそのまま
+  if (cached) return cached as never;
+  const result = await tryCatchAsync(() => reverse(lat, lng, c.env));
+  if (!result.ok) {
+    console.error("geocoder: reverse", result.error);
+    return c.json({ error: "境界タイルを読めませんでした" }, 502, { "Cache-Control": "no-store" });
+  }
+  const response = c.json(result.value, 200, { "Cache-Control": "public, max-age=86400" });
+  c.executionCtx.waitUntil(caches.default.put(cacheKey, response.clone()));
+  return response;
+});
+
+app.doc31("/openapi.json", {
+  openapi: "3.1.0",
+  info: { title: "Queria Geocoder", version: "0.1.0" },
+});
+
+app.all("/v1/reverse", (c) => c.body("Method Not Allowed", 405, { Allow: "GET" }));
+app.notFound((c) => json(c, 404, { error: "not found" }, "no-store"));
+
+export default app satisfies ExportedHandler<Env>;

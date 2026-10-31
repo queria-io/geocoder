@@ -9,6 +9,8 @@ JS で探す。町丁目が当たれば、そのコードの頭 5 桁が市区�
 
 ## URL
 
+入口は Hono と @hono/zod-openapi。仕様書は `GET /openapi.json`（OpenAPI 3.1）で、型と入力の検査も同じ定義から作る。判定のロジック (`src/lookup.ts`) は Hono に依らない純関数のまま。
+
 ```
 GET /v1/reverse?lat=35.6812&lng=139.7671
 ```

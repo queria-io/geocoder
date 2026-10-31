@@ -109,4 +109,23 @@ describe("/v1/reverse", () => {
     const response = await exports.default.fetch("https://geocoder.test/v1/forward");
     expect(response.status).toBe(404);
   });
+
+  it("GET 以外は 405", async () => {
+    const response = await exports.default.fetch(BASE, { method: "POST" });
+    expect(response.status).toBe(405);
+    expect(response.headers.get("Allow")).toBe("GET");
+  });
+
+  it("どこからでも呼べる", async () => {
+    const response = await exports.default.fetch(`${BASE}?${at(0.25, 0.75)}`);
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+  });
+});
+
+describe("/openapi.json", () => {
+  it("逆引きの仕様を返す", async () => {
+    const response = await exports.default.fetch("https://geocoder.test/openapi.json");
+    const doc = (await response.json()) as { paths: Record<string, unknown> };
+    expect(Object.keys(doc.paths)).toEqual(["/v1/reverse"]);
+  });
 });
