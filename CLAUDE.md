@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Queria のジオコーダー API。Cloudflare Workers で動き、DuckDB もデータベースも使わない。
-逆引きは R2 の境界 PMTiles、正引きは dataset-geocoder が作る Parquet を Range で読む。
+逆引き (`/v1/reverse`) は R2 の境界 PMTiles を Range で読む。正引きはまだ無く、dataset-geocoder が作る Parquet を Range で読む予定。
 
 ## コマンド
 

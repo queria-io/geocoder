@@ -25,7 +25,9 @@ git -C "$work" checkout -q "$ref"
 previous="$(cat "$here/UPSTREAM")"
 current="$(git -C "$work" rev-parse HEAD)"
 
-(cd "$here/.." && go run ./upstream/extract/main.go "$work") > "$here/cases.json"
+# 抜き出しが途中で落ちても前回の cases.json を空にしないよう、いったん別のファイルに書く
+(cd "$here/.." && go run ./upstream/extract/main.go "$work") > "$here/cases.json.tmp"
+mv "$here/cases.json.tmp" "$here/cases.json"
 # リポジトリの整形 (oxfmt) に合わせておき、取り込みの差分を試験の中身だけにする
 (cd "$here/.." && pnpm exec oxfmt upstream/cases.json > /dev/null)
 cp "$work/LICENSE" "$here/LICENSE"

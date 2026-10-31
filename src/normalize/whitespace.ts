@@ -6,12 +6,18 @@ export const isSpace = (ch: string): boolean =>
 /** 空白の並びを半角スペース 1 つにし、前後の空白を落とす */
 export const NormalizeSpaces = (s: string): [string, boolean] => {
   if (s === "") return [s, false];
-  const result = Array.from(s)
-    .reduce<string[]>((words, ch) => {
-      if (isSpace(ch)) return words.at(-1) === "" ? words : [...words, ""];
-      return words.length === 0 ? [ch] : [...words.slice(0, -1), words.at(-1) + ch];
-    }, [])
-    .filter((w) => w !== "")
-    .join(" ");
+  // 1 文字ごとに配列を作り直すと、空白の多い長い入力で 2 乗の時間がかかる (長さの検査はこのあと)
+  const words: string[] = [];
+  let word = "";
+  for (const ch of s) {
+    if (!isSpace(ch)) {
+      word += ch;
+    } else if (word !== "") {
+      words.push(word);
+      word = "";
+    }
+  }
+  if (word !== "") words.push(word);
+  const result = words.join(" ");
   return [result, result !== s];
 };

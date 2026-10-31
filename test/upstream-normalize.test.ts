@@ -8,7 +8,7 @@ import { NormalizeDashes } from "../src/normalize/dash";
 import { RemoveDefaultIgnorable } from "../src/normalize/default_ignorable";
 import { BasicNormalizeInput } from "../src/normalize/input";
 import { NFKCNormalize } from "../src/normalize/nfkc";
-import { NormalizeAddressText } from "../src/normalize/normalize";
+import { NormalizeAddressText, NormalizeBasicNormalized } from "../src/normalize/normalize";
 import { BasicNormalize } from "../src/normalize/pipeline";
 import { addSpacesAroundPunctuation } from "../src/normalize/punctuation";
 import { removeQuotes } from "../src/normalize/quote";
@@ -51,7 +51,13 @@ const check = (func: string, call: string, c: Case) => {
     const want = c.wantErr as { $expr: string } | undefined;
     if (want) expect(errorOf(() => BasicNormalizeInput(input))).toBe(want.$expr);
     else expect(BasicNormalizeInput(input)).toBe(c.want);
-  } else if (call === "NormalizeAddressText" || func === "TestNormalizeBasicNormalized") {
+  } else if (func === "TestNormalizeBasicNormalized") {
+    // 上流は BasicNormalize の結果を NormalizeBasicNormalized に渡す。空・長さの検査は通さない
+    expect(NormalizeBasicNormalized(BasicNormalize(input))).toEqual([
+      c.expectedAddr,
+      c.expectedType,
+    ]);
+  } else if (call === "NormalizeAddressText") {
     expect(NormalizeAddressText(input)).toEqual([c.expectedAddr, c.expectedType]);
   } else if (call === "BasicNormalize") {
     expect(BasicNormalize(input)).toBe(c.want);

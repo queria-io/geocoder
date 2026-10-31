@@ -15,7 +15,7 @@ import { type Level, resolveAreas, type TilePoint } from "./lookup";
 
 export interface Env {
   BUCKET: R2Bucket;
-  /** R2 の boundaries/ に置いた境界タイルのファイル名 (src/lib/gis/boundary-tiles.ts と同じ) */
+  /** R2 の boundaries/ に置いた境界タイルのファイル名 (queria-web の src/lib/gis/boundary-tiles.ts と同じ) */
   BOUNDARY_TILES_FILE: string;
 }
 
