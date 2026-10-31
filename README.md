@@ -1,6 +1,11 @@
-# dataset-geocoder
+# geocoder
 
-住所の文字列と座標・地域コードを相互に引くための表を作る、Queria のデータセット。
+住所の文字列と座標・地域コードを相互に引くジオコーダー。
+
+- 直下: ジオコーダーが読む表を作る Queria のデータセット `geocoder`（このページの以下）
+- [`api/`](api/README.md): その表と境界タイルを読む API（Cloudflare Workers）
+
+## データセット
 
 元にするのは Queria の公開データセット [address_br](https://github.com/queria-io/dataset-address-br)（アドレス・ベース・レジストリ）と e_stat（国勢調査の小地域境界）。取得はせず、それを読んで次の表を作る。
 

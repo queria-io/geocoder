@@ -1,24 +1,35 @@
 # CLAUDE.md
 
-Queria のジオコーダー API。Cloudflare Workers で動き、DuckDB もデータベースも使わない。
-逆引き (`/v1/reverse`) は R2 の境界 PMTiles を Range で読む。正引きはまだ無く、dataset-geocoder が作る Parquet を Range で読む予定。
+Queria のジオコーダー。住所と座標・地域コードを相互に引く。データとロジックを 1 つのリポジトリに置き、
+同じ PR で一緒に直す。
+
+- 直下: ジオコーダーが読む表を作る dbt のデータセット (Queria の `geocoder`)。address_br・e_stat・nlftp を読んで
+  lg_code 順・行グループ 30,720 行の Parquet にする。毎月 `.github/workflows/sync.yml` が作り直す
+- `api/`: Cloudflare Workers の API。DuckDB もデータベースも使わない。逆引き (`/v1/reverse`) は R2 の境界 PMTiles、
+  正引き (予定) は直下のデータセットの Parquet を Range で読む
+
+表の列・並び・行グループは `api/` の読み方に合わせて決めている。片方だけ変えない。
 
 ## コマンド
 
-パッケージマネージャーは pnpm。
-
 ```bash
-pnpm test        # vitest (Workers ランタイム)
+# データセット (直下)
+uv sync
+scripts/build.sh            # dbt で作って queria sync
+
+# API (api/、パッケージマネージャーは pnpm)
+cd api
+pnpm test                   # vitest (Workers ランタイム)
 pnpm typecheck
-pnpm check       # oxlint + oxfmt --check
+pnpm check                  # oxlint + oxfmt --check
 ```
 
 ## abr-geocoder の取り込み
 
-住所の正規化はデジタル庁の abr-geocoder の写し。手順は `upstream/README.md`。
+住所の正規化はデジタル庁の abr-geocoder の写し。手順は `api/upstream/README.md`。
 
-- `src/normalize/` は上流の `abrg/internal/normalize/` と同じファイル名・規則名・順番を保つ。こちらの都合で並べ替えない
-- 上流の試験は `upstream/cases.json` をそのまま流す。試験を書き直さない
+- `api/src/normalize/` は上流の `abrg/internal/normalize/` と同じファイル名・規則名・順番を保つ。こちらの都合で並べ替えない
+- 上流の試験は `api/upstream/cases.json` をそのまま流す。試験を書き直さない
 - 毎週月曜に定期の作業が上流の差分と issue を見て、取り込みの PR を作る
 
 ## 変更の出し方
