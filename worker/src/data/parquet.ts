@@ -21,16 +21,19 @@ export const r2Buffer = (
   bucket: R2Bucket,
   key: string,
   byteLength: number,
-  onRead?: (bytes: number) => void,
+  onRead?: (bytes: number, ms: number) => void,
 ): AsyncBuffer => ({
   byteLength,
   slice: async (start, end) => {
-    onRead?.((end ?? byteLength) - start);
+    // Workers の時計は I/O の間だけ進むので、ここで測れるのは R2 を待った時間だけ
+    const t0 = Date.now();
     const object = await retryOnce(() =>
       bucket.get(key, { range: { offset: start, length: (end ?? byteLength) - start } }),
     );
     if (!object) throw new Error(`not found: ${key}`);
-    return object.arrayBuffer();
+    const body = await object.arrayBuffer();
+    onRead?.((end ?? byteLength) - start, Date.now() - t0);
+    return body;
   },
 });
 

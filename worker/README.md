@@ -103,6 +103,21 @@ uv run --with 'duckdb>=1.4,<2' python bench/truth-border.py 3000 > bench/border.
 pnpm tsx bench/run.ts bench/border.csv
 ```
 
+正引きは、実際の住所と座標の組 (地価公示・指定避難所・介護サービス事業所から各 1,000 件) を
+本番の API に流し、当たった段・市区町村の一致・座標の誤差 (中央値・90%・95%・100m 超・1km 超) を出す。
+元の座標は建物や土地の位置なので、こちらが返す代表点との差も誤差に入る。
+
+```bash
+uv run --with 'duckdb>=1.4,<2' python bench/truth-forward.py 1000 > bench/truth-forward.csv
+pnpm tsx bench/forward-eval.ts bench/truth-forward.csv bench/forward-eval.jsonl
+```
+
+冷えた isolate の固定費は、本番と同じ Parquet を手元に置いて CPU の分を測る (R2 を待った時間は本番のログの `r2_ms`)。
+
+```bash
+PARQUET_DIR=<town・city・pref の Parquet> CITY=082201 pnpm vitest run -c bench/vitest.config.ts bench/cold-start.test.ts
+```
+
 ## 開発
 
 ```bash

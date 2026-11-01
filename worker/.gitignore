@@ -1,3 +1,8 @@
 node_modules/
 .wrangler/
 public/
+
+# bench の出力 (公開データの抜き出しと答え)
+bench/*.csv
+bench/*.jsonl
+bench/abr/
