@@ -17,10 +17,10 @@
   "vars": {
     "BOUNDARY_TILES_FILE": "boundaries-20261027.pmtiles",
     // geocoder の表の Parquet。FDL の refs/heads/main から引くまでの仮置きで、作り直したら書き換える
-    "TOWN_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/town__dbt_tmp/ducklake-01a194af-a665-7afe-a696-55dd0ef106ea.parquet",
-    "CITY_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/city__dbt_tmp/ducklake-01a194ac-9dd7-7409-a4a7-6d5c4d861e39.parquet",
-    "PREF_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/pref__dbt_tmp/ducklake-01a194ac-a1be-7d71-b4f5-57e2f24d286e.parquet",
-    "RSDTDSP_PARQUET": "",
+    "TOWN_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/town__dbt_tmp/ducklake-01a194d4-9c00-7d9e-8490-6e14e0290b9f.parquet",
+    "CITY_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/city__dbt_tmp/ducklake-01a194d0-a974-787a-8d7f-bf2b6ba8f94d.parquet",
+    "PREF_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/pref__dbt_tmp/ducklake-01a194d0-abf6-7c3a-ad8c-98d1a5db7c5e.parquet",
+    "RSDTDSP_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/rsdtdsp__dbt_tmp/ducklake-01a194d1-978b-7ea8-9afa-a59bd0f6c8d1.parquet",
   },
   "observability": { "enabled": true, "head_sampling_rate": 1 },
 }
