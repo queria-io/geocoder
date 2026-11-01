@@ -28,6 +28,12 @@ models:
         data_type: varchar
       - name: koaza
         data_type: varchar
+      - name: kyoto_street
+        data_type: boolean
+      - name: machiaza_dist
+        data_type: varchar
+      - name: has_chome
+        data_type: boolean
       - name: alias_oaza
         data_type: varchar
       - name: alias_koaza

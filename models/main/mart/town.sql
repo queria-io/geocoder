@@ -13,6 +13,10 @@ WITH town AS (
         PARTITION BY lg_code, machiaza_id ORDER BY rsdt_addr_flg DESC, efct_date DESC NULLS LAST
     ) = 1
 ),
+-- 同じ大字・町に丁目のある行が 1 つでもあれば、その大字・町は丁目を持つ
+oaza_has_chome AS (
+    SELECT DISTINCT lg_code, oaza_cho FROM town WHERE chome IS NOT NULL
+),
 -- 町字 ID の頭 4 桁が大字・町、末尾 3 桁が丁目・小字。代表点の無い小字 (大半がそう) は、
 -- 同じ大字・町 (末尾 000) の代表点を使う
 located AS (
@@ -43,6 +47,9 @@ SELECT
     t.oaza_cho,
     t.chome,
     t.koaza,
+    t.koaza_aka_code = '2' AS kyoto_street,
+    t.machiaza_dist,
+    t.chome IS NOT NULL OR t.oaza_cho LIKE '%丁目' OR h.oaza_cho IS NOT NULL AS has_chome,
     t.alias_oaza,
     t.alias_koaza,
     t.rsdt_addr_flg,
@@ -54,6 +61,7 @@ SELECT
     t.point_level,
     s.small_area_code
 FROM located t
+LEFT JOIN oaza_has_chome h ON h.lg_code = t.lg_code AND h.oaza_cho = t.oaza_cho
 LEFT JOIN small_area s ON ST_Contains(s.geometry, t.point)
 -- 境界が重なる場所では代表点が 2 つの小地域に入る。町字 1 行に 1 つだけ残す
 QUALIFY row_number() OVER (PARTITION BY t.lg_code, t.machiaza_id ORDER BY s.small_area_code) = 1

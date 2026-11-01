@@ -38,6 +38,15 @@ fields:
     description: "「１丁目」のような全角数字"
   - name: koaza
     title: 小字名
+  - name: kyoto_street
+    title: 京都の通り名
+    description: "true は koaza が「烏丸通鞍馬口上る」のような京都の通り名のもの。住所では町名の前に書く"
+  - name: machiaza_dist
+    title: 同じ名前の町字の区別
+    description: "同じ市区町村に同じ名前の町字があるときに見分けるための文字列。住所の表記には含まれない"
+  - name: has_chome
+    title: 丁目がある
+    description: "true はこの町字か、同じ大字・町のどれかに丁目があるもの。町名のすぐ後の数字を丁目と読むかどうかに使う"
   - name: alias_oaza
     title: 大字・町名の別名
   - name: alias_koaza

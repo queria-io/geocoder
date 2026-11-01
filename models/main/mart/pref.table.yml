@@ -1,0 +1,26 @@
+schema: main
+name: pref
+title: 都道府県
+description: |
+  都道府県の名前と代表点。
+  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
+keywords:
+  - 住所
+  - ジオコーディング
+published: true
+sources:
+  - path: https://dataset.address-br.digital.go.jp/
+fields:
+  - name: lg_code
+    title: 全国地方公共団体コード
+    description: "6桁（検査数字あり）"
+  - name: pref_code
+    title: 都道府県コード
+  - name: pref_name
+    title: 都道府県名
+  - name: lng
+    title: 経度
+    description: "代表点の経度"
+  - name: lat
+    title: 緯度
+    description: "代表点の緯度"
