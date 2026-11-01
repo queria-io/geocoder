@@ -6,6 +6,7 @@ import {
   type AsyncBuffer,
   type Compressors,
   type FileMetaData,
+  parquetMetadata,
   parquetMetadataAsync,
   parquetReadObjects,
 } from "hyparquet";
@@ -69,6 +70,53 @@ export const rowRangesFor = (
 };
 
 export type Table = { file: AsyncBuffer; metadata: FileMetaData };
+
+/** フッター (メタデータ＋末尾 8 バイト) をファイルの末尾から読む */
+const readFooter = async (file: AsyncBuffer): Promise<ArrayBuffer> => {
+  const tail = new DataView(await file.slice(file.byteLength - 8, file.byteLength));
+  if (tail.getUint32(4, true) !== 0x31524150)
+    throw new Error("parquet file invalid (footer != PAR1)");
+  const length = tail.getUint32(0, true) + 8;
+  return file.slice(file.byteLength - length, file.byteLength);
+};
+
+const FOOTER_CACHE = "https://geocoder.cache/parquet-footer/";
+
+/**
+ * R2 のファイルを開く。フッターはデータセンターのキャッシュ (Cache API) に置き、
+ * 起動したての isolate でも R2 から読み直さない。ファイル名にバージョンの ID が入り
+ * 中身は書き換わらないので、名前を鍵にしてよい
+ */
+export const openR2Table = async (
+  bucket: R2Bucket,
+  key: string,
+  onRead?: (bytes: number, ms: number) => void,
+): Promise<Table> => {
+  const cacheKey = new Request(FOOTER_CACHE + encodeURIComponent(key));
+  const hit = await caches.default.match(cacheKey);
+  if (hit) {
+    const size = Number(hit.headers.get("x-file-size"));
+    return {
+      file: r2Buffer(bucket, key, size, onRead),
+      metadata: parquetMetadata(await hit.arrayBuffer()),
+    };
+  }
+  const head = await retryOnce(() => bucket.head(key));
+  if (!head) throw new Error(`not found: ${key}`);
+  const file = r2Buffer(bucket, key, head.size, onRead);
+  const footer = await readFooter(file);
+  await caches.default.put(
+    cacheKey,
+    new Response(footer, {
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Cache-Control": "public, max-age=2592000",
+        "x-file-size": String(head.size),
+      },
+    }),
+  );
+  return { file, metadata: parquetMetadata(footer) };
+};
 
 /** ファイルを開く (フッターだけを読む)。結果は呼び出し側で isolate の中に使い回す */
 export const openTable = async (file: AsyncBuffer): Promise<Table> => ({

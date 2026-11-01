@@ -6,8 +6,7 @@ import { parquetReadObjects } from "hyparquet";
 
 import {
   compressors,
-  openTable,
-  r2Buffer,
+  openR2Table,
   readCity,
   readWhere,
   retryOnce,
@@ -62,11 +61,7 @@ const countRead = (bytes: number, ms: number) => {
   stats.r2_ms += ms;
 };
 
-const open = async (bucket: R2Bucket, key: string): Promise<Table> => {
-  const head = await retryOnce(() => bucket.head(key));
-  if (!head) throw new Error(`not found: ${key}`);
-  return openTable(r2Buffer(bucket, key, head.size, countRead));
-};
+const open = (bucket: R2Bucket, key: string): Promise<Table> => openR2Table(bucket, key, countRead);
 
 const readAll = async <T>(t: Table): Promise<T[]> =>
   (await parquetReadObjects({ file: t.file, metadata: t.metadata, compressors })) as T[];
