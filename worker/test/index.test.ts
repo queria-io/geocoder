@@ -142,9 +142,10 @@ describe("/v1/batch", () => {
       body: JSON.stringify(body),
     });
 
-  it("101 件以上は 400", async () => {
-    const response = await post({ addresses: Array.from({ length: 101 }, () => "東京") });
+  it("26 件以上は 400 で、上限の件数を返す", async () => {
+    const response = await post({ addresses: Array.from({ length: 26 }, () => "東京") });
     expect(response.status).toBe(400);
+    expect(((await response.json()) as { error: string }).error).toContain("1〜25 件");
   });
 
   it("GET は 405", async () => {

@@ -264,7 +264,7 @@ const app = new OpenAPIHono<{ Bindings: Env }>({
                 : result.error.issues.some((i) => i.path.includes("format"))
                   ? "format は json・geojson・csv のどれかで渡してください"
                   : result.error.issues.some((i) => i.path.includes("addresses"))
-                    ? "addresses に住所の文字列を 1〜100 件の配列で渡してください"
+                    ? `addresses に住所の文字列を 1〜${BATCH_MAX} 件の配列で渡してください`
                     : "lat と lng を数値で渡してください",
           },
           "no-store",
@@ -632,7 +632,8 @@ app.doc31("/openapi.json", {
   },
 });
 
-const BATCH_MAX = 100;
+// 1 件ごとに市区町村の町字を読むので、市区町村がばらばらだと 100 件で CPU の上限 (30 秒) を超えた。町字の表の行グループを小さくするまでは 25 件にする
+const BATCH_MAX = 25;
 
 const batchRoute = createRoute({
   method: "post",

@@ -239,7 +239,7 @@
   --data-urlencode "address=東京都千代田区紀尾井町1-3"</code></pre>
         <ul>
           <li>住所から: <code>GET /v1/geocode?address=…</code>（住所は URL エンコードして渡す）</li>
-          <li>まとめて: <code>POST /v1/batch</code>（1 回 100 件まで）</li>
+          <li>まとめて: <code>POST /v1/batch</code>（1 回 25 件まで）</li>
           <li>座標から: <code>GET /v1/reverse?lat=…&amp;lng=…&amp;include=address</code></li>
           <li>
             <code>include</code> で項目を足し、<code>format</code> で json・geojson・csv
