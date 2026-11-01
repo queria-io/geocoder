@@ -15,7 +15,15 @@ export type Impl = {
   cityBoundary: CityBoundary;
 };
 
-const norm = (s: string): string => TextForDB(s)[0];
+// 同じ名前を何度も正規化しないように覚えておく (市区町村の名前は数千で、isolate が冷たいときの固定費になる)
+const normalized = new Map<string, string>();
+const norm = (s: string): string => {
+  const hit = normalized.get(s);
+  if (hit !== undefined) return hit;
+  const n = TextForDB(s)[0];
+  normalized.set(s, n);
+  return n;
+};
 const order = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const unique = <T>(xs: T[]): T[] => [...new Set(xs)];
 

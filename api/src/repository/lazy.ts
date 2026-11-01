@@ -35,12 +35,9 @@ export const lazyRepository = (
   };
   // 政令市の市のコードには町字が無い (町字は区のコードで持つ)。読みに行くと、そのコードの前後の
   // 行グループをまとめて読むことになるので外す
+  const hasWards = new Set(cities.filter((c) => c.ward).map((c) => `${c.pref}\t${c.city}`));
   const designated = new Set(
-    cities
-      .filter(
-        (c) => !c.ward && cities.some((w) => w.ward && w.city === c.city && w.pref === c.pref),
-      )
-      .map((c) => c.lgCode),
+    cities.filter((c) => !c.ward && hasWards.has(`${c.pref}\t${c.city}`)).map((c) => c.lgCode),
   );
   const over = async (lgCodes: string[]) =>
     memoryRepository(
