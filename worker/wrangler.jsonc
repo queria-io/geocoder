@@ -9,7 +9,7 @@
   // 無料のベータとして geocoder.queria.io で出す。workers.dev は計測用に残す
   "workers_dev": true,
   "routes": [{ "pattern": "geocoder.queria.io", "custom_domain": true }],
-  "preview_urls": false,
+  "preview_urls": true,
   // 上流の表 (src/transform/special_chars.tsv) を文字列として読み込む
   "rules": [{ "type": "Text", "globs": ["**/*.tsv"], "fallthrough": true }],
   "r2_buckets": [

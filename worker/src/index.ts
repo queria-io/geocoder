@@ -26,11 +26,12 @@ import {
   lgCodeOf,
   meshCodes,
   parseInclude,
+  parseNames,
   SMALL_AREA_ATTRIBUTION,
   toCsv,
   versionOf,
 } from "./answer";
-import { geocode, type ForwardEnv } from "./forward";
+import { geocode, nearby, type ForwardEnv } from "./forward";
 import { ErrAddressTooLong, ErrEmptyAddress } from "./normalize/input";
 import { type Level, resolveAreas, type TilePoint } from "./lookup";
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "./model/model";
@@ -148,6 +149,21 @@ const ReverseCodes = z
   })
   .openapi("ReverseCodes");
 
+const REVERSE_INCLUDES = ["address", "codes"] as const;
+
+const ReverseAddress = z
+  .object({
+    matched_address: z.string().openapi({ description: "近くの点の住所" }),
+    match_level: z.string().openapi({
+      description: "住所がどこまで細かいか (machiaza・machiaza_detail・rsdtdsp_blk・rsdtdsp_rsdt)",
+    }),
+    lat: z.number().openapi({ description: "その住所の点の緯度" }),
+    lng: z.number().openapi({ description: "その住所の点の経度" }),
+    distance_m: z.number().openapi({ description: "渡した座標からその点までの距離 (m)" }),
+    machiaza_id: z.string().openapi({ description: "ABR の町字 ID (7 桁)" }),
+  })
+  .openapi("ReverseAddress");
+
 const ReverseResult = z
   .object({
     lat: z.number(),
@@ -163,6 +179,10 @@ const ReverseResult = z
     match_level: Level.openapi({
       description: "点が実際に入った区画の階層。どこにも入らなければ null",
     }),
+    address: ReverseAddress.nullable().optional().openapi({
+      description:
+        "include=address のときだけ。市区町村の中でいちばん近い町字・街区・住居の点の住所。町字の形は見ていないので、境目の近くでは隣の町字になることがある。市区町村に入らなければ null",
+    }),
     codes: ReverseCodes.optional().openapi({ description: "include=codes のときだけ" }),
     source: Source,
   })
@@ -176,7 +196,7 @@ const reverseRoute = createRoute({
     query: z.object({
       lat: coord("lat", -90, 90, "35.6812"),
       lng: coord("lng", -180, 180, "139.7671"),
-      include: includeParam(["codes"]),
+      include: includeParam(REVERSE_INCLUDES),
     }),
   },
   responses: {
@@ -188,7 +208,7 @@ const reverseRoute = createRoute({
     },
     502: {
       content: { "application/json": { schema: ErrorBody } },
-      description: "境界タイルを読めない",
+      description: "境界タイルか住所の表を読めない",
     },
   },
 });
@@ -198,22 +218,31 @@ const readTileOf =
   async ({ z, x, y }: TilePoint) =>
     (await archive(env).getZxy(z, x, y))?.data ?? null;
 
-const reverse = async (lat: number, lng: number, withCodes: boolean, env: Env) => {
+const reverse = async (lat: number, lng: number, groups: ReadonlySet<string>, env: Env) => {
   const { level, prefecture_code, city_code, estat_small_area_code } = await resolveAreas(
     lng,
     lat,
     readTileOf(env),
   );
+  const lg_code = lgCodeOf(city_code);
+  const withAddress = groups.has("address");
+  const address = withAddress && lg_code ? await nearby(env, lg_code, lat, lng) : null;
   return {
     lat,
     lng,
-    lg_code: lgCodeOf(city_code),
+    lg_code,
     estat_small_area_code,
     match_level: level,
-    ...(withCodes ? { codes: { prefecture_code, city_code, ...meshCodes(lat, lng) } } : {}),
+    ...(withAddress ? { address } : {}),
+    ...(groups.has("codes")
+      ? { codes: { prefecture_code, city_code, ...meshCodes(lat, lng) } }
+      : {}),
     source: {
       version: versionOf(env.BOUNDARY_TILES_FILE),
-      attribution: level === null ? [] : [ATTRIBUTION[level]],
+      attribution: [
+        ...(level === null ? [] : [ATTRIBUTION[level]]),
+        ...(address ? [ABR_ATTRIBUTION] : []),
+      ],
     },
   };
 };
@@ -257,10 +286,9 @@ app.use("/v1/*", async (c, next) => {
 
 app.openapi(reverseRoute, async (c) => {
   const { lat, lng, include } = c.req.valid("query");
-  const groups = parseInclude(include);
-  if (groups === null || groups.size > (groups.has("codes") ? 1 : 0))
-    return json(c, 400, { error: "include に使えるのは codes です" }, "no-store") as never;
-  const withCodes = groups.has("codes");
+  const groups = parseNames(include, REVERSE_INCLUDES);
+  if (groups === null)
+    return json(c, 400, { error: "include に使えるのは address・codes です" }, "no-store") as never;
   // 鍵は丸めた座標と境界タイルのファイル名から作る。元の URL のままだと書き方の違う同じ座標や
   // 余計なクエリで項目が割れ、タイルを向け替えても古い答えが 1 日残る
   const url = new URL(c.req.url);
@@ -268,15 +296,18 @@ app.openapi(reverseRoute, async (c) => {
   cacheUrl.searchParams.set("lat", String(lat));
   cacheUrl.searchParams.set("lng", String(lng));
   cacheUrl.searchParams.set("tiles", c.env.BOUNDARY_TILES_FILE);
-  if (withCodes) cacheUrl.searchParams.set("include", "codes");
+  cacheUrl.searchParams.set("include", [...groups].sort().join(","));
+  if (groups.has("address")) cacheUrl.searchParams.set("data", c.env.DATA_VERSION);
   const cacheKey = new Request(cacheUrl, { method: "GET" });
   const cached = await caches.default.match(cacheKey);
   // 置いてあるのは下で 200 として返したものそのまま
   if (cached) return cached as never;
-  const result = await tryCatchAsync(() => reverse(lat, lng, withCodes, c.env));
+  const result = await tryCatchAsync(() => reverse(lat, lng, groups, c.env));
   if (!result.ok) {
     console.error("geocoder: reverse", result.error);
-    return c.json({ error: "境界タイルを読めませんでした" }, 502, { "Cache-Control": "no-store" });
+    return c.json({ error: "境界タイルか住所の表を読めませんでした" }, 502, {
+      "Cache-Control": "no-store",
+    });
   }
   const response = c.json(result.value, 200, { "Cache-Control": "public, max-age=86400" });
   c.executionCtx.waitUntil(caches.default.put(cacheKey, response.clone()));

@@ -1,4 +1,4 @@
-// geocoder.queria.io のページ。試す欄・地図・一括変換。API は同じオリジンの /v1 を呼ぶ
+// geocoder.queria.io のページ。住所から場所・地図から住所・ファイルの一括変換の 3 つのタブ。API は同じオリジンの /v1 を呼ぶ
 import { layers, namedFlavor } from "@protomaps/basemaps";
 import * as maplibregl from "maplibre-gl";
 
@@ -9,26 +9,35 @@ const BASEMAP = "japan-20260901-z14";
 const MAX_ROWS = 1000;
 const BATCH = 100;
 
+/** どこまで分かったかを、段の名前ではなく言葉で */
 const LEVEL: Record<string, string> = {
-  pref: "都道府県",
-  city: "市区町村",
-  machiaza: "町字",
-  machiaza_detail: "小字",
-  rsdtdsp_blk: "街区（○番）",
-  rsdtdsp_rsdt: "住居（○番○号）",
-  parcel: "地番",
-  prefecture: "都道府県",
-  small_area: "小地域",
+  pref: "都道府県まで",
+  city: "市区町村まで",
+  machiaza: "町名まで",
+  machiaza_detail: "丁目・字まで",
+  rsdtdsp_blk: "番まで",
+  rsdtdsp_rsdt: "号まで",
+  parcel: "地番まで",
 };
-const levelText = (v: string | null) => (v === null ? "なし" : (LEVEL[v] ?? v));
+const levelText = (v: string | null) => (v === null ? "分かりませんでした" : (LEVEL[v] ?? v));
+
+/** 座標をどの点から取ったか */
+const POINT: Record<string, string> = {
+  machiaza: "町名の代表の点",
+  machiaza_detail: "丁目・字の代表の点",
+  rsdtdsp_blk: "番の点",
+  rsdtdsp_rsdt: "号の点",
+  parcel: "地番の点",
+};
+const pointText = (v: string | null) => (v === null ? "—" : (POINT[v] ?? v));
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const dark = matchMedia("(prefers-color-scheme: dark)").matches;
 const map = new maplibregl.Map({
   container: "map",
-  center: [139.7671, 35.6812],
-  zoom: 12,
+  center: [139.7372, 35.6794],
+  zoom: 15,
   localIdeographFontFamily: "sans-serif",
   style: {
     version: 8,
@@ -61,11 +70,23 @@ const list = (pairs: [string, string | number | null | undefined][]) => {
   return dl;
 };
 
-const show = (title: string, body: Node) => {
+const el = (tag: string, text: string, className?: string) => {
+  const e = document.createElement(tag);
+  e.textContent = text;
+  if (className) e.className = className;
+  return e;
+};
+
+/** 答えの欄: 大きく住所、その下に主な項目、コードはたたんで置く */
+const show = (title: string, main: Node[] = [], codes?: HTMLElement) => {
   const box = $("try-result");
-  const h = document.createElement("h3");
-  h.textContent = title;
-  box.replaceChildren(h, body);
+  const parts: Node[] = [el("p", title, "answer"), ...main];
+  if (codes) {
+    const details = document.createElement("details");
+    details.append(el("summary", "コードを見る"), codes);
+    parts.push(details);
+  }
+  box.replaceChildren(...parts);
 };
 
 const getJson = async (path: string, params: Record<string, string>) => {
@@ -75,28 +96,39 @@ const getJson = async (path: string, params: Record<string, string>) => {
   return body;
 };
 
-const tryAddress = async (address: string) => {
-  show("調べています…", document.createTextNode(""));
+const latLng = (lat: number, lng: number) => `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+
+const tryAddress = async (address: string, move = true) => {
+  show("探しています…");
   const body = await getJson("/v1/geocode", { address, include: "codes,small_area" }).catch(
     (e: Error) => ({ error: e.message }),
   );
-  if ("error" in body) return show("調べられませんでした", document.createTextNode(body.error));
+  if ("error" in body) return show("探せませんでした", [el("p", body.error)]);
   const r = body.results[0];
-  if (!r) return show("当たりませんでした", document.createTextNode("住所を見直してください。"));
+  if (!r) return show("見つかりませんでした", [el("p", "住所の書き方を見直してください。")]);
   if (r.lat !== null) {
     marker.setLngLat([r.lng, r.lat]).addTo(map);
-    map.flyTo({ center: [r.lng, r.lat], zoom: r.coordinates_level === "rsdtdsp_rsdt" ? 17 : 15 });
+    const view = {
+      center: [r.lng, r.lat] as [number, number],
+      zoom: r.coordinates_level === "rsdtdsp_rsdt" ? 17 : 15,
+    };
+    if (move) map.flyTo(view);
+    else map.jumpTo(view);
   }
   show(
     r.matched_address,
+    [
+      list([
+        ["分かったところ", levelText(r.match_level)],
+        ["分からなかった残り", r.unmatched_address?.join("")],
+        ["緯度, 経度", r.lat === null ? null : latLng(r.lat, r.lng)],
+        ["地図の点", pointText(r.coordinates_level)],
+      ]),
+    ],
     list([
-      ["残り", r.unmatched_address?.join("")],
-      ["当たった段", levelText(r.match_level)],
-      ["座標の点", levelText(r.coordinates_level)],
-      ["緯度, 経度", r.lat === null ? null : `${r.lat}, ${r.lng}`],
+      ["郵便番号", r.codes.postal_code],
       ["市区町村コード", r.lg_code],
       ["小地域コード", r.estat_small_area_code],
-      ["郵便番号", r.codes.postal_code],
       ["1km メッシュ", r.codes.mesh_1km],
     ]),
   );
@@ -108,25 +140,54 @@ $("try-form").addEventListener("submit", (e) => {
   if (address !== "") void tryAddress(address);
 });
 
-map.on("click", async (e) => {
-  const { lat, lng } = e.lngLat;
+const tryPoint = async (lat: number, lng: number) => {
   marker.setLngLat([lng, lat]).addTo(map);
+  show("調べています…");
   const body = await getJson("/v1/reverse", {
     lat: lat.toFixed(6),
     lng: lng.toFixed(6),
-    include: "codes",
+    include: "address,codes",
   }).catch((err: Error) => ({ error: err.message }));
-  if ("error" in body) return show("調べられませんでした", document.createTextNode(body.error));
+  if ("error" in body) return show("調べられませんでした", [el("p", body.error)]);
+  const a = body.address;
+  if (!a) return show("日本の住所の外です", [el("p", latLng(lat, lng))]);
   show(
-    `${body.lat}, ${body.lng}`,
+    `${a.matched_address} 付近`,
+    [
+      list([
+        ["押した場所", latLng(lat, lng)],
+        ["住所の点まで", `約 ${a.distance_m.toLocaleString()} m`],
+        ["分かったところ", levelText(a.match_level)],
+      ]),
+    ],
     list([
-      ["入った区画", levelText(body.match_level)],
       ["市区町村コード", body.lg_code],
       ["小地域コード", body.estat_small_area_code],
       ["1km メッシュ", body.codes.mesh_1km],
     ]),
   );
+};
+
+// タブ。地図を押したら「地図から住所」に切り替える。ファイルのタブでは地図を隠す
+const TABS = ["forward", "reverse", "batch"] as const;
+type Tab = (typeof TABS)[number];
+const select = (tab: Tab) => {
+  for (const t of TABS) {
+    $(`tab-${t}`).setAttribute("aria-selected", String(t === tab));
+    $(`panel-${t}`).hidden = t !== tab;
+  }
+  $("map-area").hidden = tab === "batch";
+  if (tab !== "batch") map.resize();
+};
+for (const t of TABS) $(`tab-${t}`).addEventListener("click", () => select(t));
+
+map.on("click", (e) => {
+  select("reverse");
+  void tryPoint(e.lngLat.lat, e.lngLat.lng);
 });
+
+// 開いたときから例の住所にピンが立っているようにする
+void tryAddress($<HTMLInputElement>("try-address").value, false);
 
 // 一括変換
 let table: string[][] = [];

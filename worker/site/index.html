@@ -6,113 +6,205 @@
     <title>Queria Geocoder</title>
     <meta
       name="description"
-      content="日本の住所を座標と地域コードに変える無料の API。登録なしで使えます。"
+      content="住所を地図の場所に、地図の場所を住所に。日本の住所を緯度・経度と地域コードに変える無料のジオコーダー。登録なしで使えます。"
     />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://geocoder.queria.io/" />
+    <meta property="og:title" content="Queria Geocoder" />
+    <meta
+      property="og:description"
+      content="住所を地図の場所に、地図の場所を住所に。無料・登録なしで使えるジオコーダー。"
+    />
+    <meta property="og:image" content="https://geocoder.queria.io/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="stylesheet" href="/app.css" />
   </head>
   <body>
     <header class="bar">
-      <a class="brand" href="/">Queria Geocoder</a>
+      <a class="brand" href="/"
+        ><img src="/favicon.svg" alt="" width="28" height="28" />Queria Geocoder</a
+      >
       <nav>
-        <a href="#try">試す</a>
-        <a href="#batch">一括変換</a>
-        <a href="#api">API</a>
-        <a href="/docs">仕様書</a>
+        <a href="#uses">使いみち</a>
+        <a href="#price">料金</a>
+        <a href="#dev">開発者の方へ</a>
       </nav>
     </header>
 
     <main>
       <section class="hero">
-        <h1>日本の住所を、座標と地域コードに変える</h1>
+        <h1>住所を地図の場所に。<br />地図の場所を住所に。</h1>
         <p>
-          住所を渡すと、緯度・経度と市区町村コード、国勢調査の小地域コード、郵便番号、地域メッシュを返します。地図上の点から市区町村と小地域を引くこともできます。登録なしで、無料で使えます（ベータ）。
+          日本の住所を緯度・経度に変えたり、地図で指した場所の住所を調べたりできます。住所録のファイルをまとめて変換することもできます。無料で、登録なしで使えます。
         </p>
       </section>
 
-      <section id="try">
-        <h2>試す</h2>
-        <form id="try-form" class="row">
-          <input
-            id="try-address"
-            type="text"
-            maxlength="100"
-            placeholder="東京都千代田区紀尾井町1-3"
-            value="東京都千代田区紀尾井町1-3"
-            aria-label="住所"
-          />
-          <button type="submit">座標を調べる</button>
-        </form>
-        <p class="hint">地図をクリックすると、その点の市区町村と小地域のコードを出します。</p>
-        <div class="try">
+      <section class="tool" aria-label="試す">
+        <div class="tabs" role="tablist">
+          <button role="tab" id="tab-forward" aria-controls="panel-forward" aria-selected="true">
+            住所から場所を探す
+          </button>
+          <button role="tab" id="tab-reverse" aria-controls="panel-reverse" aria-selected="false">
+            地図から住所を調べる
+          </button>
+          <button role="tab" id="tab-batch" aria-controls="panel-batch" aria-selected="false">
+            ファイルでまとめて変換
+          </button>
+        </div>
+
+        <div id="panel-forward" role="tabpanel" aria-labelledby="tab-forward" class="panel">
+          <form id="try-form" class="row">
+            <input
+              id="try-address"
+              type="text"
+              maxlength="100"
+              value="東京都千代田区紀尾井町1-3"
+              aria-label="住所"
+            />
+            <button type="submit">場所を探す</button>
+          </form>
+        </div>
+
+        <div id="panel-reverse" role="tabpanel" aria-labelledby="tab-reverse" class="panel" hidden>
+          <p class="lead">地図の上を押すと、その場所の住所を出します。</p>
+        </div>
+
+        <div id="panel-batch" role="tabpanel" aria-labelledby="tab-batch" class="panel" hidden>
+          <p class="lead">
+            住所の列がある CSV を選ぶと、緯度・経度と地域コードの列を足したファイルを作ります。1
+            回に 1,000 行まで。
+          </p>
+          <div class="batch">
+            <label>CSV ファイル <input id="batch-file" type="file" accept=".csv,text/csv" /></label>
+            <label
+              >住所の列
+              <select id="batch-column" disabled></select
+            ></label>
+            <label
+              >保存の形
+              <select id="batch-format">
+                <option value="csv">CSV（Excel で開けます）</option>
+                <option value="geojson">GeoJSON（地図のソフト向け）</option>
+                <option value="json">JSON</option>
+              </select>
+            </label>
+            <button id="batch-run" type="button" disabled>変換する</button>
+          </div>
+          <p id="batch-status" class="hint" aria-live="polite"></p>
+          <p><a id="batch-download" class="download" hidden>結果を保存する</a></p>
+          <p class="hint">
+            ファイルはこのページの中で読み、住所の文字だけを変換のために送ります。ファイルそのものは送りません。
+          </p>
+        </div>
+
+        <div id="map-area" class="try">
           <div id="map" class="map"></div>
           <div id="try-result" class="result" aria-live="polite"></div>
         </div>
       </section>
 
-      <section id="batch">
-        <h2>一括変換</h2>
-        <p>
-          住所の列がある CSV を選ぶと、右に座標とコードの列を足したファイルを作ります。1 ファイル
-          1,000 行まで。ファイルはこのページの中で読み、住所の文字だけを API
-          に送ります。ファイルそのものはどこにも保存しません。
-        </p>
-        <div class="batch">
-          <label>CSV ファイル <input id="batch-file" type="file" accept=".csv,text/csv" /></label>
-          <label
-            >住所の列
-            <select id="batch-column" disabled></select
-          ></label>
-          <label
-            >出力の形
-            <select id="batch-format">
-              <option value="csv">CSV</option>
-              <option value="json">JSON</option>
-              <option value="geojson">GeoJSON</option>
-            </select>
-          </label>
-          <button id="batch-run" type="button" disabled>変換する</button>
-        </div>
-        <p id="batch-status" class="hint" aria-live="polite"></p>
-        <p><a id="batch-download" class="download" hidden>結果を保存する</a></p>
+      <section id="uses">
+        <h2>こんなときに</h2>
+        <ul class="cards">
+          <li>
+            <h3>顧客の住所録を地図に置く</h3>
+            <p>会員や取引先の住所を緯度・経度に変えれば、どの地域に多いかが地図で見えます。</p>
+          </li>
+          <li>
+            <h3>出店の候補地のまわりを調べる</h3>
+            <p>
+              候補地の住所から小地域コードが分かるので、国勢調査の人口と結べます。<a
+                href="https://queria.io/gis"
+                >Queria のエリア分析</a
+              >でそのまま商圏を見られます。
+            </p>
+          </li>
+          <li>
+            <h3>住所の書き方をそろえる</h3>
+            <p>
+              「1-3」「1丁目3番」のような書き方の違いを、国の住所データの表記にそろえて返します。
+            </p>
+          </li>
+          <li>
+            <h3>地図の場所の住所とコードを調べる</h3>
+            <p>現地で取った位置や写真の位置から、住所と市区町村コード・小地域コードを出します。</p>
+          </li>
+        </ul>
       </section>
 
-      <section id="api">
-        <h2>API</h2>
-        <pre><code>curl -s -G https://geocoder.queria.io/v1/geocode \
-  --data-urlencode "address=東京都千代田区紀尾井町1-3" \
-  --data-urlencode "include=codes,small_area"</code></pre>
-        <ul>
+      <section id="why">
+        <h2>Queria Geocoder の特徴</h2>
+        <ul class="points">
+          <li><strong>無料で使える</strong>登録もいりません。</li>
           <li>
-            住所から引く: <code>GET /v1/geocode?address=…</code>。住所は URL エンコードして渡します
+            <strong>住所録を預からない</strong
+            >ファイルはブラウザの中で読み、住所の文字だけを使います。
           </li>
-          <li>まとめて引く: <code>POST /v1/batch</code>（1 回 100 件まで）</li>
-          <li>座標から引く: <code>GET /v1/reverse?lat=…&amp;lng=…</code></li>
+          <li>
+            <strong>どこまで分かったかを毎回返す</strong
+            >号まで分かったのか、町名までなのかを答えに付けます。
+          </li>
+          <li>
+            <strong>国の公開データが元</strong
+            >デジタル庁のアドレス・ベース・レジストリなどを使い、出典を答えに付けます。
+          </li>
+        </ul>
+      </section>
+
+      <section id="levels">
+        <h2>どこまで分かるか</h2>
+        <ul class="levels">
+          <li>
+            <strong>番・号まで</strong
+            >住居表示の住所（「○丁目○番○号」）は、その建物のあたりの点を返します。
+          </li>
+          <li>
+            <strong>町名・丁目まで</strong
+            >番号が分からない住所や、番号の点が無い住所は、町名・丁目の代表の点を返します。数百 m
+            ずれることがあります。
+          </li>
+          <li><strong>地番の住所</strong>今は町名まで分かります。地番ごとの点は準備中です。</li>
+        </ul>
+        <p class="hint">
+          地図から住所を調べるときは、押した場所にいちばん近い点の住所を返します。町名の境目の近くでは、となりの町名になることがあります。
+        </p>
+      </section>
+
+      <section id="price">
+        <h2>料金</h2>
+        <p>
+          今は無料です（ベータ）。1 つの場所から 1 分に 300 回まで、ファイルの変換は 1 回 1,000
+          行までにしています。もっと多く使いたいとき、人口や地価などもまとめて付けたいときは<a
+            href="https://queria.io/contact"
+            >お問い合わせ</a
+          >ください。
+        </p>
+      </section>
+
+      <section id="dev">
+        <h2>開発者の方へ</h2>
+        <p>同じことを API で呼べます。登録も鍵もいりません。</p>
+        <pre><code>curl -s -G https://geocoder.queria.io/v1/geocode \
+  --data-urlencode "address=東京都千代田区紀尾井町1-3"</code></pre>
+        <ul>
+          <li>住所から: <code>GET /v1/geocode?address=…</code>（住所は URL エンコードして渡す）</li>
+          <li>まとめて: <code>POST /v1/batch</code>（1 回 100 件まで）</li>
+          <li>座標から: <code>GET /v1/reverse?lat=…&amp;lng=…&amp;include=address</code></li>
           <li>
             <code>include</code> で項目を足し、<code>format</code> で json・geojson・csv
             を選べます。項目名は abr-geocoder（デジタル庁）と同じです
           </li>
           <li>1 つの IP から 1 分に 300 回まで。超えると 429 を返します</li>
         </ul>
-        <p>項目ごとの説明は <a href="/docs">仕様書</a> にあります。</p>
+        <p>項目ごとの説明は <a href="/docs">API の仕様書</a> にあります。</p>
       </section>
 
-      <section id="about">
-        <h2>答えの見方</h2>
-        <ul>
-          <li>
-            <code>match_level</code> は住所がどこまで当たったか、<code>coordinates_level</code>
-            は座標をどの点から取ったかです。号まで当たっても、その号に座標が無ければ町字の代表点を返し、<code
-              >coordinates_level</code
-            >
-            が町字になります
-          </li>
-          <li>座標はどれも代表点で、建物の位置ではありません</li>
-          <li>地番の住所は今は町字まで当たります。地番ごとの座標は準備中です</li>
-        </ul>
+      <section id="sources">
         <h2>出典</h2>
-        <p>
-          答えを載せるときは、答えの <code>source.attribution</code> の出典も一緒に載せてください。
-        </p>
+        <p>結果を載せるときは、答えに付いている出典も一緒に載せてください。</p>
         <ul>
           <li>「アドレス・ベース・レジストリ」（デジタル庁）を加工して作成</li>
           <li>「国勢調査 境界データ（小地域）」（総務省統計局、e-Stat）を加工して作成</li>

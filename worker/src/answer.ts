@@ -93,15 +93,20 @@ export const forwardFeature = (r: MatchedResult, include: ReadonlySet<Include>, 
 });
 
 /** "a,b" を頼まれた組の集まりに。知らない名前は null */
-export const parseInclude = (s: string | undefined): Set<Include> | null => {
+export const parseNames = <T extends string>(
+  s: string | undefined,
+  allowed: readonly T[],
+): Set<T> | null => {
   const names = (s ?? "")
     .split(",")
     .map((n) => n.trim())
     .filter((n) => n !== "");
-  return names.every((n) => (INCLUDES as readonly string[]).includes(n))
-    ? new Set(names as Include[])
+  return names.every((n) => (allowed as readonly string[]).includes(n))
+    ? new Set(names as T[])
     : null;
 };
+
+export const parseInclude = (s: string | undefined): Set<Include> | null => parseNames(s, INCLUDES);
 
 /** 表やタイルのファイル名から拡張子を外した名前。データのバージョンとして返す */
 export const versionOf = (file: string): string =>

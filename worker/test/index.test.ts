@@ -75,6 +75,11 @@ describe("/v1/reverse", () => {
     expect(body).toMatchObject({ codes: { prefecture_code: "13", city_code: "13101" } });
   });
 
+  it("include=address は町字の表を読む (この試験の R2 には無いので 502)", async () => {
+    const { status } = await reverse(`${at(0.25, 0.75)}&include=address`);
+    expect(status).toBe(502);
+  });
+
   it("知らない include は 400", async () => {
     const { status } = await reverse(`${at(0.25, 0.75)}&include=parts`);
     expect(status).toBe(400);

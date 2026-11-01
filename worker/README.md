@@ -66,13 +66,22 @@ GET /v1/reverse?lat=35.6812&lng=139.7671
   町字との対応は japan_address_code の town_small_area
 - `match_level` は点が実際に入った区画の階層 (`small_area`・`city`・`prefecture`)。どこにも入らなければ `null`
 - `include=codes` で都道府県・市区町村コードと地域メッシュを足す
+- `include=address` で近くの住所を足す。市区町村の町字の代表点から近い 3 つを選び、その町字の街区・住居の点まで寄せる
+  (150m より遠ければ町字の代表点)。町字の形は持っていないので、境目の近くでは隣の町字を返すことがある
 - 座標が数値でない・範囲外は 400
 
 ## ページ
 
-`/` は LP (試す欄・地図・一括変換)。`site/` を `pnpm build:web` で `public/` に組み、Workers の static assets で出す
+`/` は LP (住所から場所・地図から住所・ファイルの一括変換の 3 つのタブ)。`site/` を `pnpm build:web` で `public/` に組み、Workers の static assets で出す
 (`pnpm run deploy` が先に組む)。`/docs` は `/openapi.json` を読んで項目の説明を出す。
 一括変換はブラウザの中で CSV を読み、`POST /v1/batch` に 100 件ずつ住所の文字だけを送る。
+アイコンと共有画像は `site/brand/` (元は `mark.svg`・`og.svg`、PNG と ico は `gen.py` で作る)。
+
+## デプロイ
+
+Cloudflare の Workers Builds で、main へのマージで本番に出る (ルート `worker`、ビルド `pnpm test && pnpm typecheck && pnpm build:web`、
+デプロイ `npx wrangler deploy`)。main 以外のブランチは `wrangler versions upload` で確認用の URL だけ作る。
+PR では `.github/workflows/worker.yml` が試験・型・整形を見る。
 
 ## 精度
 

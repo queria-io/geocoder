@@ -56,6 +56,9 @@ footer.bar {
   font-size: 0.875rem;
 }
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   font-weight: 700;
   color: var(--fg);
   text-decoration: none;
@@ -172,4 +175,102 @@ code {
 }
 .download {
   font-weight: 600;
+}
+
+.hero h1 {
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  margin-top: 1rem;
+}
+.hero p {
+  max-width: 40rem;
+}
+.tool {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border);
+  margin: -0.25rem 0 1rem;
+}
+.tabs button {
+  line-height: 1.4;
+  background: none;
+  color: var(--muted-fg);
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.5rem 0.75rem;
+}
+.tabs button[aria-selected="true"] {
+  color: var(--fg);
+  font-weight: 600;
+  border-bottom-color: var(--primary);
+}
+.panel {
+  margin-bottom: 1rem;
+}
+.lead {
+  margin: 0;
+}
+[hidden] {
+  display: none !important;
+}
+.answer {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0 0 0.75rem;
+}
+details {
+  margin-top: 0.75rem;
+}
+summary {
+  cursor: pointer;
+  color: var(--muted-fg);
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+.cards,
+.points,
+.levels {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+}
+.cards {
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+.cards li {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+.cards h3 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+.cards p {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+.points {
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+.points strong,
+.levels strong {
+  display: block;
+}
+@media (max-width: 720px) {
+  .tabs button {
+    font-size: 0.8125rem;
+    padding: 0.5rem 0.25rem;
+  }
+  .map {
+    height: 18rem;
+  }
 }

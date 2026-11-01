@@ -28,6 +28,7 @@ import {
 import { PARCEL_COLUMNS, type ParcelRow } from "./repository/parcel";
 import { machiazaKey, RSDTDSP_COLUMNS, type RsdtdspRow } from "./repository/rsdtdsp";
 import type { BasicResult } from "./repository/types";
+import { nearestAddress, type Nearby } from "./nearby";
 
 export type ForwardEnv = {
   DATA: R2Bucket;
@@ -87,6 +88,8 @@ const machiazaLoader = <T>(bucket: R2Bucket, key: string, columns: string[]) => 
 type Built = {
   matcher: Impl;
   town: (lgCode: string, machiazaId: string) => Promise<BasicResult | null>;
+  towns: (lgCode: string) => Promise<BasicResult[]>;
+  rows: (lgCode: string, machiazaId: string) => Promise<RsdtdspRow[]>;
 };
 
 // isolate の中で使い回す。表のファイルが変われば作り直す
@@ -117,6 +120,8 @@ const build = async (env: ForwardEnv): Promise<Built> => {
     matcher: NewMatcher(lazyRepository(loadCity, cities, prefs, loadMachiaza, loadParcels), cities),
     town: async (lgCode, machiazaId) =>
       (await loadCity(lgCode)).find((b) => b.machiazaId === machiazaId) ?? null,
+    towns: loadCity,
+    rows: loadMachiaza,
   };
 };
 
@@ -156,4 +161,15 @@ export const geocode = async (
       ? ((await built.town(r.ids.lg_code, r.ids.machiaza_id))?.postCode ?? null)
       : null;
   return { results: found, postalCode };
+};
+
+/** 座標の近くの住所。lgCode は境界タイルで決めた市区町村 (6 桁) */
+export const nearby = async (
+  env: ForwardEnv,
+  lgCode: string,
+  lat: number,
+  lng: number,
+): Promise<Nearby | null> => {
+  const built = await matcherFor(env);
+  return nearestAddress(await built.towns(lgCode), built.rows, lat, lng);
 };
