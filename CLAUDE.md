@@ -10,6 +10,13 @@ Queria のジオコーダー。住所と座標・地域コードを相互に引�
 
 表の列・並び・行グループは `api/` の読み方に合わせて決めている。片方だけ変えない。
 
+`api/` は DuckLake のカタログを読まず、DuckLake が書いた Parquet を直接読む。そのために守ること:
+
+- 表は毎回まるごと作り直す (`materialized='table'`)。incremental にすると DuckLake が削除ファイルを持ち、
+  Parquet だけを読む `api/` が消したはずの行まで返す
+- `api/` が読むファイルは FDL の `refs/heads/main` が指すバージョンで決める。古いバージョンのファイルは
+  保持期間を過ぎると消えるので、作り直したら必ず指す先を切り替える
+
 ## queria-web との境目
 
 - API は geocoder.queria.io。LP とデモの画面は queria-web (queria.io/geocoder) にあり、この API を外から呼ぶ。画面のコードをここに書かない
