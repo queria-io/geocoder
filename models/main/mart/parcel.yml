@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: parcel
+    description: |
+      地番の住所（「○番地」「○番○」）と代表点。住居表示でない町字の分。座標の付く筆は一部だけ。
+      「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
+    access: public
+    columns:
+      - name: machiaza_key
+        data_type: varchar
+      - name: lg_code
+        data_type: varchar
+      - name: machiaza_id
+        data_type: varchar
+      - name: prc_id
+        data_type: varchar
+      - name: prc_num1
+        data_type: varchar
+      - name: prc_num2
+        data_type: varchar
+      - name: prc_num3
+        data_type: varchar
+      - name: lng
+        data_type: double
+      - name: lat
+        data_type: double

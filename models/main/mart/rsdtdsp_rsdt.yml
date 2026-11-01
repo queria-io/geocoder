@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: rsdtdsp_rsdt
+    description: |
+      住居表示の住居（「○丁目1番3号」の「3号」）と代表点。
+      「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
+    access: public
+    columns:
+      - name: lg_code
+        data_type: varchar
+      - name: machiaza_id
+        data_type: varchar
+      - name: blk_id
+        data_type: varchar
+      - name: rsdt_id
+        data_type: varchar
+      - name: rsdt2_id
+        data_type: varchar
+      - name: blk_num
+        data_type: varchar
+      - name: rsdt_num
+        data_type: varchar
+      - name: rsdt_num2
+        data_type: varchar
+      - name: lng
+        data_type: double
+      - name: lat
+        data_type: double

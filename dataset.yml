@@ -1,0 +1,55 @@
+spec_version: "0.1"
+name: geocoder
+title: ジオコーダー用 住所マスタ
+description: |-
+  住所の文字列と座標・地域コードを相互に引くための表。
+  「アドレス・ベース・レジストリ」（デジタル庁）と「国勢調査 町丁・字等別境界データ」（総務省統計局）を加工して作成。
+  元にした Queria のデータセットは address_br と e_stat。
+keywords:
+  - 住所
+  - ジオコーディング
+  - 町字
+  - 住居表示
+  - 小地域
+homepage: https://github.com/queria-io/geocoder
+language: ja
+themes: [land_climate]
+
+licenses:
+  - JP-DIGITAL-ADDRESS-BR
+  - JP-GOV-STD-2.0
+
+sources:
+  - title: アドレス・ベース・レジストリ（デジタル庁）
+    path: https://dataset.address-br.digital.go.jp/
+  - title: 国勢調査 町丁・字等別境界データ（総務省統計局）
+    path: https://www.e-stat.go.jp/gis
+
+contributors:
+  - title: デジタル庁
+    path: https://www.digital.go.jp/
+    roles: [rightsHolder]
+  - title: 総務省統計局
+    path: https://www.stat.go.jp/
+    roles: [rightsHolder]
+
+spatial_coverage: [JP]
+update_frequency: monthly
+cover: 📍
+
+ai_context:
+  instructions: |
+    住所の文字列から座標と地域コードを引く (正引き)、町字を国勢調査の小地域につなぐのに使う。
+    表は lg_code の順に並べてあり、市区町村で絞ると読む量が小さい。座標は lng / lat の数値の列。
+    town は町字ごとの名前・別名・代表点と、代表点が入る小地域 (small_area_code)。町字と小地域は
+    1 対 1 ではないので、small_area_code は代表点 1 点で決めた目安。
+    住居表示の町字 (town.rsdt_addr_flg = '1') は rsdtdsp_blk (「○番」) と rsdtdsp_rsdt (「○号」) まで引ける。
+    結合キーは lg_code, machiaza_id（町字）、blk_id（街区）、rsdt_id, rsdt2_id（住居）。
+  synonyms: [ジオコーダー, ジオコーディング, 住所マスタ]
+  examples:
+    - 住所から緯度経度を引きたい
+    - 町字を国勢調査の小地域につなぎたい
+
+schemas:
+  - name: main
+    title: メイン

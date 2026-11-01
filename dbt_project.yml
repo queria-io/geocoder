@@ -1,0 +1,28 @@
+name: "geocoder"
+version: "1.0.0"
+
+profile: "geocoder"
+
+model-paths: ["models"]
+macro-paths: ["macros", "shared/macros"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  geocoder:
+    +database: geocoder
+    main:
+      # ジオコーダーは市区町村 (lg_code) で絞って読む。表を lg_code の順に並べ、行グループを
+      # 小さくして、1 市区町村で読む量を数百 KB に抑える。設定はスキーマに付く
+      # (dbt は __dbt_tmp に書いてから改名するので、テーブルに付けても効かない)
+      #
+      # 行グループは DuckDB が並列に書く単位 (122,880 行) を割り切る大きさにする。32,768 行
+      # だと単位の端の端数が別の単位の行と 1 つの行グループにまとめられ、並べた順が
+      # 行グループの中で崩れて lg_code の範囲が重なった
+      +pre-hook:
+        - "CALL geocoder.set_option('parquet_row_group_size', 30720, schema => 'main')"
+        - "CALL geocoder.set_option('parquet_compression', 'zstd', schema => 'main')"
+      mart:
+        +materialized: table

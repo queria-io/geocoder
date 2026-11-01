@@ -1,0 +1,60 @@
+version: 2
+
+models:
+  - name: town
+    description: |
+      全国の町字の名前・別名・代表点と、代表点が入る国勢調査の小地域。住所の文字列を町字に当てるのに使う。名前の中の全角の英数字・記号は半角にそろえる。
+      「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
+      小地域は「国勢調査 町丁・字等別境界データ」（総務省統計局）（https://www.e-stat.go.jp/gis）を使用。
+    access: public
+    columns:
+      - name: lg_code
+        data_type: varchar
+      - name: machiaza_id
+        data_type: varchar
+      - name: machiaza_type
+        data_type: varchar
+      - name: pref_name
+        data_type: varchar
+      - name: county_name
+        data_type: varchar
+      - name: city_name
+        data_type: varchar
+      - name: ward_name
+        data_type: varchar
+      - name: oaza_cho
+        data_type: varchar
+      - name: chome
+        data_type: varchar
+      - name: koaza
+        data_type: varchar
+      - name: kyoto_street
+        data_type: boolean
+      - name: machiaza_dist
+        data_type: varchar
+      - name: has_chome
+        data_type: boolean
+      - name: rsdtdsp_count
+        data_type: integer
+      - name: parcel_count
+        data_type: integer
+      - name: alias_oaza
+        data_type: varchar
+      - name: alias_koaza
+        data_type: varchar
+      - name: rsdt_addr_flg
+        data_type: varchar
+      - name: rsdt_addr_partial
+        data_type: boolean
+      - name: post_code
+        data_type: varchar
+      - name: efct_date
+        data_type: date
+      - name: lng
+        data_type: double
+      - name: lat
+        data_type: double
+      - name: point_level
+        data_type: varchar
+      - name: small_area_code
+        data_type: varchar

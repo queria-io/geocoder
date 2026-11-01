@@ -1,0 +1,33 @@
+schema: main
+name: city
+title: 市区町村
+description: |
+  全国の市区町村（政令市の区を含む）の名前と代表点。住所の頭から市区町村を切り出すのに使う。名前の中の全角の英数字・記号は半角にそろえる。
+  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
+keywords:
+  - 住所
+  - ジオコーディング
+published: true
+sources:
+  - path: https://dataset.address-br.digital.go.jp/
+fields:
+  - name: lg_code
+    title: 全国地方公共団体コード
+    description: "6桁（検査数字あり）"
+    semantic: { role: entity, name: city }
+  - name: pref_code
+    title: 都道府県コード
+  - name: pref_name
+    title: 都道府県名
+  - name: county_name
+    title: 郡名
+  - name: city_name
+    title: 市区町村名
+  - name: ward_name
+    title: 政令市区名
+  - name: lng
+    title: 経度
+    description: "代表点の経度"
+  - name: lat
+    title: 緯度
+    description: "代表点の緯度"

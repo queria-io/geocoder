@@ -1,0 +1,39 @@
+{
+  "name": "geocoder",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "pnpm build:web && wrangler deploy",
+    "dev": "pnpm build:web && wrangler dev",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p site",
+    "check": "oxlint && oxfmt --check .",
+    "fix": "oxlint --fix && oxfmt .",
+    "build:web": "mkdir -p public && cp site/index.html site/brand/favicon.ico site/brand/apple-touch-icon.png site/brand/icon-512.png site/brand/og.png node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs public/ && cp site/brand/mark.svg public/favicon.svg && esbuild site/app.ts --bundle --format=esm --minify --outfile=public/app.js && esbuild site/app.css --bundle --minify --loader:.svg=dataurl --outfile=public/app.css"
+  },
+  "dependencies": {
+    "@hono/zod-openapi": "^1.6.3",
+    "@mapbox/vector-tile": "^3.0.0",
+    "fzstd": "^0.1.1",
+    "hono": "^4.13.14",
+    "hyparquet": "^1.32.0",
+    "pbf": "^5.1.2",
+    "pmtiles": "^4.5.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.23.0",
+    "@cloudflare/workers-types": "^5.20261014.1",
+    "@protomaps/basemaps": "5.7.2",
+    "esbuild": "^0.28.2",
+    "maplibre-gl": "6.14.0",
+    "oxfmt": "^0.73.0",
+    "oxlint": "^1.76.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.7.4",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.151.0"
+  },
+  "packageManager": "pnpm@10.17.1"
+}
