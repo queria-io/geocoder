@@ -121,7 +121,7 @@ button:disabled {
 }
 .try {
   display: grid;
-  grid-template-columns: 3fr 2fr;
+  grid-template-columns: 2fr 1fr;
   gap: 1rem;
 }
 @media (max-width: 720px) {
@@ -130,7 +130,7 @@ button:disabled {
   }
 }
 .map {
-  height: 26rem;
+  height: clamp(24rem, 70vh, 44rem);
   border-radius: var(--radius);
   border: 1px solid var(--border);
 }
@@ -271,6 +271,6 @@ summary {
     padding: 0.5rem 0.25rem;
   }
   .map {
-    height: 18rem;
+    height: 60vh;
   }
 }

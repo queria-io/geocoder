@@ -38,7 +38,7 @@ const dark = matchMedia("(prefers-color-scheme: dark)").matches;
 const map = new maplibregl.Map({
   container: "map",
   center: [139.7372, 35.6794],
-  zoom: 15,
+  zoom: 13,
   localIdeographFontFamily: "sans-serif",
   style: {
     version: 8,
@@ -111,7 +111,7 @@ const tryAddress = async (address: string, move = true) => {
     marker.setLngLat([r.lng, r.lat]).addTo(map);
     const view = {
       center: [r.lng, r.lat] as [number, number],
-      zoom: r.coordinates_level === "rsdtdsp_rsdt" ? 17 : 15,
+      zoom: r.coordinates_level === "rsdtdsp_rsdt" ? 16 : 14,
     };
     if (move) map.flyTo(view);
     else map.jumpTo(view);
