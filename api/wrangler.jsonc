@@ -21,5 +21,5 @@
     "CITY_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/city__dbt_tmp/ducklake-01a194ac-9dd7-7409-a4a7-6d5c4d861e39.parquet",
     "PREF_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/pref__dbt_tmp/ducklake-01a194ac-a1be-7d71-b4f5-57e2f24d286e.parquet",
   },
-  "observability": { "enabled": true },
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
 }
