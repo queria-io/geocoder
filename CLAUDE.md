@@ -19,7 +19,7 @@ Queria のジオコーダー。住所と座標・地域コードを相互に引�
 
 ## queria-web との境目
 
-- このリポジトリが出すのは API (geocoder.queria.io/v1) と仕様書 (/docs・/openapi.json) だけ。説明・試す画面・CSV の一括変換は queria-web の queria.io/geocoder に置き、geocoder.queria.io/ はそこへ転送する
+- このリポジトリが出すのは API (geocoder.queria.io/v1) と仕様書 (/docs・/openapi.json) だけ。`/` は /docs へ転送する。queria-web へは転送しない (このリポジトリだけで成り立つようにする)
 - queria-web (エリア分析など) はこの API をふつうの利用者と同じ形で呼ぶ。ログインと API キーは queria.io 側
 - つながりは公開の API 仕様 (OpenAPI) と、API キーの確認の 2 本だけ。queria-web の D1 の表や画面の部品をこれ以上読まない
 - API の形を変えるときは OpenAPI の差分として PR に出す。アカウントと利用規約は Queria のものを使う

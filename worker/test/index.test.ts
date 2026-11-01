@@ -155,10 +155,10 @@ describe("/v1/batch", () => {
 });
 
 describe("/", () => {
-  it("queria.io/geocoder へ転送する", async () => {
+  it("/ は仕様書へ転送する", async () => {
     const response = await exports.default.fetch("https://geocoder.test/", { redirect: "manual" });
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe("https://queria.io/geocoder");
+    expect(response.headers.get("location")).toBe("/docs");
   });
 });
 
