@@ -129,6 +129,14 @@ describe("/v1/reverse", () => {
   });
 });
 
+describe("/docs", () => {
+  it("仕様書を読む HTML を返す", async () => {
+    const response = await exports.default.fetch("https://geocoder.test/docs");
+    expect(response.headers.get("Content-Type")).toContain("text/html");
+    expect(await response.text()).toContain('data-url="/openapi.json"');
+  });
+});
+
 describe("/openapi.json", () => {
   it("逆引きと正引きの仕様を返す", async () => {
     const response = await exports.default.fetch("https://geocoder.test/openapi.json");

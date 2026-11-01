@@ -584,6 +584,24 @@ app.doc31("/openapi.json", {
   },
 });
 
+// 仕様書 (/openapi.json) を人が読める形で出す。項目の説明は手で書かず、仕様書から作る
+const DOCS_HTML = `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Queria Geocoder API</title>
+</head>
+<body>
+<script id="api-reference" data-url="/openapi.json"></script>
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.74.0"></script>
+</body>
+</html>`;
+
+app.get("/docs", (c) => c.html(DOCS_HTML, 200, { "Cache-Control": "public, max-age=3600" }));
+// LP を置くまでは説明のページへ
+app.get("/", (c) => c.redirect("/docs", 302));
+
 app.all("/v1/reverse", (c) => c.body("Method Not Allowed", 405, { Allow: "GET" }));
 app.all("/v1/geocode", (c) => c.body("Method Not Allowed", 405, { Allow: "GET" }));
 app.notFound((c) => json(c, 404, { error: "not found" }, "no-store"));
