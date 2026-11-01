@@ -627,8 +627,10 @@ app.doc31("/openapi.json", {
   info: {
     title: "Queria Geocoder",
     version: API_VERSION,
-    description:
+    description: [
       "日本の住所と座標・地域コードを相互に引く無料の API。ベータの間は答えの形を変えることがある。答えを載せるときは source.attribution の出典も一緒に載せる",
+      "地図で試す画面と、CSV をまとめて変換する画面は [queria.io/geocoder](https://queria.io/geocoder) にある",
+    ].join("\n\n"),
   },
 });
 
