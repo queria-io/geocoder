@@ -45,6 +45,15 @@ type Expect = {
   wantStructured?: Record<string, string | null>;
 };
 
+/**
+ * 上流と意図して答えを変えた試験。上流は「○丁」まで当たった町字でも最初の番号を丁目と読み替えるので、
+ * データにある番・号まで届かない。こちらは読み替えずに当てる (src/matching/two_stage.ts)
+ */
+const intended = new Map([
+  ["jat075", "宿院町西2丁 1番1号まで当てる (上流は 1番まで)"],
+  ["nja048-1", "向陵西町2丁 1番26号まで当てる (上流は町字まで)"],
+]);
+
 const townLevels = new Set(["pref", "city", "machiaza", "machiaza_detail", "unknown"]);
 const scopeOf = (level: string | undefined): string =>
   level === undefined || townLevels.has(level)
@@ -122,12 +131,13 @@ test("上流の matching/issues", async () => {
       limit: c.query.Limit ?? 1,
     }).catch((e: unknown) => e as Error);
     const problems = got instanceof Error ? [`error: ${got.message}`] : diff(c, got[0]);
+    const changed = intended.has(c.name) && problems.length > 0;
     results.push({
       file: c.file,
       name: c.name,
       address: c.query.Address,
-      scope,
-      ok: problems.length === 0,
+      scope: changed ? "intended" : scope,
+      ok: changed || problems.length === 0,
       problems,
     });
   }
@@ -140,7 +150,7 @@ test("上流の matching/issues", async () => {
     return `${xs.filter((r) => r.ok).length}/${xs.length}`;
   };
   console.log(
-    `町字まで: ${count("town")}  住居表示: ${count("residential")}  地番: ${count("parcel")}`,
+    `町字まで: ${count("town")}  住居表示: ${count("residential")}  地番: ${count("parcel")}  意図して変えた: ${count("intended")}`,
   );
   expect(results.length).toBeGreaterThan(0);
 });
