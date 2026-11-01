@@ -41,7 +41,7 @@ export const ABR_ATTRIBUTION =
 export const SMALL_AREA_ATTRIBUTION =
   "「国勢調査 境界データ（小地域）」（総務省統計局、e-Stat）を加工して作成";
 
-export const INCLUDES = ["match", "parts", "ids", "codes", "small_area"] as const;
+export const INCLUDES = ["match", "structured_address", "ids", "codes", "small_area"] as const;
 export type Include = (typeof INCLUDES)[number];
 
 /** 当てたあとに足す項目。郵便番号は町字の表、小地域は境界タイルから引く */
@@ -69,7 +69,7 @@ export const forwardAnswer = (r: MatchedResult, include: ReadonlySet<Include>, x
   coordinates_level: coordinatesLevel(r),
   lg_code: r.ids.lg_code,
   ...(include.has("match") ? { score: r.score } : {}),
-  ...(include.has("parts") ? { structured_address: r.structured_address } : {}),
+  ...(include.has("structured_address") ? { structured_address: r.structured_address } : {}),
   ...(include.has("ids") ? { ids: r.ids } : {}),
   ...(include.has("codes") ? { codes: codes(r, x) } : {}),
   ...(include.has("small_area") ? { estat_small_area_code: x.estat_small_area_code } : {}),

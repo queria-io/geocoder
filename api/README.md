@@ -35,7 +35,7 @@ GET /v1/geocode?address=東京都千代田区紀尾井町1-3
 - `match_level` は住所がどこまで当たったか、`coordinates_level` は座標を取った点の段。番号まで当たってもその点に
   座標が無ければ町字の代表点で埋め、`coordinates_level` が `machiaza` になる。どれも代表点で、建物の位置ではない
 - 当たらなければ `results` は空。`limit` (1〜10、既定 1) まで強い順に返す
-- `include` (カンマ区切り): `match` (score)・`parts` (structured_address)・`ids` (ABR の ID)・
+- `include` (カンマ区切り): `match` (score)・`structured_address` (住所の区切り)・`ids` (ABR の ID)・
   `codes` (都道府県・市区町村コード、郵便番号、地域メッシュ)・`small_area` (国勢調査の小地域コード。境界タイルを 1 枚読む)
 - `format`: `json` (既定)・`geojson` (abr-geocoder の /geocode と同じ FeatureCollection、abr-geocoder の項目は全部入る)・
   `csv` (1 件 1 行、BOM 付き UTF-8。入れ子は `structured_address.pref` のような列にほどく。出典は `X-Attribution` ヘッダに URL エンコードで入れる)

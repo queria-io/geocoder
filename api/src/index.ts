@@ -379,7 +379,7 @@ const GeocodeResult = z
       z.number().openapi({ description: "候補の並べ替えに使う値。1 はぴったりの一致" }),
       "match",
     ),
-    structured_address: optional(StructuredAddress, "parts"),
+    structured_address: optional(StructuredAddress, "structured_address"),
     ids: optional(Ids, "ids"),
     codes: optional(ForwardCodes, "codes"),
     estat_small_area_code: smallArea.optional(),

@@ -95,8 +95,10 @@ describe("meshCodes", () => {
 
 describe("parseInclude", () => {
   it("カンマ区切りの組を読み、知らない名前なら null", () => {
-    expect(parseInclude("parts, codes")).toEqual(new Set(["parts", "codes"]));
+    expect(parseInclude("structured_address, codes")).toEqual(
+      new Set(["structured_address", "codes"]),
+    );
     expect(parseInclude(undefined)).toEqual(new Set());
-    expect(parseInclude("parts,foo")).toBeNull();
+    expect(parseInclude("structured_address,foo")).toBeNull();
   });
 });
