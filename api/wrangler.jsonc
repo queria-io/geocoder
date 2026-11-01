@@ -17,9 +17,9 @@
   "vars": {
     "BOUNDARY_TILES_FILE": "boundaries-20261027.pmtiles",
     // geocoder の表の Parquet。FDL の refs/heads/main から引くまでの仮置きで、作り直したら書き換える
-    "TOWN_PARQUET": "",
-    "CITY_PARQUET": "",
-    "PREF_PARQUET": "",
+    "TOWN_PARQUET": "queria/geocoder/ducklake.duckdb.files/main/town__dbt_tmp/ducklake-01a194af-a665-7afe-a696-55dd0ef106ea.parquet",
+    "CITY_PARQUET": "queria/geocoder/ducklake.duckdb.files/main/city__dbt_tmp/ducklake-01a194ac-9dd7-7409-a4a7-6d5c4d861e39.parquet",
+    "PREF_PARQUET": "queria/geocoder/ducklake.duckdb.files/main/pref__dbt_tmp/ducklake-01a194ac-a1be-7d71-b4f5-57e2f24d286e.parquet",
   },
   "observability": { "enabled": true },
 }
