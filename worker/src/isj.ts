@@ -33,6 +33,18 @@ export const parentNumber = (r: MatchedResult): string | null =>
   /^(\d+)(?=$|-|番)/.exec(r.unmatched_address?.[0] ?? "")?.[1] ??
   null;
 
+/**
+ * 親番の点を選ぶ。地番の行があればそれだけを使う。町字に住居表示の行しか無いとき
+ * (位置参照情報が「並木三丁目」などを住居表示の区域として持つ) は、同じ番号の街区の点を使う
+ */
+const pick = (rows: IsjRow[], num: string): [number, number] | undefined => {
+  const parcel = rows.filter((x) => !x.is_residential_address);
+  return (parcel.length > 0 ? parcel : rows)
+    .filter((x) => x.block_number === num)
+    .map((x) => (x.lng !== null && x.lat !== null ? ([x.lng, x.lat] as [number, number]) : null))
+    .find((p) => p !== null);
+};
+
 export const withParcelParent = async (
   r: MatchedResult,
   load: (lgCode: string, machiazaId: string) => Promise<IsjRow[]>,
@@ -45,10 +57,7 @@ export const withParcelParent = async (
   const base = machiazaId.slice(0, 4) + "000";
   const ids = r.structured_address.chome === null ? [...new Set([machiazaId, base])] : [machiazaId];
   for (const id of ids) {
-    const hit = (await load(lgCode, id))
-      .filter((x) => !x.is_residential_address && x.block_number === num)
-      .map((x) => (x.lng !== null && x.lat !== null ? ([x.lng, x.lat] as [number, number]) : null))
-      .find((p) => p !== null);
+    const hit = pick(await load(lgCode, id), num);
     if (hit) return { ...r, coordinates: hit, coordinate_level: PARCEL_PARENT };
   }
   return r;
