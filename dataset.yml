@@ -61,3 +61,5 @@ ai_context:
 schemas:
   - name: main
     title: メイン
+  - name: town
+    title: 町字
