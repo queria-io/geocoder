@@ -79,7 +79,7 @@ GET /v1/reverse?lat=35.6812&lng=139.7671
 
 ## ページ
 
-`/` は https://queria.io/geocoder （説明・試す画面・CSV の一括変換）へ転送する。ここで出すのは API と仕様書だけ。
+出すのは API と仕様書だけ。`/` は `/docs` へ転送する。
 
 アイコンと共有画像は `site/brand/` (元は `mark.svg`・`og.svg`、PNG と ico は `gen.py` で作る)。`pnpm build:web` で `public/` に置き、Workers の static assets で出す。
 

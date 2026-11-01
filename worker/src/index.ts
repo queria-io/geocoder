@@ -735,8 +735,8 @@ const DOCS_HTML = `<!doctype html>
 </body>
 </html>`;
 
-// 説明・試す画面・一括変換は queria.io/geocoder に置く。ここは API と仕様書だけ
-app.get("/", (c) => c.redirect("https://queria.io/geocoder", 302));
+// ここは API と仕様書だけ。/ は仕様書を見せる
+app.get("/", (c) => c.redirect("/docs", 302));
 app.get("/docs", (c) => c.html(DOCS_HTML, 200, { "Cache-Control": "public, max-age=3600" }));
 
 app.all("/v1/reverse", (c) => c.body("Method Not Allowed", 405, { Allow: "GET" }));
