@@ -61,6 +61,11 @@ export type MatchedResult = {
   ids: IDs;
   structured_address: StructuredAddress;
   coordinates: [number, number] | null;
+  /**
+   * 座標を取った点の段。上流には無い。番号まで当たったのにその点に座標が無く、町字の代表点で
+   * 埋めたときだけ入れる。無ければ match_level と同じ段の点
+   */
+  coordinate_level?: MatchLevel;
   machiaza: MachiazaData;
 };
 

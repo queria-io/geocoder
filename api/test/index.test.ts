@@ -65,6 +65,7 @@ describe("/v1/reverse", () => {
       country: "JP",
       prefecture_code: "13",
       city_code: "13101",
+      lg_code: "131016",
       estat_small_area_code: "131010010",
       match: { level: "small_area", method: "polygon" },
       source: { boundaries: env.BOUNDARY_TILES_FILE },
@@ -128,9 +129,31 @@ describe("/openapi.json", () => {
     const doc = (await response.json()) as { paths: Record<string, unknown> };
     expect(Object.keys(doc.paths)).toEqual(["/v1/reverse", "/v1/geocode"]);
   });
+
+  it("逆引きの lat・lng は数値として書く", async () => {
+    const response = await exports.default.fetch("https://geocoder.test/openapi.json");
+    const doc = (await response.json()) as {
+      paths: {
+        "/v1/reverse": { get: { parameters: { name: string; schema: { type: string } }[] } };
+      };
+    };
+    const types = doc.paths["/v1/reverse"].get.parameters.map((p) => [p.name, p.schema.type]);
+    expect(types).toEqual([
+      ["lat", "number"],
+      ["lng", "number"],
+    ]);
+  });
 });
 
 describe("/v1/geocode", () => {
+  it("limit が範囲外なら 400", async () => {
+    const response = await exports.default.fetch(
+      "https://geocoder.test/v1/geocode?address=%E6%9D%B1%E4%BA%AC&limit=11",
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "limit は 1〜10 の整数で渡してください" });
+  });
+
   it("住所が空なら 400", async () => {
     const response = await exports.default.fetch("https://geocoder.test/v1/geocode?address=%20");
     expect(response.status).toBe(400);

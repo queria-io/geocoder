@@ -15,6 +15,7 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { cors } from "hono/cors";
 
+import { ABR_ATTRIBUTION, fileName, forwardAnswer, lgCodeOf } from "./answer";
 import { geocode, type ForwardEnv } from "./forward";
 import { ErrAddressTooLong, ErrEmptyAddress } from "./normalize/input";
 import { type Level, resolveAreas, type TilePoint } from "./lookup";
@@ -24,6 +25,8 @@ export interface Env extends ForwardEnv {
   BUCKET: R2Bucket;
   /** R2 の boundaries/ に置いた境界タイルのファイル名 (queria-web の src/lib/gis/boundary-tiles.ts と同じ) */
   BOUNDARY_TILES_FILE: string;
+  /** IP ごとの回数の上限。費用を守るためのもので、ふつうの使い方では当たらない高さにする */
+  LIMITER?: RateLimit;
 }
 
 /** R2 のオブジェクトを PMTiles の Source として読む (queria-web の workers/basemap と同じ) */
@@ -72,7 +75,7 @@ const ATTRIBUTION: Record<Level, string> = {
 
 const json = (
   c: Context,
-  status: 200 | 400 | 404 | 405 | 502,
+  status: 200 | 400 | 404 | 405 | 429 | 502,
   body: unknown,
   cacheControl: string,
 ) => c.json(body, status, { "Cache-Control": cacheControl });
@@ -89,7 +92,8 @@ const coord = (name: string, min: number, max: number, example: string) =>
     .transform(Number)
     .pipe(z.number().min(min).max(max))
     .transform((n) => Math.round(n * 1e6) / 1e6)
-    .openapi({ param: { name, in: "query" }, example });
+    // 入力は文字列だが、仕様書には数値として書く (利用者が仕様書から SDK を作るとき困らないように)
+    .openapi({ param: { name, in: "query" }, type: "number", example: Number(example) } as never);
 
 const Level = z.enum(["prefecture", "city", "small_area"]).nullable();
 
@@ -100,6 +104,10 @@ const ReverseResult = z
     country: z.literal("JP"),
     prefecture_code: z.string().nullable().openapi({ description: "都道府県コード (2 桁)" }),
     city_code: z.string().nullable().openapi({ description: "全国地方公共団体コードの頭 5 桁" }),
+    lg_code: z
+      .string()
+      .nullable()
+      .openapi({ description: "全国地方公共団体コード (6 桁、検査数字つき)" }),
     estat_small_area_code: z
       .string()
       .nullable()
@@ -148,6 +156,7 @@ const reverse = async (lat: number, lng: number, env: Env) => {
     lng,
     country: "JP" as const,
     ...codes,
+    lg_code: lgCodeOf(codes.city_code),
     match: { level, method: "polygon" as const },
     source: {
       boundaries: env.BOUNDARY_TILES_FILE,
@@ -166,13 +175,28 @@ const app = new OpenAPIHono<{ Bindings: Env }>({
           {
             error: result.error.issues.some((i) => i.path.includes("address"))
               ? "address を 1〜100 文字で渡してください"
-              : "lat と lng を数値で渡してください",
+              : result.error.issues.some((i) => i.path.includes("limit"))
+                ? "limit は 1〜10 の整数で渡してください"
+                : "lat と lng を数値で渡してください",
           },
           "no-store",
         ),
 });
 
 app.use("*", cors({ origin: "*", allowMethods: ["GET"] }));
+
+// 鍵は呼んだ元の IP。上限は Cloudflare の拠点ごとに数えるので目安
+app.use("/v1/*", async (c, next) => {
+  const ip = c.req.header("cf-connecting-ip");
+  if (c.env.LIMITER && ip && !(await c.env.LIMITER.limit({ key: ip })).success)
+    return json(
+      c,
+      429,
+      { error: "呼び出しが多すぎます。少し待ってから呼んでください" },
+      "no-store",
+    );
+  return next();
+});
 
 app.openapi(reverseRoute, async (c) => {
   const { lat, lng } = c.req.valid("query");
@@ -241,7 +265,15 @@ const GeocodeResult = z
       ])
       .openapi({ description: "当たった階層" }),
     score: z.number().openapi({ description: "1 はぴったりの一致。あいまい一致はそれより小さい" }),
-    lg_code: z.string().nullable().openapi({ description: "全国地方公共団体コード (6 桁)" }),
+    country: z.literal("JP"),
+    prefecture_code: z.string().nullable().openapi({ description: "都道府県コード (2 桁)" }),
+    city_code: z.string().nullable().openapi({
+      description: "全国地方公共団体コードの頭 5 桁。都道府県までしか当たらなければ null",
+    }),
+    lg_code: z
+      .string()
+      .nullable()
+      .openapi({ description: "全国地方公共団体コード (6 桁、検査数字つき)" }),
     machiaza_id: z.string().nullable().openapi({ description: "ABR の町字 ID (7 桁)" }),
     rsdt_addr_flg: z
       .string()
@@ -250,8 +282,25 @@ const GeocodeResult = z
     structured_address: StructuredAddress,
     lng: z.number().nullable(),
     lat: z.number().nullable(),
+    coordinate_level: z
+      .enum(["rsdtdsp_rsdt", "rsdtdsp_blk", "parcel", "machiaza", "city", "pref"])
+      .nullable()
+      .openapi({
+        description:
+          "座標を取った点。rsdtdsp_rsdt は号、rsdtdsp_blk は街区、parcel は地番の筆、machiaza は町字、city は市区町村、pref は都道府県の代表点。番号まで当たってもその点に座標が無ければ町字の代表点で埋め、ここが machiaza になる。どれも代表点で、建物の位置ではない",
+      }),
   })
   .openapi("GeocodeResult");
+
+const GeocodeResponse = z
+  .object({
+    results: z.array(GeocodeResult),
+    source: z.object({
+      tables: z.array(z.string()).openapi({ description: "答えに使った表のファイル名" }),
+      attribution: z.array(z.string()),
+    }),
+  })
+  .openapi("GeocodeResponse");
 
 const geocodeRoute = createRoute({
   method: "get",
@@ -265,11 +314,22 @@ const geocodeRoute = createRoute({
         .min(1)
         .max(100)
         .openapi({ param: { name: "address", in: "query" }, example: "東京都千代田区紀尾井町1-3" }),
+      limit: z
+        .string()
+        .regex(/^\d+$/)
+        .transform(Number)
+        .pipe(z.number().int().min(1).max(10))
+        .optional()
+        .openapi({
+          param: { name: "limit", in: "query", description: "返す候補の数の上限 (1〜10、既定 1)" },
+          type: "integer",
+          example: 1,
+        } as never),
     }),
   },
   responses: {
     200: {
-      content: { "application/json": { schema: z.object({ results: z.array(GeocodeResult) }) } },
+      content: { "application/json": { schema: GeocodeResponse } },
       description: "当てた結果。強い順",
     },
     400: {
@@ -281,8 +341,8 @@ const geocodeRoute = createRoute({
 });
 
 app.openapi(geocodeRoute, async (c) => {
-  const { address } = c.req.valid("query");
-  const result = await tryCatchAsync(() => geocode(c.env, address, 1));
+  const { address, limit } = c.req.valid("query");
+  const result = await tryCatchAsync(() => geocode(c.env, address, limit ?? 1));
   if (!result.ok) {
     if (result.error instanceof ErrEmptyAddress || result.error instanceof ErrAddressTooLong)
       return c.json({ error: "address を 1〜100 文字で渡してください" }, 400, {
@@ -291,24 +351,34 @@ app.openapi(geocodeRoute, async (c) => {
     console.error("geocoder: geocode", result.error);
     return c.json({ error: "住所の表を読めませんでした" }, 502, { "Cache-Control": "no-store" });
   }
-  const results = result.value.map((r) => ({
-    matched_address: r.matched_address,
-    unmatched_address: r.unmatched_address,
-    match_level: r.match_level,
-    score: r.score,
-    lg_code: r.ids.lg_code,
-    machiaza_id: r.ids.machiaza_id,
-    rsdt_addr_flg: r.ids.rsdt_addr_flg,
-    structured_address: r.structured_address,
-    lng: r.coordinates?.[0] ?? null,
-    lat: r.coordinates?.[1] ?? null,
-  }));
-  return c.json({ results }, 200, { "Cache-Control": "public, max-age=86400" });
+  const e = c.env;
+  const tables = [
+    e.PREF_PARQUET,
+    e.CITY_PARQUET,
+    e.TOWN_PARQUET,
+    e.RSDTDSP_PARQUET,
+    e.PARCEL_PARQUET,
+  ]
+    .filter((k) => k !== "")
+    .map(fileName);
+  return c.json(
+    {
+      results: result.value.map(forwardAnswer),
+      source: { tables, attribution: [ABR_ATTRIBUTION] },
+    },
+    200,
+    { "Cache-Control": "public, max-age=86400" },
+  );
 });
 
 app.doc31("/openapi.json", {
   openapi: "3.1.0",
-  info: { title: "Queria Geocoder", version: "0.1.0" },
+  info: {
+    title: "Queria Geocoder",
+    version: "0.1.0-beta",
+    description:
+      "日本の住所と座標・地域コードを相互に引く無料の API。ベータの間は答えの形を変えることがある。答えを載せるときは source.attribution の出典も一緒に載せる",
+  },
 });
 
 app.all("/v1/reverse", (c) => c.body("Method Not Allowed", 405, { Allow: "GET" }));

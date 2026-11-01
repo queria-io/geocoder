@@ -63,6 +63,15 @@ const mergeFrom = (dst: StructuredAddress, src: StructuredAddress): StructuredAd
     Object.entries(dst).map(([k, v]) => [k, v ?? src[k as keyof StructuredAddress]]),
   ) as StructuredAddress;
 
+/**
+ * 番号の点に座標が無ければ町字の代表点で埋める。上流は座標を null のまま返す。
+ * どの点から取ったかは coordinate_level に残す
+ */
+const withMachiazaPoint = (result: MatchedResult, basic: MatchedResult) =>
+  result.coordinates !== null || basic.coordinates === null
+    ? {}
+    : { coordinates: basic.coordinates, coordinate_level: basic.match_level };
+
 const normalizeResidentialWithBasic = async (
   n: Impl,
   basicResults: MatchedResult[],
@@ -80,7 +89,15 @@ const normalizeResidentialWithBasic = async (
     merged.chome === null && parsed.HasChome && parsed.Chome !== ""
       ? { ...merged, chome: parsed.Chome + "丁目" }
       : merged;
-  return [{ ...result, ids, structured_address: sa, matched_address: FormatAddress(sa) }];
+  return [
+    {
+      ...result,
+      ...withMachiazaPoint(result, basic),
+      ids,
+      structured_address: sa,
+      matched_address: FormatAddress(sa),
+    },
+  ];
 };
 
 export const tryTwoStageResidential = async (
@@ -170,7 +187,15 @@ const normalizeParcelWithBasic = async (
   if (!result) return null;
   const ids = { ...result.ids, rsdt_addr_flg: result.ids.rsdt_addr_flg ?? basic.ids.rsdt_addr_flg };
   const sa = mergeFrom(result.structured_address, basic.structured_address);
-  return [{ ...result, ids, structured_address: sa, matched_address: FormatAddress(sa) }];
+  return [
+    {
+      ...result,
+      ...withMachiazaPoint(result, basic),
+      ids,
+      structured_address: sa,
+      matched_address: FormatAddress(sa),
+    },
+  ];
 };
 
 /** 地番の表に通り名は無いので、町字までの答えから通り名と、通り名の町字 ID・住居表示の印を移す */

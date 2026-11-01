@@ -4,8 +4,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2025-12-01",
   "account_id": "57c6a116efc637fc3f21d0affea15508",
-  // 試作の間は workers.dev で測る。出すときに route を決める
+  // 無料のベータとして geocoder.queria.io で出す。workers.dev は計測用に残す
   "workers_dev": true,
+  "routes": [{ "pattern": "geocoder.queria.io", "custom_domain": true }],
   "preview_urls": false,
   // 上流の表 (src/transform/special_chars.tsv) を文字列として読み込む
   "rules": [{ "type": "Text", "globs": ["**/*.tsv"], "fallthrough": true }],
@@ -23,5 +24,9 @@
     "RSDTDSP_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/rsdtdsp__dbt_tmp/ducklake-01a194d1-978b-7ea8-9afa-a59bd0f6c8d1.parquet",
     "PARCEL_PARQUET": "",
   },
+  // IP ごとの回数の上限 (src/index.ts)。費用を守るためのもので、ふつうの使い方では当たらない高さ
+  "ratelimits": [
+    { "name": "LIMITER", "namespace_id": "1001", "simple": { "limit": 300, "period": 60 } },
+  ],
   "observability": { "enabled": true, "head_sampling_rate": 1 },
 }
