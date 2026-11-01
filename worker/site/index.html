@@ -28,10 +28,11 @@
         ><img src="/favicon.svg" alt="" width="28" height="28" />Queria Geocoder</a
       >
       <nav>
-        <a href="#uses">使いみち</a>
+        <a href="#codes">地域コード</a>
+        <a href="#uses">利用例</a>
         <a href="#how">仕組み</a>
         <a href="#price">料金</a>
-        <a href="#dev">開発者の方へ</a>
+        <a href="#dev">開発者向け</a>
       </nav>
     </header>
 
@@ -108,8 +109,26 @@
         </div>
       </section>
 
+      <section id="codes">
+        <h2>地域コード</h2>
+        <p>
+          住所 1
+          件ごとに、緯度・経度と一緒に統計と結ぶためのコードを返します。緯度・経度を境界のデータと重ねて、コードを別に出し直す必要はありません。
+        </p>
+        <ul>
+          <li>市区町村コード・全国地方公共団体コード: 自治体ごとの統計と結べます</li>
+          <li>国勢調査の小地域コード: 町丁目ごとの人口・世帯と結べます</li>
+          <li>地域メッシュコード (1km・500m・250m): メッシュ統計と結べます</li>
+          <li>郵便番号と、アドレス・ベース・レジストリの町字・街区・住居の ID</li>
+        </ul>
+        <p>
+          Queria の<a href="https://queria.io">データカタログ</a
+          >の表も同じコードで持っているので、住所録をそのまま人口や地価の表と結べます。町字の代表点までしか分からなかった住所では、小地域とメッシュも代表点から出すので、広い町字では実際の場所と違うことがあります。
+        </p>
+      </section>
+
       <section id="uses">
-        <h2>使いみち</h2>
+        <h2>利用例</h2>
         <ul class="cards">
           <li>
             <h3>顧客の住所録を地図に置く</h3>
@@ -148,7 +167,7 @@
       </section>
 
       <section id="free">
-        <h2>無料で使える理由</h2>
+        <h2>無料で提供できる理由</h2>
         <p>
           データベースも常に動かすサーバーも持たず、Queria
           が整備している住所のデータをファイルとして読むだけの作りなので、動かす費用がほとんどかからないからです。仕組みは<a
@@ -163,7 +182,7 @@
       </section>
 
       <section id="trust">
-        <h2>答えを信頼できる理由</h2>
+        <h2>データの信頼性</h2>
         <ul class="points">
           <li>
             <strong>国が作った住所のデータが元です</strong
@@ -185,7 +204,7 @@
       </section>
 
       <section id="levels">
-        <h2>どこまで分かるか</h2>
+        <h2>精度</h2>
         <ul class="levels">
           <li>
             <strong>番・号まで</strong
@@ -215,7 +234,7 @@
       </section>
 
       <section id="dev">
-        <h2>開発者の方へ</h2>
+        <h2>開発者向け</h2>
         <p>同じことを API で呼べます。登録も鍵もいりません。</p>
         <pre><code>curl -s -G https://geocoder.queria.io/v1/geocode \
   --data-urlencode "address=東京都千代田区紀尾井町1-3"</code></pre>
