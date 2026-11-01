@@ -23,7 +23,7 @@ type Answer = {
 type Row = Truth & { answer: Answer; error_m: number | null };
 
 const BASE = process.env.BASE ?? "https://geocoder.queria.io";
-const BATCH = 100;
+const BATCH = 25; // /v1/batch の上限 (src/index.ts の BATCH_MAX) にそろえる
 
 // 住所に「,」や「"」が入るので、CSV は引用符を見て割る
 const splitCsv = (line: string): string[] =>
