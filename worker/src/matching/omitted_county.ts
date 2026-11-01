@@ -2,6 +2,7 @@
 // 照合は完全一致なので、郡を省いた住所 (北海道当別町春日町…) は町字が 1 つも当たらなかった。
 // 都道府県が分かっているとき、検索文字が郡のある町村の名前で始まっていれば、頭に郡を足す
 import type { CityRow } from "../repository/memory";
+import { StandardizeSpecialChars } from "../transform/special_chars";
 
 type Name = { city: string; county: string };
 
@@ -15,7 +16,11 @@ export const buildCountyIndex = (cities: CityRow[]): CountyIndex =>
       [...Map.groupBy(rows, (c) => c.city)]
         .map(([city, rs]): Name => {
           const counties = new Set(rs.map((r) => r.county ?? ""));
-          return { city, county: counties.size === 1 ? [...counties][0] : "" };
+          // 検索文字は異体字をそろえたあと (檜原村 → 桧原村) なので、名前も同じくそろえて比べる
+          return {
+            city: StandardizeSpecialChars(city)[0],
+            county: counties.size === 1 ? [...counties][0] : "",
+          };
         })
         .sort((a, b) => b.city.length - a.city.length),
     ]),
