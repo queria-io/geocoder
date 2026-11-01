@@ -36,3 +36,6 @@ models:
             - "CREATE SCHEMA IF NOT EXISTS geocoder.town"
             - "CALL geocoder.set_option('parquet_row_group_size', 4096, schema => 'town')"
             - "CALL geocoder.set_option('parquet_compression', 'zstd', schema => 'town')"
+          # 前に main に置いていた町字の表を消す (dbt は移した先しか作らないので、残すとカタログに古い表が出続ける)
+          +post-hook:
+            - "DROP TABLE IF EXISTS geocoder.main.town"
