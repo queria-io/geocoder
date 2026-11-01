@@ -21,18 +21,33 @@ oaza_has_chome AS (
 ),
 -- 町字 ID の頭 4 桁が大字・町、末尾 3 桁が丁目・小字。代表点の無い小字 (大半がそう) は、
 -- 同じ大字・町 (末尾 000) の代表点を使う
+-- 大字・町の行に代表点が無い (または行が無い) ときは、同じ大字・町の小字などの代表点の平均を使う
+oaza_mean AS (
+    SELECT
+        lg_code,
+        left(machiaza_id, 4) AS oaza_id,
+        ST_Point(avg(ST_X(geometry)), avg(ST_Y(geometry))) AS geometry
+    FROM town
+    WHERE geometry IS NOT NULL
+    GROUP BY lg_code, left(machiaza_id, 4)
+),
 located AS (
     SELECT
         t.*,
-        coalesce(t.geometry, p.geometry) AS point,
+        coalesce(t.geometry, p.geometry, m.geometry) AS point,
         CASE
             WHEN t.geometry IS NOT NULL THEN 'town'
             WHEN p.geometry IS NOT NULL THEN 'parent_town'
+            WHEN m.geometry IS NOT NULL THEN 'oaza_mean'
         END AS point_level
     FROM town t
     LEFT JOIN town p
         ON p.lg_code = t.lg_code
         AND p.machiaza_id = left(t.machiaza_id, 4) || '000'
+        AND t.geometry IS NULL
+    LEFT JOIN oaza_mean m
+        ON m.lg_code = t.lg_code
+        AND m.oaza_id = left(t.machiaza_id, 4)
         AND t.geometry IS NULL
 ),
 -- 住居表示の住所の数。番・号の段は、これが 0 の町字では住居表示の表を読まない
