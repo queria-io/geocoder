@@ -12,6 +12,6 @@ con = duckdb.connect()
 con.execute("CREATE TABLE town (lg_code VARCHAR, machiaza_id VARCHAR, oaza_cho VARCHAR, lng DOUBLE, lat DOUBLE)")
 con.executemany("INSERT INTO town VALUES (?, ?, ?, ?, ?)", rows)
 con.execute(
-    "COPY (SELECT * FROM town ORDER BY lg_code, machiaza_id) TO 'api/test/fixture-town.parquet' "
+    "COPY (SELECT * FROM town ORDER BY lg_code, machiaza_id) TO 'worker/test/fixture-town.parquet' "
     "(FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE 2048)"
 )

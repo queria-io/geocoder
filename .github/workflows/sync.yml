@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - "*.md"
-      - "api/**" # Worker の変更ではデータを作り直さない
+      - "worker/**" # Worker の変更ではデータを作り直さない
   schedule:
     - cron: "0 19 2 * *" # address_br の Sync（0 19 1 * *）の翌日に、その更新を受けて作り直す
   workflow_dispatch:

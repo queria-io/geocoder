@@ -7,10 +7,10 @@
     "deploy": "pnpm build:web && wrangler deploy",
     "dev": "pnpm build:web && wrangler dev",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p web",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p site",
     "check": "oxlint && oxfmt --check .",
     "fix": "oxlint --fix && oxfmt .",
-    "build:web": "mkdir -p public && cp web/index.html node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs public/ && esbuild web/app.ts --bundle --format=esm --minify --outfile=public/app.js && esbuild web/app.css --bundle --minify --loader:.svg=dataurl --outfile=public/app.css"
+    "build:web": "mkdir -p public && cp site/index.html node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs public/ && esbuild site/app.ts --bundle --format=esm --minify --outfile=public/app.js && esbuild site/app.css --bundle --minify --loader:.svg=dataurl --outfile=public/app.css"
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.6.3",

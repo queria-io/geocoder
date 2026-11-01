@@ -3,7 +3,7 @@
 住所の文字列と座標・地域コードを相互に引くジオコーダー。
 
 - 直下: ジオコーダーが読む表を作る Queria のデータセット `geocoder`（このページの以下）
-- [`api/`](api/README.md): その表と境界タイルを読む API（Cloudflare Workers）
+- [`worker/`](worker/README.md): geocoder.queria.io を出す Cloudflare Worker（API・LP・説明のページ）
 
 API・LP・試す画面は geocoder.queria.io で、このリポジトリから出す。queria-web はこの API をふつうの利用者と同じ形で呼ぶ。
 queria-web との境目は、公開の API 仕様（OpenAPI）と、API キー・プランの確認の 2 つだけにする。

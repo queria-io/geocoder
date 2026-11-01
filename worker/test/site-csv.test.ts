@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { chunks, guessAddressColumn, parseCsv, toCsv } from "../web/csv";
+import { chunks, guessAddressColumn, parseCsv, toCsv } from "../site/csv";
 
 describe("parseCsv", () => {
   it("囲んだ値のカンマ・改行・二重引用符と BOM を扱う", () => {

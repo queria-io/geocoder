@@ -25,7 +25,8 @@ const tsvText: Plugin = {
 
 export default defineConfig({
   // bench/ は手元で流す重い試験 (bench/vitest.config.ts)
-  test: { exclude: ["bench/**", "node_modules/**"] },
+  // 最初のテストは Worker の起動 (表とタイルの読み込み) を待つので、既定の 5 秒では足りないことがある
+  test: { exclude: ["bench/**", "node_modules/**"], testTimeout: 20_000 },
   plugins: [
     pmtilesFixture,
     tsvText,
