@@ -39,7 +39,7 @@ export type ForwardEnv = {
   CITY_PARQUET: string;
   PREF_PARQUET: string;
   RSDTDSP_PARQUET: string;
-  /** 空なら地番の段は流さない */
+  /** 空なら地番の段は流さない。カンマ区切りで複数のファイルを並べられる */
   PARCEL_PARQUET: string;
   /** 国交省の位置参照情報の親番の点 (isj_block)。空なら町字の代表点のまま */
   ISJ_PARQUET: string;
@@ -71,27 +71,40 @@ const open = async (bucket: R2Bucket, key: string): Promise<Table> => {
 const readAll = async <T>(t: Table): Promise<T[]> =>
   (await parquetReadObjects({ file: t.file, metadata: t.metadata, compressors })) as T[];
 
+/** key はカンマ区切りで複数のファイルを並べられる (DuckLake が大きな表を何個かに分けて書く) */
+export const splitKeys = (key: string): string[] =>
+  key
+    .split(",")
+    .map((k) => k.trim())
+    .filter((k) => k !== "");
+
 /**
  * 町字 1 つ分の行を読む口 (住居表示・地番の表)。表は番号まである住所で初めて開く。
+ * ファイルが分かれていれば全部のフッターを開き、行グループの範囲で当たるものだけ読む。
  * 覚えるのは最近の町字だけにする (町字は全国で数十万ある)。key が空なら何も読まない
  */
 const machiazaLoader = <T>(bucket: R2Bucket, key: string, columns: string[]) => {
-  let table: Promise<Table> | null = null;
+  const keys = splitKeys(key);
+  let tables: Promise<Table[]> | null = null;
   const rows = new Map<string, Promise<T[]>>();
   return (lgCode: string, machiazaId: string): Promise<T[]> => {
-    if (key === "") return Promise.resolve([]);
+    if (keys.length === 0) return Promise.resolve([]);
     const k = machiazaKey(lgCode, machiazaId);
     const hit = rows.get(k);
     if (hit) return hit;
-    table ??= open(bucket, key);
-    const p = table.then((t) =>
-      readWhere<T>(t, "machiaza_key", k, columns, (n) => (stats.rows += n)),
-    );
+    tables ??= Promise.all(keys.map((x) => open(bucket, x)));
+    const p = tables
+      .then((ts) =>
+        Promise.all(
+          ts.map((t) => readWhere<T>(t, "machiaza_key", k, columns, (n) => (stats.rows += n))),
+        ),
+      )
+      .then((parts) => parts.flat());
     if (rows.size >= 1024) rows.delete(rows.keys().next().value as string);
     rows.set(k, p);
     p.catch(() => {
       rows.delete(k);
-      table = null;
+      tables = null;
     });
     return p;
   };
