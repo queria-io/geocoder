@@ -55,3 +55,7 @@ geocoder:
           alias: e_stat
           is_ducklake: true
           read_only: true
+        - path: "ducklake:https://data.queria.io/datasets/queria/nlftp/ducklake.duckdb"
+          alias: nlftp
+          is_ducklake: true
+          read_only: true

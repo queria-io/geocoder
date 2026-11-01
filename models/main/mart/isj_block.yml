@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: isj_block
+    description: |
+      街区符号（住居表示の地域の「○番」）と地番の親番（それ以外の地域の「○番地」）ごとの代表点を、ABR の町字に付けたもの。
+      整備の範囲は都市計画区域に相当する範囲だけ。地番の地域では親番だけで、枝番は無い。
+      「街区レベル位置参照情報　国土交通省」を加工して作成。町字は「アドレス・ベース・レジストリ」（デジタル庁）。
+    access: public
+    columns:
+      - name: machiaza_key
+        data_type: varchar
+      - name: lg_code
+        data_type: varchar
+      - name: machiaza_id
+        data_type: varchar
+      - name: block_number
+        data_type: varchar
+        description: 街区符号または地番の親番
+      - name: is_residential_address
+        data_type: boolean
+        description: 住居表示の地域の街区符号なら true、地番の親番なら false
+      - name: lng
+        data_type: double
+      - name: lat
+        data_type: double

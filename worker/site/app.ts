@@ -28,6 +28,7 @@ const POINT: Record<string, string> = {
   rsdtdsp_blk: "番の点",
   rsdtdsp_rsdt: "号の点",
   parcel: "地番の点",
+  parcel_parent: "地番（○番地）の点",
 };
 const pointText = (v: string | null) => (v === null ? "—" : (POINT[v] ?? v));
 
