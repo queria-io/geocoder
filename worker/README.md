@@ -70,6 +70,13 @@ GET /v1/reverse?lat=35.6812&lng=139.7671
   (150m より遠ければ町字の代表点)。町字の形は持っていないので、境目の近くでは隣の町字を返すことがある
 - 座標が数値でない・範囲外は 400
 
+## 地番の親番の点
+
+地番の住所は ABR の地番マスタに座標の付く筆が一部しか無い。地番まで当たらない、または当たっても点が無く町字の代表点に
+落ちたときは、国交省の街区レベル位置参照情報の親番 (「28番地10」の「28」) の点に寄せ、`coordinates_level` を
+`parcel_parent` にする (`src/isj.ts`、表は直下のデータセットの `isj_block`、`ISJ_PARQUET` が空なら流さない)。
+答えの出典に「街区レベル位置参照情報」（国土交通省）が足される。
+
 ## ページ
 
 `/` は LP (住所から場所・地図から住所・ファイルの一括変換の 3 つのタブ)。`site/` を `pnpm build:web` で `public/` に組み、Workers の static assets で出す
@@ -79,9 +86,9 @@ GET /v1/reverse?lat=35.6812&lng=139.7671
 
 ## デプロイ
 
-Cloudflare の Workers Builds で、main へのマージで本番に出る (ルート `worker`、ビルド `pnpm test && pnpm typecheck && pnpm build:web`、
-デプロイ `npx wrangler deploy`)。main 以外のブランチは `wrangler versions upload` で確認用の URL だけ作る。
-PR では `.github/workflows/worker.yml` が試験・型・整形を見る。
+Cloudflare の Workers Builds で、main へのマージで本番に出る (ルート `worker`、ビルド `pnpm build:web`、
+デプロイ `npx wrangler deploy`)。main 以外のブランチのビルドは止めてある (確認用のビルドは `wrangler preview` と
+設定の二重持ちが要るため)。PR では `.github/workflows/worker.yml` が試験・型・整形を見る。
 
 ## 精度
 

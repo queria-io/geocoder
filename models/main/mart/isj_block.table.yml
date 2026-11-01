@@ -1,0 +1,37 @@
+schema: main
+name: isj_block
+title: 街区・地番の親番の点
+description: |
+  街区符号（住居表示の地域の「○番」）と地番の親番（それ以外の地域の「○番地」）ごとの代表点を、ABR の町字に付けたもの。
+  整備の範囲は都市計画区域に相当する範囲だけ。地番の地域では親番だけで、枝番は無い。
+  「街区レベル位置参照情報　国土交通省」を加工して作成。町字は「アドレス・ベース・レジストリ」（デジタル庁）。
+keywords:
+  - 住所
+  - 地番
+  - 街区
+  - ジオコーディング
+published: true
+sources:
+  - path: https://nlftp.mlit.go.jp/isj/
+  - path: https://dataset.address-br.digital.go.jp/
+fields:
+  - name: machiaza_key
+    title: 町字キー
+    description: "lg_code と machiaza_id をつないだもの (13桁)。この順に並ぶ"
+  - name: lg_code
+    title: 全国地方公共団体コード
+    description: "6桁（検査数字あり）"
+    semantic: { role: entity, name: city }
+  - name: machiaza_id
+    title: 町字ID
+    description: "town と lg_code・machiaza_id で結合する"
+  - name: block_number
+    title: 街区符号・親番
+    description: "住居表示の地域は街区符号、それ以外は地番の親番"
+  - name: is_residential_address
+    title: 住居表示
+    description: "住居表示の地域の街区符号なら true、地番の親番なら false"
+  - name: lng
+    title: 経度
+  - name: lat
+    title: 緯度

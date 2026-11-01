@@ -29,6 +29,7 @@ import { PARCEL_COLUMNS, type ParcelRow } from "./repository/parcel";
 import { machiazaKey, RSDTDSP_COLUMNS, type RsdtdspRow } from "./repository/rsdtdsp";
 import type { BasicResult } from "./repository/types";
 import { nearestAddress, type Nearby } from "./nearby";
+import { ISJ_COLUMNS, type IsjRow, withParcelParent } from "./isj";
 
 export type ForwardEnv = {
   DATA: R2Bucket;
@@ -39,6 +40,8 @@ export type ForwardEnv = {
   RSDTDSP_PARQUET: string;
   /** 空なら地番の段は流さない */
   PARCEL_PARQUET: string;
+  /** 国交省の位置参照情報の親番の点 (isj_block)。空なら町字の代表点のまま */
+  ISJ_PARQUET: string;
 };
 
 /** 1 件の問い合わせで何をどれだけ読んだか。重いところを探すためにログへ出す */
@@ -90,6 +93,7 @@ type Built = {
   town: (lgCode: string, machiazaId: string) => Promise<BasicResult | null>;
   towns: (lgCode: string) => Promise<BasicResult[]>;
   rows: (lgCode: string, machiazaId: string) => Promise<RsdtdspRow[]>;
+  isj: (lgCode: string, machiazaId: string) => Promise<IsjRow[]>;
 };
 
 // isolate の中で使い回す。表のファイルが変われば作り直す
@@ -122,6 +126,7 @@ const build = async (env: ForwardEnv): Promise<Built> => {
       (await loadCity(lgCode)).find((b) => b.machiazaId === machiazaId) ?? null,
     towns: loadCity,
     rows: loadMachiaza,
+    isj: machiazaLoader<IsjRow>(env.DATA, env.ISJ_PARQUET, ISJ_COLUMNS),
   };
 };
 
@@ -132,6 +137,7 @@ const matcherFor = (env: ForwardEnv): Promise<Built> => {
     env.PREF_PARQUET,
     env.RSDTDSP_PARQUET,
     env.PARCEL_PARQUET,
+    env.ISJ_PARQUET,
   ].join("\n");
   if (cached?.key !== key) {
     const matcher = build(env);
@@ -155,7 +161,9 @@ export const geocode = async (
   const results = await Match(built.matcher, { address, category: "all", pref: "", limit });
   console.log(JSON.stringify({ geocode: address, cold, ...stats }));
   // 当たらなかったもの (都道府県も決まらない) は返さない
-  const found = results.filter((r) => r.match_level !== "unknown");
+  const found = await Promise.all(
+    results.filter((r) => r.match_level !== "unknown").map((r) => withParcelParent(r, built.isj)),
+  );
   const postalCode = async (r: MatchedResult) =>
     r.ids.lg_code && r.ids.machiaza_id
       ? ((await built.town(r.ids.lg_code, r.ids.machiaza_id))?.postCode ?? null)

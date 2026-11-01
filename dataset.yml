@@ -3,8 +3,9 @@ name: geocoder
 title: ジオコーダー用 住所マスタ
 description: |-
   住所の文字列と座標・地域コードを相互に引くための表。
-  「アドレス・ベース・レジストリ」（デジタル庁）と「国勢調査 町丁・字等別境界データ」（総務省統計局）を加工して作成。
-  元にした Queria のデータセットは address_br と e_stat。
+  「アドレス・ベース・レジストリ」（デジタル庁）、「国勢調査 町丁・字等別境界データ」（総務省統計局）、
+  「街区レベル位置参照情報」（国土交通省）を加工して作成。
+  元にした Queria のデータセットは address_br・e_stat・nlftp。
 keywords:
   - 住所
   - ジオコーディング
@@ -18,12 +19,15 @@ themes: [land_climate]
 licenses:
   - JP-DIGITAL-ADDRESS-BR
   - JP-GOV-STD-2.0
+  - JP-MLIT-NLFTP
 
 sources:
   - title: アドレス・ベース・レジストリ（デジタル庁）
     path: https://dataset.address-br.digital.go.jp/
   - title: 国勢調査 町丁・字等別境界データ（総務省統計局）
     path: https://www.e-stat.go.jp/gis
+  - title: 街区レベル位置参照情報（国土交通省）
+    path: https://nlftp.mlit.go.jp/isj/
 
 contributors:
   - title: デジタル庁
@@ -31,6 +35,9 @@ contributors:
     roles: [rightsHolder]
   - title: 総務省統計局
     path: https://www.stat.go.jp/
+    roles: [rightsHolder]
+  - title: 国土交通省
+    path: https://www.mlit.go.jp/
     roles: [rightsHolder]
 
 spatial_coverage: [JP]
@@ -45,6 +52,7 @@ ai_context:
     1 対 1 ではないので、small_area_code は代表点 1 点で決めた目安。
     住居表示の町字 (town.rsdt_addr_flg = '1') は rsdtdsp_blk (「○番」) と rsdtdsp_rsdt (「○号」) まで引ける。
     結合キーは lg_code, machiaza_id（町字）、blk_id（街区）、rsdt_id, rsdt2_id（住居）。
+    isj_block は国交省の位置参照情報の街区・地番の親番の点で、ABR に座標の無い地番の住所の点に使う。
   synonyms: [ジオコーダー, ジオコーディング, 住所マスタ]
   examples:
     - 住所から緯度経度を引きたい

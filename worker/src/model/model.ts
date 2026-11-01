@@ -65,9 +65,12 @@ export type MatchedResult = {
    * 座標を取った点の段。上流には無い。番号まで当たったのにその点に座標が無く、町字の代表点で
    * 埋めたときだけ入れる。無ければ match_level と同じ段の点
    */
-  coordinate_level?: MatchLevel;
+  coordinate_level?: CoordinateLevel;
   machiaza: MachiazaData;
 };
+
+/** 座標を取った点の段。parcel_parent は国交省の位置参照情報の地番の親番の点 (上流には無い) */
+export type CoordinateLevel = MatchLevel | "parcel_parent";
 
 export const emptyIDs = (): IDs => ({
   lg_code: null,

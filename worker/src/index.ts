@@ -17,6 +17,7 @@ import { cors } from "hono/cors";
 
 import {
   ABR_ATTRIBUTION,
+  coordinatesLevel,
   csvColumns,
   type Extras,
   type Include,
@@ -32,6 +33,7 @@ import {
   versionOf,
 } from "./answer";
 import { geocode, nearby, type ForwardEnv } from "./forward";
+import { ISJ_ATTRIBUTION, PARCEL_PARENT } from "./isj";
 import { ErrAddressTooLong, ErrEmptyAddress } from "./normalize/input";
 import { type Level, resolveAreas, type TilePoint } from "./lookup";
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "./model/model";
@@ -356,7 +358,7 @@ const Ids = z
       "ABR の ID。rsdt_addr_flg は '1' が住居表示、'0' が地番の町字、決まらなければ null",
   });
 
-const MatchLevel = z.enum([
+const MATCH_LEVELS = [
   "pref",
   "city",
   "machiaza",
@@ -364,7 +366,9 @@ const MatchLevel = z.enum([
   "rsdtdsp_blk",
   "rsdtdsp_rsdt",
   "parcel",
-]);
+] as const;
+const MatchLevel = z.enum(MATCH_LEVELS);
+const CoordinatesLevel = z.enum([...MATCH_LEVELS, "parcel_parent"]);
 
 const ForwardCodes = z
   .object({
@@ -401,9 +405,9 @@ const GeocodeResult = z
       description:
         "住所がどこまで当たったか。rsdtdsp_rsdt は号、rsdtdsp_blk は街区、parcel は地番、machiaza_detail は小字、machiaza は町字",
     }),
-    coordinates_level: MatchLevel.nullable().openapi({
+    coordinates_level: CoordinatesLevel.nullable().openapi({
       description:
-        "座標を取った点の段。値の意味は match_level と同じ。番号まで当たってもその点に座標が無ければ町字の代表点で埋め、machiaza になる。どれも代表点で、建物の位置ではない",
+        "座標を取った点の段。値の意味は match_level と同じ。番号まで当たってもその点に座標が無ければ町字の代表点で埋め、machiaza になる。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、国交省の街区レベル位置参照情報から取る (ABR に地番の点が無いとき)。どれも代表点で、建物の位置ではない",
     }),
     lg_code: z
       .string()
@@ -445,7 +449,7 @@ const GeocodeFeatureCollection = z
           unmatched_address: z.array(z.string()).nullable(),
           score: z.number(),
           match_level: MatchLevel,
-          coordinates_level: MatchLevel.nullable(),
+          coordinates_level: CoordinatesLevel.nullable(),
           ids: Ids,
           structured_address: StructuredAddress,
           codes: optional(ForwardCodes, "codes"),
@@ -556,8 +560,10 @@ const answer = async (env: Env, address: string, limit: number, groups: Readonly
   return results.map((r, i) => [r, extras[i]] as const);
 };
 
-const attributionFor = (groups: ReadonlySet<Include>) => [
+/** levels は答えごとの coordinates_level。位置参照情報の点を使った答えがあれば、その出典も足す */
+const attributionFor = (groups: ReadonlySet<Include>, levels: readonly (string | null)[]) => [
   ABR_ATTRIBUTION,
+  ...(levels.includes(PARCEL_PARENT) ? [ISJ_ATTRIBUTION] : []),
   ...(groups.has("small_area") ? [SMALL_AREA_ATTRIBUTION] : []),
 ];
 
@@ -579,7 +585,10 @@ app.openapi(geocodeRoute, async (c) => {
     return json(c, 502, { error: "住所の表を読めませんでした" }, "no-store") as never;
   }
   const version = c.env.DATA_VERSION;
-  const attribution = attributionFor(groups);
+  const attribution = attributionFor(
+    groups,
+    result.value.map(([r]) => coordinatesLevel(r)),
+  );
   const headers = { "Cache-Control": "public, max-age=86400" };
   if (format === "geojson") {
     const body = {
@@ -698,7 +707,13 @@ app.openapi(batchRoute, async (c) => {
   return c.json(
     {
       results: result.value,
-      source: { version: c.env.DATA_VERSION, attribution: attributionFor(groups) },
+      source: {
+        version: c.env.DATA_VERSION,
+        attribution: attributionFor(
+          groups,
+          result.value.map((a) => a?.coordinates_level ?? null),
+        ),
+      },
     },
     200,
     { "Cache-Control": "no-store" },
