@@ -33,9 +33,20 @@ export const lazyRepository = (
       .slice(0, maxFuzzyCities)
       .map(({ c }) => c);
   };
+  // 政令市の市のコードには町字が無い (町字は区のコードで持つ)。読みに行くと、そのコードの前後の
+  // 行グループをまとめて読むことになるので外す
+  const designated = new Set(
+    cities
+      .filter(
+        (c) => !c.ward && cities.some((w) => w.ward && w.city === c.city && w.pref === c.pref),
+      )
+      .map((c) => c.lgCode),
+  );
   const over = async (lgCodes: string[]) =>
     memoryRepository(
-      (await Promise.all([...new Set(lgCodes)].map(loadCity))).flat(),
+      (
+        await Promise.all([...new Set(lgCodes)].filter((c) => !designated.has(c)).map(loadCity))
+      ).flat(),
       cities,
       prefs,
     );
