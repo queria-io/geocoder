@@ -168,7 +168,8 @@ export const geocode = async (
   const cold = cached === null;
   const built = await matcherFor(env);
   const results = await Match(built.matcher, { address, category: "all", pref: "", limit });
-  console.log(JSON.stringify({ geocode: address, cold, ...stats }));
+  // 住所は残さない。読んだ量と時間だけを書く
+  console.log(JSON.stringify({ geocode: true, cold, ...stats }));
   // 当たらなかったもの (都道府県も決まらない) は返さない
   const found = await Promise.all(
     results.filter((r) => r.match_level !== "unknown").map((r) => withParcelParent(r, built.isj)),

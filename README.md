@@ -14,6 +14,7 @@ curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東�
 
 - 直下: ジオコーダーが読む表を作る Queria のデータセット `geocoder`（このページの以下）
 - [`worker/`](worker/README.md): geocoder.queria.io を出す Cloudflare Worker（API・サイト・API の説明のページ）
+- [`examples/addresses.csv`](examples/addresses.csv): サイトの「ファイルでまとめて変換」や `POST /v1/batch` を試すための住所の CSV（役所などの住所と、郡や都道府県を省いたものなど書き方を変えたもの）
 
 ライセンスは [MIT](LICENSE)。住所の照合の規則は [abr-geocoder](https://github.com/digital-go-jp/abr-geocoder)（デジタル庁、MIT ライセンス）を元にしている（[`worker/upstream/`](worker/upstream/README.md)）。
 
