@@ -6,7 +6,7 @@
     <title>Queria Geocoder</title>
     <meta
       name="description"
-      content="住所を地図の場所に、地図の場所を住所に。日本の住所を緯度・経度と地域コードに変える無料のジオコーダー。登録なしで使えます。"
+      content="日本の住所を緯度・経度と地域コードに変える無料のジオコーダーです。地図で押した場所の住所も調べられます。登録はいりません。"
     />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -16,7 +16,7 @@
     <meta property="og:title" content="Queria Geocoder" />
     <meta
       property="og:description"
-      content="住所を地図の場所に、地図の場所を住所に。無料・登録なしで使えるジオコーダー。"
+      content="日本の住所を緯度・経度と地域コードに変える無料のジオコーダーです。登録はいりません。"
     />
     <meta property="og:image" content="https://geocoder.queria.io/og.png" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -29,6 +29,7 @@
       >
       <nav>
         <a href="#uses">使いみち</a>
+        <a href="#how">仕組み</a>
         <a href="#price">料金</a>
         <a href="#dev">開発者の方へ</a>
       </nav>
@@ -36,9 +37,10 @@
 
     <main>
       <section class="hero">
-        <h1>住所を地図の場所に。<br />地図の場所を住所に。</h1>
+        <h1>日本の住所を緯度・経度に変えるジオコーダーです</h1>
         <p>
-          日本の住所を緯度・経度に変えたり、地図で指した場所の住所を調べたりできます。住所録のファイルをまとめて変換することもできます。無料で、登録なしで使えます。
+          地図で押した場所の住所を調べることもできます。住所の列がある CSV
+          は、まとめて変換できます。無料で、登録はいりません。
         </p>
       </section>
 
@@ -75,7 +77,7 @@
         <div id="panel-batch" role="tabpanel" aria-labelledby="tab-batch" class="panel" hidden>
           <p class="lead">
             住所の列がある CSV を選ぶと、緯度・経度と地域コードの列を足したファイルを作ります。1
-            回に 1,000 行まで。
+            回に 1,000 行まで変換できます。
           </p>
           <div class="batch">
             <label>CSV ファイル <input id="batch-file" type="file" accept=".csv,text/csv" /></label>
@@ -135,21 +137,48 @@
         </ul>
       </section>
 
-      <section id="why">
-        <h2>Queria Geocoder の特徴</h2>
+      <section id="how">
+        <h2>仕組み</h2>
+        <p>
+          デジタル庁のアドレス・ベース・レジストリ（国の住所データ）を毎月取り込み、住所を探すための表を作っています。住所を受け取ると、まず都道府県と市区町村を読み取り、その市区町村の町名・番地の表だけを読んで当てます。返すのは、当たった町名や番地の代表の点の緯度・経度です。
+        </p>
+        <p>
+          「1-3」と「1丁目3番」、旧字体と新字体のような書き方の違いは、デジタル庁が公開している
+          abr-geocoder
+          と同じ規則で直しています。地図から住所を調べるときは、押した場所にいちばん近い番地の点を探します。
+        </p>
+      </section>
+
+      <section id="free">
+        <h2>無料で使える理由</h2>
+        <p>
+          住所 1
+          件を調べる費用がとても小さいからです。表は前もって作ってあり、問い合わせのたびに読むのはその市区町村の分だけです。常に動かしておく大きなサーバーも持っていません。
+        </p>
+        <p>
+          この費用は Queria が持ちます。Queria
+          は、その場所の人口や地価などを付けて使う法人向けの契約で収入を得ています。住所から緯度・経度と地域コードを調べる部分は、無料で出す方針です。
+        </p>
+      </section>
+
+      <section id="trust">
+        <h2>答えを確かめられるようにしていること</h2>
         <ul class="points">
-          <li><strong>無料で使える</strong>登録もいりません。</li>
           <li>
-            <strong>住所録を預からない</strong
-            >ファイルはブラウザの中で読み、住所の文字だけを使います。
+            <strong>元は国の公開データです</strong
+            >答えには毎回、出典と使ったデータの日付が付きます。
           </li>
           <li>
-            <strong>どこまで分かったかを毎回返す</strong
-            >号まで分かったのか、町名までなのかを答えに付けます。
+            <strong>どこまで分かったかを答えごとに返します</strong
+            >号まで分かったのか、町名までしか分からなかったのかを分けて返します。町名までしか分からなかった住所に、番地の点を返すことはしません。
           </li>
           <li>
-            <strong>国の公開データが元</strong
-            >デジタル庁のアドレス・ベース・レジストリなどを使い、出典を答えに付けます。
+            <strong>abr-geocoder の試験と同じ問題を流しています</strong>町名までの 441
+            問と住居表示の 122 問は、abr-geocoder と同じ答えになります。直すたびに流し直します。
+          </li>
+          <li>
+            <strong>住所録のファイルは送りません</strong
+            >ファイルはこのページの中で読み、住所の文字だけを変換のために送ります。
           </li>
         </ul>
       </section>
