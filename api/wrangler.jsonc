@@ -9,7 +9,17 @@
   "preview_urls": false,
   // 上流の表 (src/transform/special_chars.tsv) を文字列として読み込む
   "rules": [{ "type": "Text", "globs": ["**/*.tsv"], "fallthrough": true }],
-  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "queria-assets" }],
-  "vars": { "BOUNDARY_TILES_FILE": "boundaries-20261027.pmtiles" },
+  "r2_buckets": [
+    { "binding": "BUCKET", "bucket_name": "queria-assets" },
+    // data.queria.io の中身。geocoder の表 (town・city・pref) を読む
+    { "binding": "DATA", "bucket_name": "queria" },
+  ],
+  "vars": {
+    "BOUNDARY_TILES_FILE": "boundaries-20261027.pmtiles",
+    // geocoder の表の Parquet。FDL の refs/heads/main から引くまでの仮置きで、作り直したら書き換える
+    "TOWN_PARQUET": "",
+    "CITY_PARQUET": "",
+    "PREF_PARQUET": "",
+  },
   "observability": { "enabled": true },
 }

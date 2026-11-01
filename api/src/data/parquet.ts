@@ -11,7 +11,7 @@ import {
 } from "hyparquet";
 
 // 表は zstd で書いている (dbt_project.yml)。fzstd は純粋な JS なので Workers でそのまま動く
-const compressors: Compressors = { ZSTD: (input) => decompress(input) };
+export const compressors: Compressors = { ZSTD: (input) => decompress(input) };
 
 /** R2 のオブジェクトを、hyparquet が Range で読める形にする */
 export const r2Buffer = (bucket: R2Bucket, key: string, byteLength: number): AsyncBuffer => ({

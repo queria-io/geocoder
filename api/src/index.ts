@@ -15,10 +15,12 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { cors } from "hono/cors";
 
+import { geocode, type ForwardEnv } from "./forward";
+import { ErrAddressTooLong, ErrEmptyAddress } from "./normalize/input";
 import { type Level, resolveAreas, type TilePoint } from "./lookup";
 import { tryCatchAsync } from "./result";
 
-export interface Env {
+export interface Env extends ForwardEnv {
   BUCKET: R2Bucket;
   /** R2 の boundaries/ に置いた境界タイルのファイル名 (queria-web の src/lib/gis/boundary-tiles.ts と同じ) */
   BOUNDARY_TILES_FILE: string;
@@ -158,7 +160,16 @@ const app = new OpenAPIHono<{ Bindings: Env }>({
   defaultHook: (result, c) =>
     result.success
       ? undefined
-      : json(c, 400, { error: "lat と lng を数値で渡してください" }, "no-store"),
+      : json(
+          c,
+          400,
+          {
+            error: result.error.issues.some((i) => i.path.includes("address"))
+              ? "address を 1〜100 文字で渡してください"
+              : "lat と lng を数値で渡してください",
+          },
+          "no-store",
+        ),
 });
 
 app.use("*", cors({ origin: "*", allowMethods: ["GET"] }));
@@ -186,12 +197,122 @@ app.openapi(reverseRoute, async (c) => {
   return response;
 });
 
+const StructuredAddress = z
+  .object(
+    Object.fromEntries(
+      [
+        "pref",
+        "county",
+        "city",
+        "ward",
+        "kyoto_st",
+        "oaza_cho",
+        "chome",
+        "koaza",
+        "machiaza_dist",
+        "blk_num",
+        "rsdt_num",
+        "rsdt_num2",
+        "prc_num1",
+        "prc_num2",
+        "prc_num3",
+      ].map((k) => [k, z.string().nullable()]),
+    ),
+  )
+  .openapi("StructuredAddress");
+
+const GeocodeResult = z
+  .object({
+    matched_address: z.string().openapi({ description: "当たった住所の表記" }),
+    unmatched_address: z
+      .array(z.string())
+      .nullable()
+      .openapi({ description: "当たらずに残った部分 (番号・建物名など)。残りが無ければ null" }),
+    match_level: z
+      .enum([
+        "unknown",
+        "pref",
+        "city",
+        "machiaza",
+        "machiaza_detail",
+        "rsdtdsp_blk",
+        "rsdtdsp_rsdt",
+        "parcel",
+      ])
+      .openapi({ description: "当たった階層" }),
+    score: z.number().openapi({ description: "1 はぴったりの一致。あいまい一致はそれより小さい" }),
+    lg_code: z.string().nullable().openapi({ description: "全国地方公共団体コード (6 桁)" }),
+    machiaza_id: z.string().nullable().openapi({ description: "ABR の町字 ID (7 桁)" }),
+    rsdt_addr_flg: z
+      .string()
+      .nullable()
+      .openapi({ description: "'1' は住居表示の町字。決まらなければ null" }),
+    structured_address: StructuredAddress,
+    lng: z.number().nullable(),
+    lat: z.number().nullable(),
+  })
+  .openapi("GeocodeResult");
+
+const geocodeRoute = createRoute({
+  method: "get",
+  path: "/v1/geocode",
+  summary: "住所から町字と代表点を返す",
+  request: {
+    query: z.object({
+      address: z
+        .string()
+        .trim()
+        .min(1)
+        .max(100)
+        .openapi({ param: { name: "address", in: "query" }, example: "東京都千代田区紀尾井町1-3" }),
+    }),
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: z.object({ results: z.array(GeocodeResult) }) } },
+      description: "当てた結果。強い順",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorBody } },
+      description: "住所が空か長すぎる",
+    },
+    502: { content: { "application/json": { schema: ErrorBody } }, description: "表を読めない" },
+  },
+});
+
+app.openapi(geocodeRoute, async (c) => {
+  const { address } = c.req.valid("query");
+  const result = await tryCatchAsync(() => geocode(c.env, address, 1));
+  if (!result.ok) {
+    if (result.error instanceof ErrEmptyAddress || result.error instanceof ErrAddressTooLong)
+      return c.json({ error: "address を 1〜100 文字で渡してください" }, 400, {
+        "Cache-Control": "no-store",
+      });
+    console.error("geocoder: geocode", result.error);
+    return c.json({ error: "住所の表を読めませんでした" }, 502, { "Cache-Control": "no-store" });
+  }
+  const results = result.value.map((r) => ({
+    matched_address: r.matched_address,
+    unmatched_address: r.unmatched_address,
+    match_level: r.match_level,
+    score: r.score,
+    lg_code: r.ids.lg_code,
+    machiaza_id: r.ids.machiaza_id,
+    rsdt_addr_flg: r.ids.rsdt_addr_flg,
+    structured_address: r.structured_address,
+    lng: r.coordinates?.[0] ?? null,
+    lat: r.coordinates?.[1] ?? null,
+  }));
+  return c.json({ results }, 200, { "Cache-Control": "public, max-age=86400" });
+});
+
 app.doc31("/openapi.json", {
   openapi: "3.1.0",
   info: { title: "Queria Geocoder", version: "0.1.0" },
 });
 
 app.all("/v1/reverse", (c) => c.body("Method Not Allowed", 405, { Allow: "GET" }));
+app.all("/v1/geocode", (c) => c.body("Method Not Allowed", 405, { Allow: "GET" }));
 app.notFound((c) => json(c, 404, { error: "not found" }, "no-store"));
 
 export default app satisfies ExportedHandler<Env>;

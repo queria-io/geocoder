@@ -123,9 +123,17 @@ describe("/v1/reverse", () => {
 });
 
 describe("/openapi.json", () => {
-  it("逆引きの仕様を返す", async () => {
+  it("逆引きと正引きの仕様を返す", async () => {
     const response = await exports.default.fetch("https://geocoder.test/openapi.json");
     const doc = (await response.json()) as { paths: Record<string, unknown> };
-    expect(Object.keys(doc.paths)).toEqual(["/v1/reverse"]);
+    expect(Object.keys(doc.paths)).toEqual(["/v1/reverse", "/v1/geocode"]);
+  });
+});
+
+describe("/v1/geocode", () => {
+  it("住所が空なら 400", async () => {
+    const response = await exports.default.fetch("https://geocoder.test/v1/geocode?address=%20");
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "address を 1〜100 文字で渡してください" });
   });
 });
