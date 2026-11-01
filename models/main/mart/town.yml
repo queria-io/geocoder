@@ -36,6 +36,8 @@ models:
         data_type: boolean
       - name: rsdtdsp_count
         data_type: integer
+      - name: parcel_count
+        data_type: integer
       - name: alias_oaza
         data_type: varchar
       - name: alias_koaza

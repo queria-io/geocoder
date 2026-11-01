@@ -50,6 +50,9 @@ fields:
   - name: rsdtdsp_count
     title: 住居表示の住所の数
     description: "rsdtdsp の表にあるこの町字の行の数。住居表示を実施していない町字は 0"
+  - name: parcel_count
+    title: 地番の数
+    description: "parcel の表にあるこの町字の地番の数"
   - name: alias_oaza
     title: 大字・町名の別名
   - name: alias_koaza
