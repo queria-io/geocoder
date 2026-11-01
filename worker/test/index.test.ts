@@ -154,6 +154,14 @@ describe("/v1/batch", () => {
   });
 });
 
+describe("/", () => {
+  it("queria.io/geocoder へ転送する", async () => {
+    const response = await exports.default.fetch("https://geocoder.test/", { redirect: "manual" });
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("https://queria.io/geocoder");
+  });
+});
+
 describe("/docs", () => {
   it("仕様書を読む HTML を返す", async () => {
     const response = await exports.default.fetch("https://geocoder.test/docs");
