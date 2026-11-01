@@ -42,6 +42,13 @@ GET /v1/reverse?lat=35.6812&lng=139.7671
 GET /v1/geocode?address=東京都千代田区紀尾井町1-3&limit=1
 ```
 
+住所は URL エンコードして渡す。日本語をそのまま URL に入れると、Worker に届く前に Cloudflare の入口が本文の無い 400 を返す。
+ブラウザや多くの HTTP ライブラリは自分で直すが、curl は直さない。
+
+```bash
+curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東京都千代田区紀尾井町1-3"
+```
+
 - `results` は強い順。`limit` (1〜10、既定 1) まで返す
 - コードは逆引きと同じ名前で、`prefecture_code` (2 桁)・`city_code` (5 桁)・`lg_code` (6 桁、検査数字つき) を返す
 - `match_level` は住所がどこまで当たったか、`coordinate_level` は座標を取った点 (号・街区・地番の筆・町字・市区町村・都道府県の代表点)。
