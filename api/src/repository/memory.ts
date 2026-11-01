@@ -2,6 +2,7 @@
 import { All, MaxChomeNumber } from "../model/model";
 import { ExtractChomeDigits, MaxEditDistance } from "../util/address";
 import { byteLength, editdist3, utf8 } from "./editdist";
+import { findParcelExact, type ParcelRow } from "./parcel";
 import { findResidentialBestMatch, machiazaKey, type RsdtdspRow } from "./rsdtdsp";
 import type { BasicResult, CityResult, PrefectureResult, Repository } from "./types";
 
@@ -39,8 +40,10 @@ export const memoryRepository = (
   cities: CityRow[],
   prefs: PrefRow[],
   rsdtdsp: RsdtdspRow[] = [],
+  parcels: ParcelRow[] = [],
 ): Repository => {
   const byMachiaza = Map.groupBy(rsdtdsp, (r) => machiazaKey(r.lg_code, r.machiaza_id));
+  const parcelsByMachiaza = Map.groupBy(parcels, (r) => machiazaKey(r.lg_code, r.machiaza_id));
   const byAddress = Map.groupBy(towns, (t) => t.normalizedAddress);
   const byPref = Map.groupBy(towns, (t) => prefCodeOf(t.lgCode));
   const byLgCode = Map.groupBy(towns, (t) => t.lgCode);
@@ -158,5 +161,7 @@ export const memoryRepository = (
     },
     FindResidentialBestMatch: async (lgCode, machiazaId, filter) =>
       findResidentialBestMatch(byMachiaza.get(machiazaKey(lgCode, machiazaId)) ?? [], filter),
+    FindParcelExact: async (lgCode, machiazaId, filter) =>
+      findParcelExact(parcelsByMachiaza.get(machiazaKey(lgCode, machiazaId)) ?? [], filter),
   };
 };

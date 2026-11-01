@@ -82,12 +82,14 @@ export const readWhere = async <T>(
   onRows?: (rows: number) => void,
 ): Promise<T[]> => {
   const ranges = rowRangesFor(metadata, value, key);
+  const names = new Set(metadata.schema.map((c) => c.name));
   onRows?.(ranges.reduce((n, r) => n + r.rowEnd - r.rowStart, 0));
   const read = (range: RowRange) =>
     parquetReadObjects({
       file,
       metadata,
-      columns: columns.includes(key) ? columns : [key, ...columns],
+      // 表に無い列は読まない (列を足した表を作り直す前でも読めるように)
+      columns: [key, ...columns.filter((c) => c !== key && names.has(c))],
       compressors,
       ...range,
     }) as Promise<Record<string, unknown>[]>;

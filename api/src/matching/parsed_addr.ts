@@ -81,3 +81,33 @@ export const parcelNumberPrefix = (p: ParsedAddress): string => {
   const last = runes[runes.length - 1];
   return last !== undefined && IsParcelNumberPrefix(last) ? last : "";
 };
+
+const digitsEnd = (s: string, from: number): number => {
+  let i = from;
+  while (i < s.length && IsASCIIDigit(s[i])) i++;
+  return i;
+};
+
+/**
+ * 番号の部分の頭の数字。2 つ目からは、ABR が枝番に使うイロハ (6-ロ の ロ、3872-ニ2 の ニ2) も番号とみなす。
+ * 枝番はその部分まるごとのときだけ (ロ棟 を枝番 ロ と読まない)
+ */
+const numberComponent = (part: string, allowBranch: boolean): string => {
+  const end = digitsEnd(part, 0);
+  if (end > 0) return part.slice(0, end);
+  if (!allowBranch) return "";
+  const first = Array.from(part)[0];
+  if (first === undefined || !IsParcelNumberPrefix(first)) return "";
+  return digitsEnd(part, first.length) === part.length ? part : "";
+};
+
+/** 番号の部分を頭から、数字でも枝番でもない部分の手前まで */
+export const numericParts = (p: ParsedAddress): string[] => {
+  const out: string[] = [];
+  for (const [i, part] of p.Numbers.entries()) {
+    const c = numberComponent(part, i > 0);
+    if (c === "") break;
+    out.push(c);
+  }
+  return out;
+};

@@ -21,6 +21,7 @@
     "CITY_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/city__dbt_tmp/ducklake-01a194d0-a974-787a-8d7f-bf2b6ba8f94d.parquet",
     "PREF_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/pref__dbt_tmp/ducklake-01a194d0-abf6-7c3a-ad8c-98d1a5db7c5e.parquet",
     "RSDTDSP_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/rsdtdsp__dbt_tmp/ducklake-01a194d1-978b-7ea8-9afa-a59bd0f6c8d1.parquet",
+    "PARCEL_PARQUET": "",
   },
   "observability": { "enabled": true, "head_sampling_rate": 1 },
 }

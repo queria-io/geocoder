@@ -1,10 +1,10 @@
 """ABR の町字・市区町村・都道府県マスタの CSV から、geocoder の town・city・pref の表と同じ列の JSON を作る。
 上流の試験 (bench/upstream-issues.test.ts) を、data.queria.io に届かない場所でも流すため。
 
-    uv run --with duckdb python bench/make-abr-fixture.py <CSV のあるフォルダ> bench/abr/ [rsdtdsp.parquet]
+    uv run --with duckdb python bench/make-abr-fixture.py <CSV のあるフォルダ> bench/abr/ [rsdtdsp.parquet] [parcel.parquet]
 
-3 つ目に geocoder の rsdtdsp の表の Parquet を渡すと、bench/abr/rsdtdsp.parquet に写し、town に
-住居表示の住所の数 (rsdtdsp_count) を足す。渡さなければ 0 にする (番・号の段は流れない)。
+3 つ目・4 つ目に geocoder の rsdtdsp・parcel の表の Parquet を渡すと、bench/abr/ に写し、town に
+住居表示の住所の数 (rsdtdsp_count)・地番の数 (parcel_count) を足す。渡さなければ 0 にする (その段は流れない)。
 CSV は https://dataset.address-br.digital.go.jp/ の mt_town_all.csv・mt_city_all.csv・mt_pref_all.csv。
 """
 
@@ -15,6 +15,7 @@ import duckdb
 
 src, out = Path(sys.argv[1]), Path(sys.argv[2])
 rsdtdsp = Path(sys.argv[3]) if len(sys.argv) > 3 else None
+parcel = Path(sys.argv[4]) if len(sys.argv) > 4 else None
 out.mkdir(parents=True, exist_ok=True)
 con = duckdb.connect()
 if rsdtdsp:
@@ -26,6 +27,14 @@ if rsdtdsp:
     con.sql(f"CREATE VIEW rsdtdsp_count AS SELECT lg_code, machiaza_id, count(*)::INTEGER AS n FROM read_parquet('{out / 'rsdtdsp.parquet'}') GROUP BY ALL")
 else:
     con.sql("CREATE VIEW rsdtdsp_count AS SELECT NULL::VARCHAR AS lg_code, NULL::VARCHAR AS machiaza_id, 0 AS n WHERE false")
+if parcel:
+    con.sql(f"""
+    COPY (SELECT * FROM read_parquet('{parcel}') ORDER BY machiaza_key, prc_id)
+    TO '{out / 'parcel.parquet'}' (FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE 30720)
+    """)
+    con.sql(f"CREATE VIEW parcel_count AS SELECT lg_code, machiaza_id, count(*)::INTEGER AS n FROM read_parquet('{out / 'parcel.parquet'}') GROUP BY ALL")
+else:
+    con.sql("CREATE VIEW parcel_count AS SELECT NULL::VARCHAR AS lg_code, NULL::VARCHAR AS machiaza_id, 0 AS n WHERE false")
 # macros/half_width.sql と同じ: 名前の全角の英数字・記号を半角に
 FULL = "０１２３４５６７８９ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ！＂＃＄％＆＇（）＊＋，－．／：；＜＝＞？＠［＼］＾＿｀｛｜｝～"
 HALF = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
@@ -47,10 +56,12 @@ COPY (
         half_width(t.chome) AS chome, half_width(t.koaza) AS koaza,
         t.koaza_aka_code = '2' AS kyoto_street, half_width(t.machiaza_dist) AS machiaza_dist,
         t.chome IS NOT NULL OR t.oaza_cho LIKE '%丁目' OR h.oaza_cho IS NOT NULL AS has_chome,
-        coalesce(c.n, 0) AS rsdtdsp_count, t.rsdt_addr_flg, t.rsdt_addr_partial
+        coalesce(c.n, 0) AS rsdtdsp_count, coalesce(pc.n, 0) AS parcel_count,
+        t.rsdt_addr_flg, t.rsdt_addr_partial
     FROM town t
     LEFT JOIN oaza_has_chome h ON h.lg_code = t.lg_code AND h.oaza_cho = t.oaza_cho
     LEFT JOIN rsdtdsp_count c ON c.lg_code = t.lg_code AND c.machiaza_id = t.machiaza_id
+    LEFT JOIN parcel_count pc ON pc.lg_code = t.lg_code AND pc.machiaza_id = t.machiaza_id
     ORDER BY t.lg_code, t.machiaza_id
 ) TO '{out / 'town.json'}' (FORMAT json, ARRAY true)
 """)

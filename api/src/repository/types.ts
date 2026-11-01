@@ -11,6 +11,7 @@ import {
   type Str,
   type StructuredAddress,
 } from "../model/model";
+import type { ParcelFilter, ParcelRow } from "./parcel";
 import type { ResidentialBestResult, ResidentialFilter } from "./rsdtdsp";
 
 /** 町字の 1 行。normalizedAddress は 郡・市区町村・区・通り名・大字町・丁目・小字 を TextForDB に通したもの */
@@ -76,6 +77,11 @@ export type Repository = {
     machiazaId: string,
     filter: ResidentialFilter,
   ) => Promise<ResidentialBestResult | null>;
+  FindParcelExact: (
+    lgCode: string,
+    machiazaId: string,
+    filter: ParcelFilter,
+  ) => Promise<ParcelRow | null>;
 };
 
 const coords = (lon: number | null, lat: number | null): [number, number] | null =>

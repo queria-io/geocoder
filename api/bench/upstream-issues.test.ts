@@ -18,6 +18,12 @@ import { lazyRepository } from "../src/repository/lazy";
 import { openTable, readWhere } from "../src/data/parquet";
 import { memoryRepository } from "../src/repository/memory";
 import {
+  findParcelExact,
+  PARCEL_COLUMNS,
+  type ParcelFilter,
+  type ParcelRow,
+} from "../src/repository/parcel";
+import {
   findResidentialBestMatch,
   machiazaKey,
   RSDTDSP_COLUMNS,
@@ -100,10 +106,16 @@ test("上流の matching/issues", async () => {
     : null;
   const loadMachiaza = async (lg: string, id: string): Promise<RsdtdspRow[]> =>
     rsdtdsp ? readWhere(rsdtdsp, "machiaza_key", machiazaKey(lg, id), RSDTDSP_COLUMNS) : [];
+  const parcelFile = new URL("parcel.parquet", dir);
+  const parcel = existsSync(parcelFile)
+    ? await openTable(await asyncBufferFromFile(parcelFile.pathname))
+    : null;
+  const loadParcels = async (lg: string, id: string): Promise<ParcelRow[]> =>
+    parcel ? readWhere(parcel, "machiaza_key", machiazaKey(lg, id), PARCEL_COLUMNS) : [];
   // REPO=lazy で、Worker と同じく市区町村ごとに読む形を流す
   const repo =
     process.env.REPO === "lazy"
-      ? lazyRepository(async (lg) => byCity.get(lg) ?? [], cities, prefs, loadMachiaza)
+      ? lazyRepository(async (lg) => byCity.get(lg) ?? [], cities, prefs, loadMachiaza, loadParcels)
       : {
           ...memoryRepository(towns, cities, prefs),
           FindResidentialBestMatch: async (

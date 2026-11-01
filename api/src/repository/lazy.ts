@@ -4,6 +4,7 @@ import { All } from "../model/model";
 import { MaxEditDistance } from "../util/address";
 import { byteLength, editdist3, utf8 } from "./editdist";
 import { memoryRepository, type CityRow, type PrefRow } from "./memory";
+import { findParcelExact, type ParcelRow } from "./parcel";
 import { findResidentialBestMatch, type RsdtdspRow } from "./rsdtdsp";
 import type { BasicResult, Repository } from "./types";
 
@@ -15,6 +16,7 @@ export const lazyRepository = (
   cities: CityRow[],
   prefs: PrefRow[],
   loadMachiaza: (lgCode: string, machiazaId: string) => Promise<RsdtdspRow[]> = async () => [],
+  loadParcels: (lgCode: string, machiazaId: string) => Promise<ParcelRow[]> = async () => [],
 ): Repository => {
   const empty = memoryRepository([], cities, prefs);
   const inPref = (p: string) =>
@@ -68,5 +70,7 @@ export const lazyRepository = (
     },
     FindResidentialBestMatch: async (lgCode, machiazaId, filter) =>
       findResidentialBestMatch(await loadMachiaza(lgCode, machiazaId), filter),
+    FindParcelExact: async (lgCode, machiazaId, filter) =>
+      findParcelExact(await loadParcels(lgCode, machiazaId), filter),
   };
 };
