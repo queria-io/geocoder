@@ -13,6 +13,9 @@ import {
 // 表は zstd で書いている (dbt_project.yml)。fzstd は純粋な JS なので Workers でそのまま動く
 export const compressors: Compressors = { ZSTD: (input) => decompress(input) };
 
+/** R2 はときどき一時的な内部エラー (10001) を返すので、1 回だけ叩き直す */
+export const retryOnce = <T>(f: () => Promise<T>): Promise<T> => f().catch(() => f());
+
 /** R2 のオブジェクトを、hyparquet が Range で読める形にする */
 export const r2Buffer = (
   bucket: R2Bucket,
@@ -23,9 +26,9 @@ export const r2Buffer = (
   byteLength,
   slice: async (start, end) => {
     onRead?.((end ?? byteLength) - start);
-    const object = await bucket.get(key, {
-      range: { offset: start, length: (end ?? byteLength) - start },
-    });
+    const object = await retryOnce(() =>
+      bucket.get(key, { range: { offset: start, length: (end ?? byteLength) - start } }),
+    );
     if (!object) throw new Error(`not found: ${key}`);
     return object.arrayBuffer();
   },

@@ -3,7 +3,7 @@
 // 町字の表は市区町村 1 つ分の行グループだけを読む
 import { parquetReadObjects } from "hyparquet";
 
-import { compressors, openTable, r2Buffer, readCity, type Table } from "./data/parquet";
+import { compressors, openTable, r2Buffer, readCity, retryOnce, type Table } from "./data/parquet";
 import { Match } from "./matching/match_core";
 import { NewMatcher, type Impl } from "./matching/matcher";
 import type { MatchedResult } from "./model/model";
@@ -36,7 +36,7 @@ const countRead = (bytes: number) => {
 };
 
 const open = async (bucket: R2Bucket, key: string): Promise<Table> => {
-  const head = await bucket.head(key);
+  const head = await retryOnce(() => bucket.head(key));
   if (!head) throw new Error(`not found: ${key}`);
   return openTable(r2Buffer(bucket, key, head.size, countRead));
 };
