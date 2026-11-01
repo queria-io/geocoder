@@ -36,7 +36,7 @@ curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東�
 ```bash
 git submodule update --init
 uv sync
-scripts/build.sh   # queria sync で公開まで行う
+scripts/build.sh   # fdl checkout → dbt → fdl commit で公開まで行う
 ```
 
 address_br の更新（毎月）の翌日に、`.github/workflows/sync.yml` が作り直す。
