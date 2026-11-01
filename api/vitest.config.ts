@@ -24,6 +24,8 @@ const tsvText: Plugin = {
 };
 
 export default defineConfig({
+  // bench/ は手元で流す重い試験 (bench/vitest.config.ts)
+  test: { exclude: ["bench/**", "node_modules/**"] },
   plugins: [
     pmtilesFixture,
     tsvText,
