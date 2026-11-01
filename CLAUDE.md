@@ -4,7 +4,7 @@ Queria のジオコーダー。住所と座標・地域コードを相互に引�
 同じ PR で一緒に直す。
 
 - 直下: ジオコーダーが読む表を作る dbt のデータセット (Queria の `geocoder`)。address_br・e_stat・nlftp を読んで
-  lg_code 順・行グループ 30,720 行の Parquet にする。毎月 `.github/workflows/sync.yml` が作り直す
+  lg_code 順の Parquet にする (行グループは町字の表が 4,096 行、ほかは 30,720 行)。毎月 `.github/workflows/sync.yml` が作り直す
 - `worker/`: Cloudflare Workers の API。DuckDB もデータベースも使わない。逆引き (`/v1/reverse`) は R2 の境界 PMTiles、
   正引き (予定) は直下のデータセットの Parquet を Range で読む
 

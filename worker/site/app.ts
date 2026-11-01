@@ -7,7 +7,7 @@ import { chunks, guessAddressColumn, parseCsv, toCsv } from "./csv";
 const ASSETS = "https://assets.queria.io/basemap";
 const BASEMAP = "japan-20260901-z14";
 const MAX_ROWS = 1000;
-const BATCH = 100;
+const BATCH = 25;
 
 /** どこまで分かったかを、段の名前ではなく言葉で */
 const LEVEL: Record<string, string> = {

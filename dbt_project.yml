@@ -26,3 +26,13 @@ models:
         - "CALL geocoder.set_option('parquet_compression', 'zstd', schema => 'main')"
       mart:
         +materialized: table
+        # 町字の表は市区町村ごとに 1 回ずつ読む (1 市区町村は平均 384 行)。30,720 行の行グループだと
+        # 1 市区町村のたびに 3 万行を展開し、ばらばらの市区町村の一括変換で CPU の上限を超えた。
+        # 町字の表だけ別のスキーマに置き、行グループを 4,096 行にする。住居表示・地番の表は行が多く、
+        # 小さくするとフッターが数 MB になって最初の 1 回が遅くなるので 30,720 のまま
+        town:
+          +schema: town
+          +pre-hook:
+            - "CREATE SCHEMA IF NOT EXISTS geocoder.town"
+            - "CALL geocoder.set_option('parquet_row_group_size', 4096, schema => 'town')"
+            - "CALL geocoder.set_option('parquet_compression', 'zstd', schema => 'town')"

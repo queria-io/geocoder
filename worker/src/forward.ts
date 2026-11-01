@@ -45,11 +45,20 @@ export type ForwardEnv = {
 };
 
 /** 1 件の問い合わせで何をどれだけ読んだか。重いところを探すためにログへ出す */
-export type ForwardStats = { reads: number; bytes: number; cities: string[]; rows: number };
-let stats: ForwardStats = { reads: 0, bytes: 0, cities: [], rows: 0 };
-const countRead = (bytes: number) => {
+export type ForwardStats = {
+  reads: number;
+  bytes: number;
+  /** R2 を待った時間の合計 (読みが並ぶと重なる) */
+  r2_ms: number;
+  cities: string[];
+  rows: number;
+};
+const emptyStats = (): ForwardStats => ({ reads: 0, bytes: 0, r2_ms: 0, cities: [], rows: 0 });
+let stats = emptyStats();
+const countRead = (bytes: number, ms: number) => {
   stats.reads += 1;
   stats.bytes += bytes;
+  stats.r2_ms += ms;
 };
 
 const open = async (bucket: R2Bucket, key: string): Promise<Table> => {
@@ -155,7 +164,7 @@ export const geocode = async (
   results: MatchedResult[];
   postalCode: (r: MatchedResult) => Promise<string | null>;
 }> => {
-  stats = { reads: 0, bytes: 0, cities: [], rows: 0 };
+  stats = emptyStats();
   const cold = cached === null;
   const built = await matcherFor(env);
   const results = await Match(built.matcher, { address, category: "all", pref: "", limit });

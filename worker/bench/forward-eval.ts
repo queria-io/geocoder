@@ -1,0 +1,134 @@
+// 正引きの物差し。truth-forward.py の実住所を API に流し、当たった段・市区町村の一致・座標の誤差を出す。
+// 使い方: pnpm tsx bench/forward-eval.ts bench/truth-forward.csv [出力の JSONL]
+//   BASE=http://localhost:8787 で手元の wrangler dev にも流せる (既定は本番)
+import { readFileSync, writeFileSync } from "node:fs";
+
+import { chunks, parseCsv } from "../site/csv";
+import { distanceM } from "../src/nearby";
+
+type Truth = {
+  source: string;
+  id: string;
+  address: string;
+  lat: number;
+  lng: number;
+  city: string;
+};
+type Answer = {
+  lat: number | null;
+  lng: number | null;
+  match_level: string;
+  coordinates_level: string | null;
+  lg_code: string | null;
+} | null;
+type Row = Truth & { answer: Answer; error_m: number | null };
+
+const BASE = process.env.BASE ?? "https://geocoder.queria.io";
+const BATCH = 25; // /v1/batch の上限 (src/index.ts の BATCH_MAX) にそろえる
+
+// 住所に「,」「"」や改行が入るので、一括変換のページと同じ読み方で割る
+const truths: Truth[] = parseCsv(readFileSync(process.argv[2], "utf8"))
+  .slice(1)
+  .map(([source, id, address, lat, lng, city]) => ({
+    source,
+    id,
+    address,
+    lat: Number(lat),
+    lng: Number(lng),
+    city,
+  }));
+
+const post = async (addresses: string[], tries = 3): Promise<Answer[]> => {
+  const res = await fetch(`${BASE}/v1/batch`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ addresses }),
+  });
+  // 回数の上限 (429) と、R2 の一時的な失敗や CPU の超過 (5xx) は待って送り直す。何千件も流すので、1 回の失敗で全部を捨てない
+  if ((res.status === 429 || res.status >= 500) && tries > 0) {
+    process.stderr.write(`${res.status}: ${res.status === 429 ? 60 : 5} 秒待って送り直す\n`);
+    await new Promise((r) => setTimeout(r, res.status === 429 ? 60_000 : 5_000));
+    return post(addresses, res.status === 429 ? tries : tries - 1);
+  }
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  return ((await res.json()) as { results: Answer[] }).results;
+};
+
+const answers: Answer[] = [];
+for (const c of chunks(truths, BATCH)) answers.push(...(await post(c.map((t) => t.address))));
+
+// 政令市の区は区のコードで返すが、指定避難所は市のコードで持つ (横浜市の区は 14101〜、避難所は 14100)。
+// 区のコードを市のコードに戻してからも比べる
+const DESIGNATED = [
+  "01100",
+  "04100",
+  "11100",
+  "12100",
+  "14100",
+  "14130",
+  "14150",
+  "15100",
+  "22100",
+  "22130",
+  "23100",
+  "26100",
+  "27100",
+  "27140",
+  "28100",
+  "33100",
+  "34100",
+  "40100",
+  "40130",
+  "43100",
+];
+const parentCity = (code: string): string | undefined => {
+  const p = DESIGNATED.findLast((d) => d <= code);
+  return p !== undefined && p !== code && p.slice(0, 3) === code.slice(0, 3) ? p : undefined;
+};
+const sameCityOf = (r: Row): boolean => {
+  const code = r.answer?.lg_code?.slice(0, 5);
+  return code !== undefined && (code === r.city || parentCity(code) === r.city);
+};
+
+const rows: Row[] = truths.map((t, i) => {
+  const a = answers[i];
+  const error_m = a?.lat == null || a.lng == null ? null : distanceM(t.lat, t.lng, a.lat, a.lng);
+  return { ...t, answer: a, error_m };
+});
+if (process.argv[3]) writeFileSync(process.argv[3], rows.map((r) => JSON.stringify(r)).join("\n"));
+
+const pct = (xs: number[], p: number): number | null =>
+  xs.length === 0 ? null : [...xs].sort((a, b) => a - b)[Math.floor((xs.length - 1) * p)];
+const share = (n: number, d: number) => (d === 0 ? "-" : `${((100 * n) / d).toFixed(1)}%`);
+const fmt = (x: number | null) => (x === null ? "-" : String(Math.round(x)));
+
+const summary = (label: string, rs: Row[]) => {
+  const errors = rs.flatMap((r) => (r.error_m === null ? [] : [r.error_m]));
+  const sameCity = rs.filter(sameCityOf).length;
+  return [
+    label,
+    rs.length,
+    share(rs.filter((r) => r.answer !== null).length, rs.length),
+    share(sameCity, rs.length),
+    fmt(pct(errors, 0.5)),
+    fmt(pct(errors, 0.9)),
+    fmt(pct(errors, 0.95)),
+    share(errors.filter((e) => e > 100).length, errors.length),
+    share(errors.filter((e) => e > 1000).length, errors.length),
+  ].join(" | ");
+};
+
+const groupBy = <K extends string>(rs: Row[], key: (r: Row) => K) =>
+  [...Map.groupBy(rs, key)].sort(([a], [b]) => (a < b ? -1 : 1));
+
+const header =
+  "| 区分 | 件数 | 答えあり | 市区町村が一致 | 誤差の中央値 (m) | 90% | 95% | 100m 超 | 1km 超 |\n|---|---|---|---|---|---|---|---|---|";
+const table = (groups: [string, Row[]][]) =>
+  [header, ...groups.map(([k, rs]) => `| ${summary(k, rs)} |`)].join("\n");
+
+console.log(`## 元データごと (${BASE})\n`);
+console.log(table([...groupBy(rows, (r) => r.source), ["全体", rows]]));
+console.log("\n## 当たった段ごと\n");
+console.log(table(groupBy(rows, (r) => r.answer?.match_level ?? "答えなし")));
+console.log("\n## 座標の点の段ごと\n");
+console.log(table(groupBy(rows, (r) => r.answer?.coordinates_level ?? "座標なし")));

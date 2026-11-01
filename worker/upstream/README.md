@@ -14,7 +14,7 @@
   上流のファイルが変わったら、同じ名前のファイルを直せば済む
 - `src/transform/special_chars.tsv` は上流の表をそのまま置く (`sync.sh` が写す)
 - 試験は `test/upstream-normalize.test.ts` が `cases.json` をそのまま流す。こちらで試験を書き直さない
-- 名寄せ (`matching/`) は上流の辞書 (DuckDB) に依るので写さない。issue の試験を正引きの試験として使う
+- 名寄せ (`matching/`) も同じ名前のファイルに写す。上流が辞書 (PostgreSQL から作る DuckDB) を引く口だけは、R2 の Parquet を読む実装 (`src/repository/`) に差し替える。issue の試験は正引きの試験として流す
 
 ## 上流を取り込む
 
