@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import { Match } from "../src/matching/match_core";
+import { NewMatcher } from "../src/matching/matcher";
 import { adjustMachiazaIDForChome } from "../src/matching/two_stage";
+import { memoryRepository } from "../src/repository/memory";
 import { findResidentialBestMatch, type RsdtdspRow } from "../src/repository/rsdtdsp";
+import { toBasic, toCity, toPref, type TownRow } from "../src/repository/town";
 
 const row = (blk: string, rsdt: string | null, rsdt2: string | null = null): RsdtdspRow => ({
   lg_code: "131016",
@@ -35,5 +39,58 @@ describe("adjustMachiazaIDForChome", () => {
     expect(adjustMachiazaIDForChome("0043000", "2")).toBe("0043002");
     expect(adjustMachiazaIDForChome("0043000", "")).toBe("0043000");
     expect(adjustMachiazaIDForChome("0043000", "101")).toBe("0043000");
+  });
+});
+
+describe("住居表示の段", () => {
+  const town = (machiazaId: string, chome: string | null, rsdtdspCount: number): TownRow => ({
+    lg_code: "271462",
+    machiaza_id: machiazaId,
+    pref_name: "大阪府",
+    county_name: null,
+    city_name: "堺市",
+    ward_name: "北区",
+    oaza_cho: "新金岡町",
+    chome,
+    koaza: null,
+    kyoto_street: false,
+    machiaza_dist: null,
+    has_chome: true,
+    rsdtdsp_count: rsdtdspCount,
+    rsdt_addr_flg: "1",
+    rsdt_addr_partial: false,
+  });
+  const at = (machiazaId: string, blk: string, rsdt: string | null, lng: number): RsdtdspRow => ({
+    ...row(blk, rsdt),
+    lg_code: "271462",
+    machiaza_id: machiazaId,
+    lng,
+  });
+  const matcher = () => {
+    const cities = [
+      toCity({
+        lg_code: "271462",
+        pref_code: "27",
+        pref_name: "大阪府",
+        county_name: null,
+        city_name: "堺市",
+        ward_name: "北区",
+      }),
+    ];
+    const prefs = [toPref({ lg_code: "270008", pref_code: "27", pref_name: "大阪府" })];
+    const towns = [town("0035001", "1丁", 1), town("0035005", "5丁", 1)].map(toBasic);
+    const rsdtdsp = [at("0035001", "4", null, 1), at("0035005", "1", "4", 5)];
+    return NewMatcher(memoryRepository(towns, cities, prefs, rsdtdsp), cities);
+  };
+
+  it("丁目まで当たった町字では、最初の番号を丁目と読み替えない", async () => {
+    const [r] = await Match(matcher(), {
+      address: "大阪府堺市北区新金岡町5丁1-4",
+      category: "all",
+      pref: "",
+      limit: 1,
+    });
+    expect(r.matched_address).toBe("大阪府堺市北区新金岡町5丁1-4");
+    expect(r.coordinates?.[0]).toBe(5);
   });
 });

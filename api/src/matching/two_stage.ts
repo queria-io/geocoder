@@ -81,8 +81,13 @@ export const tryTwoStageResidential = async (
 ): Promise<MatchedResult[] | null> => {
   const basic = nctx.State.BasicResults[0];
   if (!basic?.ids.machiaza_id) return null;
-  // 丁目のある町なら、最初の番号を丁目と読み替える ("舞浜:2-11" → "舞浜2@:11")
-  const converted = basic.machiaza.hasChome ? convertColonToChome(nctx.Input.SearchAddr) : null;
+  // 丁目のある町なら、最初の番号を丁目と読み替える ("舞浜:2-11" → "舞浜2@:11")。
+  // 当たった町字がもう丁目まで持っていれば ("新金岡町5丁")、最初の番号は街区なので読み替えない。
+  // 上流はここを分けず、"新金岡町5丁1-4" を 1丁 の 4番 に当ててしまう
+  const converted =
+    basic.machiaza.hasChome && basic.structured_address.chome === null
+      ? convertColonToChome(nctx.Input.SearchAddr)
+      : null;
   const chomeConverted =
     converted !== null && converted.HasChome !== nctx.Input.SearchAddr.HasChome;
   const searchAddr = chomeConverted ? converted : nctx.Input.SearchAddr;
