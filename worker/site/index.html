@@ -28,6 +28,7 @@
         ><img src="/favicon.svg" alt="" width="28" height="28" />Queria Geocoder</a
       >
       <nav>
+        <a href="#codes">付くコード</a>
         <a href="#uses">使いみち</a>
         <a href="#how">仕組み</a>
         <a href="#price">料金</a>
@@ -106,6 +107,24 @@
           <div id="map" class="map"></div>
           <div id="try-result" class="result" aria-live="polite"></div>
         </div>
+      </section>
+
+      <section id="codes">
+        <h2>緯度・経度と一緒に付くコード</h2>
+        <p>
+          住所 1
+          件ごとに、緯度・経度と一緒に統計と結ぶためのコードを返します。緯度・経度を境界のデータと重ねて、コードを別に出し直す必要はありません。
+        </p>
+        <ul>
+          <li>市区町村コード・全国地方公共団体コード: 自治体ごとの統計と結べます</li>
+          <li>国勢調査の小地域コード: 町丁目ごとの人口・世帯と結べます</li>
+          <li>地域メッシュコード (1km・500m・250m): メッシュ統計と結べます</li>
+          <li>郵便番号と、アドレス・ベース・レジストリの町字・街区・住居の ID</li>
+        </ul>
+        <p>
+          Queria の<a href="https://queria.io">データカタログ</a
+          >の表も同じコードで持っているので、住所録をそのまま人口や地価の表と結べます。町字の代表点までしか分からなかった住所では、小地域とメッシュも代表点から出すので、広い町字では実際の場所と違うことがあります。
+        </p>
       </section>
 
       <section id="uses">
