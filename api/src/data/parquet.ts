@@ -14,9 +14,15 @@ import {
 export const compressors: Compressors = { ZSTD: (input) => decompress(input) };
 
 /** R2 のオブジェクトを、hyparquet が Range で読める形にする */
-export const r2Buffer = (bucket: R2Bucket, key: string, byteLength: number): AsyncBuffer => ({
+export const r2Buffer = (
+  bucket: R2Bucket,
+  key: string,
+  byteLength: number,
+  onRead?: (bytes: number) => void,
+): AsyncBuffer => ({
   byteLength,
   slice: async (start, end) => {
+    onRead?.((end ?? byteLength) - start);
     const object = await bucket.get(key, {
       range: { offset: start, length: (end ?? byteLength) - start },
     });
@@ -66,9 +72,11 @@ export const readCity = async <T extends { lg_code: string }>(
   { file, metadata }: Table,
   lgCode: string,
   columns: string[],
+  onRows?: (rows: number) => void,
 ): Promise<T[]> => {
   const range = rowRangeFor(metadata, lgCode);
   if (!range) return [];
+  onRows?.(range.rowEnd - range.rowStart);
   const rows = (await parquetReadObjects({
     file,
     metadata,

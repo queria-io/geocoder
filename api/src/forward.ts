@@ -27,10 +27,18 @@ export type ForwardEnv = {
   PREF_PARQUET: string;
 };
 
+/** 1 件の問い合わせで何をどれだけ読んだか。重いところを探すためにログへ出す */
+export type ForwardStats = { reads: number; bytes: number; cities: string[]; rows: number };
+let stats: ForwardStats = { reads: 0, bytes: 0, cities: [], rows: 0 };
+const countRead = (bytes: number) => {
+  stats.reads += 1;
+  stats.bytes += bytes;
+};
+
 const open = async (bucket: R2Bucket, key: string): Promise<Table> => {
   const head = await bucket.head(key);
   if (!head) throw new Error(`not found: ${key}`);
-  return openTable(r2Buffer(bucket, key, head.size));
+  return openTable(r2Buffer(bucket, key, head.size, countRead));
 };
 
 const readAll = async <T>(t: Table): Promise<T[]> =>
@@ -49,7 +57,10 @@ const build = async (env: ForwardEnv): Promise<Impl> => {
   const loadCity = (lgCode: string) => {
     const hit = towns.get(lgCode);
     if (hit) return hit;
-    const p = readCity<TownRow>(town, lgCode, TOWN_COLUMNS).then((rows) => rows.map(toBasic));
+    stats.cities.push(lgCode);
+    const p = readCity<TownRow>(town, lgCode, TOWN_COLUMNS, (n) => (stats.rows += n)).then((rows) =>
+      rows.map(toBasic),
+    );
     towns.set(lgCode, p);
     // 読めなかった市区町村は覚えずに、次の問い合わせで読み直す
     p.catch(() => towns.delete(lgCode));
@@ -72,5 +83,10 @@ export const geocode = async (
   env: ForwardEnv,
   address: string,
   limit: number,
-): Promise<MatchedResult[]> =>
-  Match(await matcherFor(env), { address, category: "all", pref: "", limit });
+): Promise<MatchedResult[]> => {
+  stats = { reads: 0, bytes: 0, cities: [], rows: 0 };
+  const cold = cached === null;
+  const results = await Match(await matcherFor(env), { address, category: "all", pref: "", limit });
+  console.log(JSON.stringify({ geocode: address, cold, ...stats }));
+  return results;
+};
