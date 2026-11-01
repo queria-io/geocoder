@@ -3,6 +3,7 @@
 //   BASE=http://localhost:8787 で手元の wrangler dev にも流せる (既定は本番)
 import { readFileSync, writeFileSync } from "node:fs";
 
+import { chunks, parseCsv } from "../site/csv";
 import { distanceM } from "../src/nearby";
 
 type Truth = {
@@ -25,17 +26,9 @@ type Row = Truth & { answer: Answer; error_m: number | null };
 const BASE = process.env.BASE ?? "https://geocoder.queria.io";
 const BATCH = 25; // /v1/batch の上限 (src/index.ts の BATCH_MAX) にそろえる
 
-// 住所に「,」や「"」が入るので、CSV は引用符を見て割る
-const splitCsv = (line: string): string[] =>
-  [...line.matchAll(/("([^"]|"")*"|[^,]*)(,|$)/g)]
-    .slice(0, -1)
-    .map(([, v]) => (v.startsWith('"') ? v.slice(1, -1).replaceAll('""', '"') : v));
-
-const truths: Truth[] = readFileSync(process.argv[2], "utf8")
-  .trim()
-  .split("\n")
+// 住所に「,」「"」や改行が入るので、一括変換のページと同じ読み方で割る
+const truths: Truth[] = parseCsv(readFileSync(process.argv[2], "utf8"))
   .slice(1)
-  .map(splitCsv)
   .map(([source, id, address, lat, lng, city]) => ({
     source,
     id,
@@ -45,25 +38,57 @@ const truths: Truth[] = readFileSync(process.argv[2], "utf8")
     city,
   }));
 
-const post = async (addresses: string[]): Promise<Answer[]> => {
+const post = async (addresses: string[], tries = 3): Promise<Answer[]> => {
   const res = await fetch(`${BASE}/v1/batch`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ addresses }),
   });
-  if (res.status === 429) {
-    await new Promise((r) => setTimeout(r, 60_000));
-    return post(addresses);
+  // 回数の上限 (429) と、R2 の一時的な失敗や CPU の超過 (5xx) は待って送り直す。何千件も流すので、1 回の失敗で全部を捨てない
+  if ((res.status === 429 || res.status >= 500) && tries > 0) {
+    process.stderr.write(`${res.status}: ${res.status === 429 ? 60 : 5} 秒待って送り直す\n`);
+    await new Promise((r) => setTimeout(r, res.status === 429 ? 60_000 : 5_000));
+    return post(addresses, res.status === 429 ? tries : tries - 1);
   }
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   return ((await res.json()) as { results: Answer[] }).results;
 };
 
-const chunks = <T>(xs: T[], n: number): T[][] =>
-  Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
-
 const answers: Answer[] = [];
 for (const c of chunks(truths, BATCH)) answers.push(...(await post(c.map((t) => t.address))));
+
+// 政令市の区は区のコードで返すが、指定避難所は市のコードで持つ (横浜市の区は 14101〜、避難所は 14100)。
+// 区のコードを市のコードに戻してからも比べる
+const DESIGNATED = [
+  "01100",
+  "04100",
+  "11100",
+  "12100",
+  "14100",
+  "14130",
+  "14150",
+  "15100",
+  "22100",
+  "22130",
+  "23100",
+  "26100",
+  "27100",
+  "27140",
+  "28100",
+  "33100",
+  "34100",
+  "40100",
+  "40130",
+  "43100",
+];
+const parentCity = (code: string): string | undefined => {
+  const p = DESIGNATED.findLast((d) => d <= code);
+  return p !== undefined && p !== code && p.slice(0, 3) === code.slice(0, 3) ? p : undefined;
+};
+const sameCityOf = (r: Row): boolean => {
+  const code = r.answer?.lg_code?.slice(0, 5);
+  return code !== undefined && (code === r.city || parentCity(code) === r.city);
+};
 
 const rows: Row[] = truths.map((t, i) => {
   const a = answers[i];
@@ -79,7 +104,7 @@ const fmt = (x: number | null) => (x === null ? "-" : String(Math.round(x)));
 
 const summary = (label: string, rs: Row[]) => {
   const errors = rs.flatMap((r) => (r.error_m === null ? [] : [r.error_m]));
-  const sameCity = rs.filter((r) => r.answer?.lg_code?.slice(0, 5) === r.city).length;
+  const sameCity = rs.filter(sameCityOf).length;
   return [
     label,
     rs.length,

@@ -14,26 +14,32 @@ for name in ["reinfolib", "gsi", "mhlw"]:
     c.sql(f"ATTACH 'ducklake:{data}/{name}/ducklake.duckdb' AS {name} (READ_ONLY)")
 c.sql(f"""
 COPY (
+  -- USING SAMPLE は WHERE より先に効く (標本を取ってから絞る) ので、絞った結果を副問い合わせにしてから取る。
+  -- 地価公示は 32 年分あり、そのまま取ると最新年の標準地は 1,000 件のうち 20 件ほどしか残らない
   WITH land AS (
     SELECT 'land' AS source, CAST(point_id AS VARCHAR) AS id, location AS address,
       latitude AS lat, longitude AS lng, left(city_code, 5) AS city_code
-    FROM reinfolib.main.mart_land_prices
-    WHERE land_price_type = 0 AND year = (SELECT max(year) FROM reinfolib.main.mart_land_prices)
-      AND location IS NOT NULL AND latitude IS NOT NULL
+    FROM (
+      SELECT * FROM reinfolib.main.mart_land_prices
+      WHERE land_price_type = 0 AND year = (SELECT max(year) FROM reinfolib.main.mart_land_prices)
+        AND location IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL
+    )
     USING SAMPLE {n} ROWS (reservoir, 42)
   ),
   shelter AS (
-    -- site_id は「E」＋市区町村コード 5 桁＋連番
+    -- site_id は「E」＋市区町村コード 5 桁＋連番。政令市は区ではなく市のコード (横浜市は 14100)
     SELECT 'shelter', site_id, address, latitude, longitude, substr(site_id, 2, 5)
-    FROM gsi.main.designated_shelter
-    WHERE address IS NOT NULL AND latitude IS NOT NULL
+    FROM (
+      SELECT * FROM gsi.main.designated_shelter
+      WHERE address IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL
+    )
     USING SAMPLE {n} ROWS (reservoir, 42)
   ),
   kaigo AS (
     SELECT 'kaigo', establishment_number, address, latitude, longitude, city_code
     FROM (
       SELECT * FROM mhlw.kaigo.establishment
-      WHERE address IS NOT NULL AND latitude IS NOT NULL
+      WHERE address IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL
       QUALIFY row_number() OVER (PARTITION BY establishment_number ORDER BY service_type) = 1
     )
     USING SAMPLE {n} ROWS (reservoir, 42)
