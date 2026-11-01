@@ -14,7 +14,9 @@
   "dependencies": {
     "@hono/zod-openapi": "^1.6.3",
     "@mapbox/vector-tile": "^3.0.0",
+    "fzstd": "^0.1.1",
     "hono": "^4.13.14",
+    "hyparquet": "^1.32.0",
     "pbf": "^5.1.2",
     "pmtiles": "^4.5.0",
     "zod": "^4.6.7"

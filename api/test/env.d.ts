@@ -13,3 +13,8 @@ declare module "*.pmtiles" {
   const data: ArrayBuffer;
   export default data;
 }
+
+declare module "*.parquet" {
+  const data: ArrayBuffer;
+  export default data;
+}
