@@ -80,8 +80,11 @@ const tryDetailedSearch = async (n: Impl, nctx: NormalizeContext): Promise<Match
   switch (nctx.Input.AddressType) {
     case "rsdtdsp":
       return (await tryTwoStageResidential(n, nctx)) ?? [];
-    case "parcel":
-      return (await tryTwoStageParcel(n, nctx)) ?? [];
+    case "parcel": {
+      // 上流には無い。「1番地3」と書かれていても住居表示の区域なら地番は無いので、住居表示でも探す
+      const parcel = (await tryTwoStageParcel(n, nctx)) ?? [];
+      return parcel.length > 0 ? parcel : ((await tryTwoStageResidential(n, nctx)) ?? []);
+    }
     default: {
       const residential = (await tryTwoStageResidential(n, nctx)) ?? [];
       const complete =

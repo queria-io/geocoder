@@ -1,7 +1,7 @@
 // 住所 → 町字の正引き。R2 に置いた geocoder の表 (town・city・pref の Parquet) を読み、
 // abr-geocoder から写した当て方 (matching/) に渡す。市区町村と都道府県の表は小さいので丸ごと、
 // 町字の表は市区町村 1 つ分の行グループだけを読む
-import { stripPostalCode } from "./matching/postal_prefix";
+import { preNormalize } from "./matching/pre_normalize";
 import { parquetReadObjects } from "hyparquet";
 
 import {
@@ -169,7 +169,7 @@ export const geocode = async (
   const cold = cached === null;
   const built = await matcherFor(env);
   const results = await Match(built.matcher, {
-    address: stripPostalCode(address),
+    address: preNormalize(address),
     category: "all",
     pref: "",
     limit,
