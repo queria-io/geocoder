@@ -1,11 +1,13 @@
-// 上流の matching/issues の試験 (upstream/cases.json) を、ABR の町字までの表で流す。
-// 住居表示と地番の段はまだ無いので、町字より細かい答えを期待する試験は数えるだけにする。
+// 上流の matching/issues の試験 (upstream/cases.json) を、ABR から作った表で流す。
+// 地番の段はまだ無いので、地番を期待する試験は数えるだけにする。
 //
-//   uv run --with duckdb python bench/make-abr-fixture.py <ABR の CSV のフォルダ> bench/abr/
+//   uv run --with duckdb python bench/make-abr-fixture.py <ABR の CSV のフォルダ> bench/abr/ [rsdtdsp の Parquet]
 //   pnpm exec vitest run --config bench/vitest.config.ts
 //
 // 結果は bench/abr/upstream-results.json に書く
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+
+import { asyncBufferFromFile } from "hyparquet";
 
 import { expect, test } from "vitest";
 
@@ -13,7 +15,14 @@ import { Match } from "../src/matching/match_core";
 import { NewMatcher } from "../src/matching/matcher";
 import type { Category, MatchedResult } from "../src/model/model";
 import { lazyRepository } from "../src/repository/lazy";
+import { openTable, readWhere } from "../src/data/parquet";
 import { memoryRepository } from "../src/repository/memory";
+import {
+  findResidentialBestMatch,
+  machiazaKey,
+  RSDTDSP_COLUMNS,
+  type RsdtdspRow,
+} from "../src/repository/rsdtdsp";
 import {
   toBasic,
   toCity,
@@ -37,6 +46,12 @@ type Expect = {
 };
 
 const townLevels = new Set(["pref", "city", "machiaza", "machiaza_detail", "unknown"]);
+const scopeOf = (level: string | undefined): string =>
+  level === undefined || townLevels.has(level)
+    ? "town"
+    : level.startsWith("rsdtdsp")
+      ? "residential"
+      : "parcel";
 
 const category = (c: unknown): Category =>
   typeof c === "string" && c !== "" ? (c as Category) : "all";
@@ -69,11 +84,25 @@ test("上流の matching/issues", async () => {
   const cities = read<CityTableRow>("city.json").map(toCity);
   const prefs = read<PrefTableRow>("pref.json").map(toPref);
   const byCity = Map.groupBy(towns, (t) => t.lgCode);
+  // 住居表示の表 (2 千万行) はメモリに載せず、Worker と同じく町字ごとに Parquet から読む
+  const rsdtdspFile = new URL("rsdtdsp.parquet", dir);
+  const rsdtdsp = existsSync(rsdtdspFile)
+    ? await openTable(await asyncBufferFromFile(rsdtdspFile.pathname))
+    : null;
+  const loadMachiaza = async (lg: string, id: string): Promise<RsdtdspRow[]> =>
+    rsdtdsp ? readWhere(rsdtdsp, "machiaza_key", machiazaKey(lg, id), RSDTDSP_COLUMNS) : [];
   // REPO=lazy で、Worker と同じく市区町村ごとに読む形を流す
   const repo =
     process.env.REPO === "lazy"
-      ? lazyRepository(async (lg) => byCity.get(lg) ?? [], cities, prefs)
-      : memoryRepository(towns, cities, prefs);
+      ? lazyRepository(async (lg) => byCity.get(lg) ?? [], cities, prefs, loadMachiaza)
+      : {
+          ...memoryRepository(towns, cities, prefs),
+          FindResidentialBestMatch: async (
+            lg: string,
+            id: string,
+            f: Parameters<typeof findResidentialBestMatch>[1],
+          ) => findResidentialBestMatch(await loadMachiaza(lg, id), f),
+        };
   const n = NewMatcher(repo, cities);
 
   const all = (cases as { file: string; cases: Expect[] }[])
@@ -85,8 +114,7 @@ test("上流の matching/issues", async () => {
 
   const results = [];
   for (const c of all) {
-    const scope =
-      c.wantMatchLevel === undefined || townLevels.has(c.wantMatchLevel) ? "town" : "detail";
+    const scope = scopeOf(c.wantMatchLevel);
     const got = await Match(n, {
       address: c.query.Address,
       category: category(c.query.Category),
@@ -111,6 +139,8 @@ test("上流の matching/issues", async () => {
     const xs = results.filter((r) => r.scope === scope);
     return `${xs.filter((r) => r.ok).length}/${xs.length}`;
   };
-  console.log(`町字まで: ${count("town")}  それより細かい: ${count("detail")}`);
+  console.log(
+    `町字まで: ${count("town")}  住居表示: ${count("residential")}  地番: ${count("parcel")}`,
+  );
   expect(results.length).toBeGreaterThan(0);
 });

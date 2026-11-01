@@ -4,6 +4,7 @@ import { All } from "../model/model";
 import { MaxEditDistance } from "../util/address";
 import { byteLength, editdist3, utf8 } from "./editdist";
 import { memoryRepository, type CityRow, type PrefRow } from "./memory";
+import { findResidentialBestMatch, type RsdtdspRow } from "./rsdtdsp";
 import type { BasicResult, Repository } from "./types";
 
 /** 都道府県で絞ったあいまい一致で読む市区町村の数。上流は都道府県の町字を全部見るが、ここでは名前の近い順に絞る */
@@ -13,6 +14,7 @@ export const lazyRepository = (
   loadCity: (lgCode: string) => Promise<BasicResult[]>,
   cities: CityRow[],
   prefs: PrefRow[],
+  loadMachiaza: (lgCode: string, machiazaId: string) => Promise<RsdtdspRow[]> = async () => [],
 ): Repository => {
   const empty = memoryRepository([], cities, prefs);
   const inPref = (p: string) =>
@@ -64,5 +66,7 @@ export const lazyRepository = (
             : p.lgCodes;
       return (await over(scope)).FindBasicByLevenshtein(p);
     },
+    FindResidentialBestMatch: async (lgCode, machiazaId, filter) =>
+      findResidentialBestMatch(await loadMachiaza(lgCode, machiazaId), filter),
   };
 };

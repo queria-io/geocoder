@@ -37,12 +37,16 @@ export const r2Buffer = (
 export type RowRange = { rowStart: number; rowEnd: number };
 
 /**
- * lg_code が入りうる行グループの行の範囲。行グループはファイルの中で lg_code 順に並ぶとは限らない
- * (書き手が並行に書く) ので、当たった行グループを 1 つずつ返す。隣り合うものだけ 1 つにまとめる
+ * 並べた列 (lg_code など) の値が入りうる行グループの行の範囲。行グループはファイルの中でその順に
+ * 並ぶとは限らない (書き手が並行に書く) ので、当たった行グループを 1 つずつ返す。隣り合うものだけ 1 つにまとめる
  */
-export const rowRangesFor = (metadata: FileMetaData, lgCode: string): RowRange[] => {
-  const column = metadata.schema.findIndex((s) => s.name === "lg_code") - 1;
-  if (column < 0) throw new Error("lg_code の列がありません");
+export const rowRangesFor = (
+  metadata: FileMetaData,
+  value: string,
+  key = "lg_code",
+): RowRange[] => {
+  const column = metadata.schema.findIndex((s) => s.name === key) - 1;
+  if (column < 0) throw new Error(`${key} の列がありません`);
   return metadata.row_groups.reduce<{ start: number; ranges: RowRange[] }>(
     ({ start, ranges }, group) => {
       const rows = Number(group.num_rows);
@@ -50,7 +54,7 @@ export const rowRangesFor = (metadata: FileMetaData, lgCode: string): RowRange[]
       const min = String(stats?.min_value ?? stats?.min ?? "");
       const max = String(stats?.max_value ?? stats?.max ?? "\uffff");
       const last = ranges.at(-1);
-      const next = !(min <= lgCode && lgCode <= max)
+      const next = !(min <= value && value <= max)
         ? ranges
         : last?.rowEnd === start
           ? [...ranges.slice(0, -1), { rowStart: last.rowStart, rowEnd: start + rows }]
@@ -69,22 +73,31 @@ export const openTable = async (file: AsyncBuffer): Promise<Table> => ({
   metadata: await parquetMetadataAsync(file),
 });
 
-/** 市区町村 1 つ分の行を読む。行グループごと読むので、隣の市区町村の行は読んだあとに落とす */
-export const readCity = async <T extends { lg_code: string }>(
+/** 並べた列 key が value の行を読む。行グループごと読むので、ほかの値の行は読んだあとに落とす */
+export const readWhere = async <T>(
   { file, metadata }: Table,
-  lgCode: string,
+  key: string,
+  value: string,
   columns: string[],
   onRows?: (rows: number) => void,
 ): Promise<T[]> => {
-  const ranges = rowRangesFor(metadata, lgCode);
+  const ranges = rowRangesFor(metadata, value, key);
   onRows?.(ranges.reduce((n, r) => n + r.rowEnd - r.rowStart, 0));
   const read = (range: RowRange) =>
     parquetReadObjects({
       file,
       metadata,
-      columns: columns.includes("lg_code") ? columns : ["lg_code", ...columns],
+      columns: columns.includes(key) ? columns : [key, ...columns],
       compressors,
       ...range,
-    }) as Promise<T[]>;
-  return (await Promise.all(ranges.map(read))).flat().filter((row) => row.lg_code === lgCode);
+    }) as Promise<Record<string, unknown>[]>;
+  return (await Promise.all(ranges.map(read))).flat().filter((row) => row[key] === value) as T[];
 };
+
+/** 市区町村 1 つ分の行を読む */
+export const readCity = <T extends { lg_code: string }>(
+  table: Table,
+  lgCode: string,
+  columns: string[],
+  onRows?: (rows: number) => void,
+): Promise<T[]> => readWhere<T>(table, "lg_code", lgCode, columns, onRows);

@@ -16,6 +16,7 @@ export type TownRow = {
   kyoto_street: boolean;
   machiaza_dist: string | null;
   has_chome: boolean;
+  rsdtdsp_count: number;
   rsdt_addr_flg: string;
   rsdt_addr_partial: boolean;
   lng?: number | null;
@@ -35,6 +36,7 @@ export const TOWN_COLUMNS = [
   "kyoto_street",
   "machiaza_dist",
   "has_chome",
+  "rsdtdsp_count",
   "rsdt_addr_flg",
   "rsdt_addr_partial",
   "lng",
@@ -76,7 +78,7 @@ export const toBasic = (t: TownRow): BasicResult => {
     machiazaDist: t.machiaza_dist,
     hasChome: t.has_chome,
     parcelCount: 0,
-    rsdtdspCount: 0,
+    rsdtdspCount: Number(t.rsdtdsp_count ?? 0),
     lon: t.lng ?? null,
     lat: t.lat ?? null,
   };

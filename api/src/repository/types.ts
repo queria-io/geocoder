@@ -11,6 +11,7 @@ import {
   type Str,
   type StructuredAddress,
 } from "../model/model";
+import type { ResidentialBestResult, ResidentialFilter } from "./rsdtdsp";
 
 /** 町字の 1 行。normalizedAddress は 郡・市区町村・区・通り名・大字町・丁目・小字 を TextForDB に通したもの */
 export type BasicResult = {
@@ -70,6 +71,11 @@ export type Repository = {
   FindBasicByLevenshtein: (p: LevenshteinParams) => Promise<BasicResult[]>;
   FindBasicByPrefix: (p: PrefixParams) => Promise<BasicResult[]>;
   FindCityByAddress: (p: CitySearchParams) => Promise<CityResult | null>;
+  FindResidentialBestMatch: (
+    lgCode: string,
+    machiazaId: string,
+    filter: ResidentialFilter,
+  ) => Promise<ResidentialBestResult | null>;
 };
 
 const coords = (lon: number | null, lat: number | null): [number, number] | null =>

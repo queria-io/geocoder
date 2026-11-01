@@ -3,7 +3,15 @@
 // 町字の表は市区町村 1 つ分の行グループだけを読む
 import { parquetReadObjects } from "hyparquet";
 
-import { compressors, openTable, r2Buffer, readCity, retryOnce, type Table } from "./data/parquet";
+import {
+  compressors,
+  openTable,
+  r2Buffer,
+  readCity,
+  readWhere,
+  retryOnce,
+  type Table,
+} from "./data/parquet";
 import { Match } from "./matching/match_core";
 import { NewMatcher, type Impl } from "./matching/matcher";
 import type { MatchedResult } from "./model/model";
@@ -17,6 +25,7 @@ import {
   type PrefTableRow,
   type TownRow,
 } from "./repository/town";
+import { machiazaKey, RSDTDSP_COLUMNS, type RsdtdspRow } from "./repository/rsdtdsp";
 import type { BasicResult } from "./repository/types";
 
 export type ForwardEnv = {
@@ -25,6 +34,7 @@ export type ForwardEnv = {
   TOWN_PARQUET: string;
   CITY_PARQUET: string;
   PREF_PARQUET: string;
+  RSDTDSP_PARQUET: string;
 };
 
 /** 1 件の問い合わせで何をどれだけ読んだか。重いところを探すためにログへ出す */
@@ -51,6 +61,8 @@ const build = async (env: ForwardEnv): Promise<Impl> => {
   const [town, city, pref] = await Promise.all(
     [env.TOWN_PARQUET, env.CITY_PARQUET, env.PREF_PARQUET].map((k) => open(env.DATA, k)),
   );
+  // 住居表示の表は番・号まである住所で初めて開く
+  let rsdtdsp: Promise<Table> | null = null;
   const cities = (await readAll<CityTableRow>(city)).map(toCity);
   const prefs = (await readAll<PrefTableRow>(pref)).map(toPref);
   const towns = new Map<string, Promise<BasicResult[]>>();
@@ -66,11 +78,33 @@ const build = async (env: ForwardEnv): Promise<Impl> => {
     p.catch(() => towns.delete(lgCode));
     return p;
   };
-  return NewMatcher(lazyRepository(loadCity, cities, prefs), cities);
+  // 町字ごとの住居表示の行。覚えるのは最近の分だけにする (町字は全国で数十万ある)
+  const machiazas = new Map<string, Promise<RsdtdspRow[]>>();
+  const loadMachiaza = (lgCode: string, machiazaId: string) => {
+    const key = machiazaKey(lgCode, machiazaId);
+    const hit = machiazas.get(key);
+    if (hit) return hit;
+    // 住居表示の表をまだ指していなければ、町字までで答える
+    if (env.RSDTDSP_PARQUET === "") return Promise.resolve([]);
+    rsdtdsp ??= open(env.DATA, env.RSDTDSP_PARQUET);
+    const p = rsdtdsp.then((t) =>
+      readWhere<RsdtdspRow>(t, "machiaza_key", key, RSDTDSP_COLUMNS, (n) => (stats.rows += n)),
+    );
+    if (machiazas.size >= 1024) machiazas.delete(machiazas.keys().next().value as string);
+    machiazas.set(key, p);
+    p.catch(() => {
+      machiazas.delete(key);
+      rsdtdsp = null;
+    });
+    return p;
+  };
+  return NewMatcher(lazyRepository(loadCity, cities, prefs, loadMachiaza), cities);
 };
 
 const matcherFor = (env: ForwardEnv): Promise<Impl> => {
-  const key = [env.TOWN_PARQUET, env.CITY_PARQUET, env.PREF_PARQUET].join("\n");
+  const key = [env.TOWN_PARQUET, env.CITY_PARQUET, env.PREF_PARQUET, env.RSDTDSP_PARQUET].join(
+    "\n",
+  );
   if (cached?.key !== key) {
     const matcher = build(env);
     matcher.catch(() => (cached = null));

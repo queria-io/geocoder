@@ -34,6 +34,8 @@ models:
         data_type: varchar
       - name: has_chome
         data_type: boolean
+      - name: rsdtdsp_count
+        data_type: integer
       - name: alias_oaza
         data_type: varchar
       - name: alias_koaza

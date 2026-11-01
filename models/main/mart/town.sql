@@ -35,6 +35,12 @@ located AS (
         AND p.machiaza_id = left(t.machiaza_id, 4) || '000'
         AND t.geometry IS NULL
 ),
+-- 住居表示の住所の数。番・号の段は、これが 0 の町字では住居表示の表を読まない
+rsdtdsp_count AS (
+    SELECT lg_code, machiaza_id, count(*) AS rsdtdsp_count
+    FROM {{ ref('rsdtdsp') }}
+    GROUP BY lg_code, machiaza_id
+),
 small_area AS (
     SELECT CAST(key_code AS VARCHAR) AS small_area_code, geometry FROM e_stat.boundary.small_area
 )
@@ -52,6 +58,7 @@ SELECT
     t.koaza_aka_code = '2' AS kyoto_street,
     {{ half_width('t.machiaza_dist') }} AS machiaza_dist,
     t.chome IS NOT NULL OR t.oaza_cho LIKE '%丁目' OR h.oaza_cho IS NOT NULL AS has_chome,
+    coalesce(c.rsdtdsp_count, 0)::INTEGER AS rsdtdsp_count,
     t.alias_oaza,
     t.alias_koaza,
     t.rsdt_addr_flg,
@@ -64,6 +71,7 @@ SELECT
     s.small_area_code
 FROM located t
 LEFT JOIN oaza_has_chome h ON h.lg_code = t.lg_code AND h.oaza_cho = t.oaza_cho
+LEFT JOIN rsdtdsp_count c ON c.lg_code = t.lg_code AND c.machiaza_id = t.machiaza_id
 LEFT JOIN small_area s ON ST_Contains(s.geometry, t.point)
 -- 境界が重なる場所では代表点が 2 つの小地域に入る。町字 1 行に 1 つだけ残す
 QUALIFY row_number() OVER (PARTITION BY t.lg_code, t.machiaza_id ORDER BY s.small_area_code) = 1

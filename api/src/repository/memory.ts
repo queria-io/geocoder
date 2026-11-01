@@ -2,6 +2,7 @@
 import { All, MaxChomeNumber } from "../model/model";
 import { ExtractChomeDigits, MaxEditDistance } from "../util/address";
 import { byteLength, editdist3, utf8 } from "./editdist";
+import { findResidentialBestMatch, machiazaKey, type RsdtdspRow } from "./rsdtdsp";
 import type { BasicResult, CityResult, PrefectureResult, Repository } from "./types";
 
 export type CityRow = CityResult & { prefCode: string; normalizedAddress: string };
@@ -37,7 +38,9 @@ export const memoryRepository = (
   towns: BasicResult[],
   cities: CityRow[],
   prefs: PrefRow[],
+  rsdtdsp: RsdtdspRow[] = [],
 ): Repository => {
+  const byMachiaza = Map.groupBy(rsdtdsp, (r) => machiazaKey(r.lg_code, r.machiaza_id));
   const byAddress = Map.groupBy(towns, (t) => t.normalizedAddress);
   const byPref = Map.groupBy(towns, (t) => prefCodeOf(t.lgCode));
   const byLgCode = Map.groupBy(towns, (t) => t.lgCode);
@@ -153,5 +156,7 @@ export const memoryRepository = (
           : inPref(cities, prefCode).find((c) => c.normalizedAddress === cityAddr);
       return hit ? city(hit) : null;
     },
+    FindResidentialBestMatch: async (lgCode, machiazaId, filter) =>
+      findResidentialBestMatch(byMachiaza.get(machiazaKey(lgCode, machiazaId)) ?? [], filter),
   };
 };

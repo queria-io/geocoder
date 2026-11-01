@@ -47,6 +47,9 @@ fields:
   - name: has_chome
     title: 丁目がある
     description: "true はこの町字か、同じ大字・町のどれかに丁目があるもの。町名のすぐ後の数字を丁目と読むかどうかに使う"
+  - name: rsdtdsp_count
+    title: 住居表示の住所の数
+    description: "rsdtdsp の表にあるこの町字の行の数。住居表示を実施していない町字は 0"
   - name: alias_oaza
     title: 大字・町名の別名
   - name: alias_koaza
