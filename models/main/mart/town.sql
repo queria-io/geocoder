@@ -9,6 +9,8 @@ WITH town AS (
         -- 2 行がある (約 1,200 組、ほかの列は同じ)。1 行にまとめ、地番の住所もあることを残す
         count(DISTINCT rsdt_addr_flg) OVER (PARTITION BY lg_code, machiaza_id) > 1 AS rsdt_addr_partial
     FROM address_br.main.mart_town
+    -- 状態フラグ 3 は存在しない町字
+    WHERE status_flg <> '3'
     QUALIFY row_number() OVER (
         PARTITION BY lg_code, machiaza_id ORDER BY rsdt_addr_flg DESC, efct_date DESC NULLS LAST
     ) = 1
@@ -41,14 +43,14 @@ SELECT
     t.machiaza_id,
     t.machiaza_type,
     t.pref_name,
-    t.county_name,
-    t.city_name,
-    t.ward_name,
-    t.oaza_cho,
-    t.chome,
-    t.koaza,
+    {{ half_width('t.county_name') }} AS county_name,
+    {{ half_width('t.city_name') }} AS city_name,
+    {{ half_width('t.ward_name') }} AS ward_name,
+    {{ half_width('t.oaza_cho') }} AS oaza_cho,
+    {{ half_width('t.chome') }} AS chome,
+    {{ half_width('t.koaza') }} AS koaza,
     t.koaza_aka_code = '2' AS kyoto_street,
-    t.machiaza_dist,
+    {{ half_width('t.machiaza_dist') }} AS machiaza_dist,
     t.chome IS NOT NULL OR t.oaza_cho LIKE '%丁目' OR h.oaza_cho IS NOT NULL AS has_chome,
     t.alias_oaza,
     t.alias_koaza,

@@ -6,9 +6,9 @@ SELECT
     lg_code,
     pref_code,
     pref_name,
-    county_name,
-    city_name,
-    ward_name,
+    {{ half_width('county_name') }} AS county_name,
+    {{ half_width('city_name') }} AS city_name,
+    {{ half_width('ward_name') }} AS ward_name,
     ST_X(geometry) AS lng,
     ST_Y(geometry) AS lat
 FROM address_br.main.mart_city
