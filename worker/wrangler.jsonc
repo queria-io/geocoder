@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "queria-geocoder",
   "main": "src/index.ts",
-  // LP (site/ を pnpm build:web で public/ に組む)。/ はここから、/v1・/docs・/openapi.json は Worker が返す
+  // アイコンと共有画像 (site/brand を pnpm build:web で public/ に置く)。/v1・/docs・/openapi.json は Worker が返す
   "assets": { "directory": "./public" },
   "compatibility_date": "2025-12-01",
   "account_id": "57c6a116efc637fc3f21d0affea15508",
