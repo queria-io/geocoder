@@ -41,7 +41,7 @@ export type ForwardEnv = {
   /** 空なら地番の段は流さない */
   PARCEL_PARQUET: string;
   /** 国交省の位置参照情報の親番の点 (isj_block)。空なら町字の代表点のまま */
-  ISJ_PARQUET?: string;
+  ISJ_PARQUET: string;
 };
 
 /** 1 件の問い合わせで何をどれだけ読んだか。重いところを探すためにログへ出す */
@@ -126,7 +126,7 @@ const build = async (env: ForwardEnv): Promise<Built> => {
       (await loadCity(lgCode)).find((b) => b.machiazaId === machiazaId) ?? null,
     towns: loadCity,
     rows: loadMachiaza,
-    isj: machiazaLoader<IsjRow>(env.DATA, env.ISJ_PARQUET ?? "", ISJ_COLUMNS),
+    isj: machiazaLoader<IsjRow>(env.DATA, env.ISJ_PARQUET, ISJ_COLUMNS),
   };
 };
 
@@ -137,7 +137,7 @@ const matcherFor = (env: ForwardEnv): Promise<Built> => {
     env.PREF_PARQUET,
     env.RSDTDSP_PARQUET,
     env.PARCEL_PARQUET,
-    env.ISJ_PARQUET ?? "",
+    env.ISJ_PARQUET,
   ].join("\n");
   if (cached?.key !== key) {
     const matcher = build(env);

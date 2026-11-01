@@ -15,7 +15,15 @@ WITH town AS (
     WHERE status_flg <> '3' AND oaza_cho IS NOT NULL
 ),
 block AS (
-    SELECT lg_code, oaza_chome_name, koaza_name, block_number, is_residential_address, lng, lat
+    -- 番号に全角の数字が混じる行がある (「２１」)。ジオコーダーは半角で引くのでそろえる
+    SELECT
+        lg_code,
+        oaza_chome_name,
+        koaza_name,
+        translate(block_number, '０１２３４５６７８９', '0123456789') AS block_number,
+        is_residential_address,
+        lng,
+        lat
     FROM nlftp.isj.block
     -- 同じ番号が離れた地点に分かれて入るものは、代表の 1 行だけ使う
     WHERE is_representative
@@ -26,7 +34,7 @@ matched AS (
         t.machiaza_id,
         -- 小字まで同じ町字を先に使う
         row_number() OVER (
-            PARTITION BY b.lg_code, b.oaza_chome_name, b.koaza_name, b.block_number
+            PARTITION BY b.lg_code, b.oaza_chome_name, b.koaza_name, b.block_number, b.is_residential_address
             ORDER BY (t.koaza IS NOT NULL) DESC, t.machiaza_id
         ) AS rank
     FROM block b
@@ -46,5 +54,8 @@ SELECT
 FROM matched
 WHERE rank = 1
 -- 小字の違う同じ番号が 1 つの大字・町の町字に寄ることがある。そのときは 1 行に絞る
-QUALIFY row_number() OVER (PARTITION BY machiaza_key, block_number ORDER BY koaza_name NULLS FIRST) = 1
+-- 住居表示の街区符号と地番の親番は同じ番号でも別の点なので、分けたまま残す
+QUALIFY row_number() OVER (
+    PARTITION BY machiaza_key, block_number, is_residential_address ORDER BY koaza_name NULLS FIRST
+) = 1
 ORDER BY machiaza_key, block_number

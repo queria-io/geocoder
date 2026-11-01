@@ -35,6 +35,19 @@ describe("withParcelParent", () => {
     expect(r.coordinate_level).toBeUndefined();
   });
 
+  it("丁目の町字は丁目の無い大字・町の点に寄せない", async () => {
+    const base: Record<string, IsjRow[]> = {
+      "0822010051000": [
+        { block_number: "28", is_residential_address: false, lng: 140.2, lat: 36.2 },
+      ],
+    };
+    const r = await withParcelParent(
+      result({ structured_address: { ...emptySA(), chome: "3丁目" } }),
+      async (lg, id) => base[lg + id] ?? [],
+    );
+    expect(r.coordinate_level).toBeUndefined();
+  });
+
   it("番号の点まで当たっていれば触らない", async () => {
     const r = await withParcelParent(result({ match_level: "parcel" }), load);
     expect(r.coordinates).toEqual([140.08913, 36.077563]);
@@ -57,6 +70,9 @@ describe("withParcelParent", () => {
 describe("parentNumber", () => {
   it("残りの頭の数字", () => {
     expect(parentNumber(result({ unmatched_address: ["28-10"] }))).toBe("28");
+    expect(parentNumber(result({ unmatched_address: ["28番地10"] }))).toBe("28");
     expect(parentNumber(result({ unmatched_address: ["ビル"] }))).toBeNull();
+    expect(parentNumber(result({ unmatched_address: ["2F"] }))).toBeNull();
+    expect(parentNumber(result({ unmatched_address: ["9丁目28"] }))).toBeNull();
   });
 });

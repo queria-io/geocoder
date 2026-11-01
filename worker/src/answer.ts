@@ -1,6 +1,6 @@
 // API の答えの形。当て方 (matching/) は上流の写しのままにして、外向けの形はここで作る。
 // 項目名と段の値は abr-geocoder の答え (GeoJSON) にそろえる
-import type { CoordinateLevel, MatchedResult, MatchLevel } from "./model/model";
+import type { CoordinateLevel, MatchedResult } from "./model/model";
 
 /** 全国地方公共団体コードの検査数字。頭 5 桁から 6 桁目を出す */
 export const checkDigit = (code5: string): string => {
