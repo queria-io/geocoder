@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { openTable, r2Buffer, readCity, rowRangeFor, type Table } from "../src/data/parquet";
+import { openTable, r2Buffer, readCity, rowRangesFor, type Table } from "../src/data/parquet";
 // 3 市区町村・行グループ 3 つの town (test/make-parquet-fixture.py)
 import fixture from "./fixture-town.parquet";
 
@@ -24,16 +24,30 @@ beforeAll(async () => {
 type Town = { lg_code: string; machiaza_id: string; oaza_cho: string };
 const cols = ["machiaza_id", "oaza_cho"];
 
-describe("rowRangeFor", () => {
+describe("rowRangesFor", () => {
   it("lg_code が入る行グループの行だけを指す", () => {
-    expect(rowRangeFor(table.metadata, "131016")).toEqual({ rowStart: 0, rowEnd: 4096 });
-    expect(rowRangeFor(table.metadata, "131024")).toEqual({ rowStart: 2048, rowEnd: 4096 });
-    expect(rowRangeFor(table.metadata, "132012")).toEqual({ rowStart: 2048, rowEnd: 6000 });
+    expect(rowRangesFor(table.metadata, "131016")).toEqual([{ rowStart: 0, rowEnd: 4096 }]);
+    expect(rowRangesFor(table.metadata, "131024")).toEqual([{ rowStart: 2048, rowEnd: 4096 }]);
+    expect(rowRangesFor(table.metadata, "132012")).toEqual([{ rowStart: 2048, rowEnd: 6000 }]);
   });
 
-  it("どの行グループの範囲にも入らなければ null", () => {
-    expect(rowRangeFor(table.metadata, "011002")).toBeNull();
-    expect(rowRangeFor(table.metadata, "472018")).toBeNull();
+  it("どの行グループの範囲にも入らなければ空", () => {
+    expect(rowRangesFor(table.metadata, "011002")).toEqual([]);
+    expect(rowRangesFor(table.metadata, "472018")).toEqual([]);
+  });
+
+  it("離れた行グループは間を読まずに別々に返す", () => {
+    const [a, b, c] = table.metadata.row_groups;
+    const shuffled = { ...table.metadata, row_groups: [b, a, c] };
+    // 行グループの並びを入れ替え、当たる行グループの間に当たらないものを挟む
+    const metadata = { ...table.metadata, row_groups: [a, c, b] };
+    expect(rowRangesFor(shuffled, "132012")).toEqual([
+      { rowStart: 0, rowEnd: 2048 },
+      { rowStart: 4096, rowEnd: 6000 },
+    ]);
+    expect(rowRangesFor(metadata, "131024")).toEqual([
+      { rowStart: Number(a.num_rows) + Number(c.num_rows), rowEnd: 6000 },
+    ]);
   });
 });
 

@@ -34,29 +34,28 @@ export const r2Buffer = (
 export type RowRange = { rowStart: number; rowEnd: number };
 
 /**
- * lg_code が入りうる行グループの行の範囲。行グループは lg_code 順に並び重ならないので、
- * 当たる行グループは続いた 1 か所になる。範囲を 1 つにまとめて返し、無ければ null
+ * lg_code が入りうる行グループの行の範囲。行グループはファイルの中で lg_code 順に並ぶとは限らない
+ * (書き手が並行に書く) ので、当たった行グループを 1 つずつ返す。隣り合うものだけ 1 つにまとめる
  */
-export const rowRangeFor = (metadata: FileMetaData, lgCode: string): RowRange | null => {
+export const rowRangesFor = (metadata: FileMetaData, lgCode: string): RowRange[] => {
   const column = metadata.schema.findIndex((s) => s.name === "lg_code") - 1;
   if (column < 0) throw new Error("lg_code の列がありません");
-  const groups = metadata.row_groups.reduce<{ start: number; ranges: RowRange[] }>(
+  return metadata.row_groups.reduce<{ start: number; ranges: RowRange[] }>(
     ({ start, ranges }, group) => {
       const rows = Number(group.num_rows);
       const stats = group.columns[column]?.meta_data?.statistics;
       const min = String(stats?.min_value ?? stats?.min ?? "");
-      const max = String(stats?.max_value ?? stats?.max ?? "￿");
-      const hit = min <= lgCode && lgCode <= max;
-      return {
-        start: start + rows,
-        ranges: hit ? [...ranges, { rowStart: start, rowEnd: start + rows }] : ranges,
-      };
+      const max = String(stats?.max_value ?? stats?.max ?? "\uffff");
+      const last = ranges.at(-1);
+      const next = !(min <= lgCode && lgCode <= max)
+        ? ranges
+        : last?.rowEnd === start
+          ? [...ranges.slice(0, -1), { rowStart: last.rowStart, rowEnd: start + rows }]
+          : [...ranges, { rowStart: start, rowEnd: start + rows }];
+      return { start: start + rows, ranges: next };
     },
     { start: 0, ranges: [] },
   ).ranges;
-  return groups.length === 0
-    ? null
-    : { rowStart: groups[0].rowStart, rowEnd: groups[groups.length - 1].rowEnd };
 };
 
 export type Table = { file: AsyncBuffer; metadata: FileMetaData };
@@ -74,15 +73,15 @@ export const readCity = async <T extends { lg_code: string }>(
   columns: string[],
   onRows?: (rows: number) => void,
 ): Promise<T[]> => {
-  const range = rowRangeFor(metadata, lgCode);
-  if (!range) return [];
-  onRows?.(range.rowEnd - range.rowStart);
-  const rows = (await parquetReadObjects({
-    file,
-    metadata,
-    columns: columns.includes("lg_code") ? columns : ["lg_code", ...columns],
-    compressors,
-    ...range,
-  })) as T[];
-  return rows.filter((row) => row.lg_code === lgCode);
+  const ranges = rowRangesFor(metadata, lgCode);
+  onRows?.(ranges.reduce((n, r) => n + r.rowEnd - r.rowStart, 0));
+  const read = (range: RowRange) =>
+    parquetReadObjects({
+      file,
+      metadata,
+      columns: columns.includes("lg_code") ? columns : ["lg_code", ...columns],
+      compressors,
+      ...range,
+    }) as Promise<T[]>;
+  return (await Promise.all(ranges.map(read))).flat().filter((row) => row.lg_code === lgCode);
 };
