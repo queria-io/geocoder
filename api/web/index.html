@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Queria Geocoder</title>
+    <meta
+      name="description"
+      content="日本の住所を座標と地域コードに変える無料の API。登録なしで使えます。"
+    />
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <a class="brand" href="/">Queria Geocoder</a>
+      <nav>
+        <a href="#try">試す</a>
+        <a href="#batch">一括変換</a>
+        <a href="#api">API</a>
+        <a href="/docs">仕様書</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <h1>日本の住所を、座標と地域コードに変える</h1>
+        <p>
+          住所を渡すと、緯度・経度と市区町村コード、国勢調査の小地域コード、郵便番号、地域メッシュを返します。地図上の点から市区町村と小地域を引くこともできます。登録なしで、無料で使えます（ベータ）。
+        </p>
+      </section>
+
+      <section id="try">
+        <h2>試す</h2>
+        <form id="try-form" class="row">
+          <input
+            id="try-address"
+            type="text"
+            maxlength="100"
+            placeholder="東京都千代田区紀尾井町1-3"
+            value="東京都千代田区紀尾井町1-3"
+            aria-label="住所"
+          />
+          <button type="submit">座標を調べる</button>
+        </form>
+        <p class="hint">地図をクリックすると、その点の市区町村と小地域のコードを出します。</p>
+        <div class="try">
+          <div id="map" class="map"></div>
+          <div id="try-result" class="result" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section id="batch">
+        <h2>一括変換</h2>
+        <p>
+          住所の列がある CSV を選ぶと、右に座標とコードの列を足したファイルを作ります。1 ファイル
+          1,000 行まで。ファイルはこのページの中で読み、住所の文字だけを API
+          に送ります。ファイルそのものはどこにも保存しません。
+        </p>
+        <div class="batch">
+          <label>CSV ファイル <input id="batch-file" type="file" accept=".csv,text/csv" /></label>
+          <label
+            >住所の列
+            <select id="batch-column" disabled></select
+          ></label>
+          <label
+            >出力の形
+            <select id="batch-format">
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+              <option value="geojson">GeoJSON</option>
+            </select>
+          </label>
+          <button id="batch-run" type="button" disabled>変換する</button>
+        </div>
+        <p id="batch-status" class="hint" aria-live="polite"></p>
+        <p><a id="batch-download" class="download" hidden>結果を保存する</a></p>
+      </section>
+
+      <section id="api">
+        <h2>API</h2>
+        <pre><code>curl -s -G https://geocoder.queria.io/v1/geocode \
+  --data-urlencode "address=東京都千代田区紀尾井町1-3" \
+  --data-urlencode "include=codes,small_area"</code></pre>
+        <ul>
+          <li>
+            住所から引く: <code>GET /v1/geocode?address=…</code>。住所は URL エンコードして渡します
+          </li>
+          <li>まとめて引く: <code>POST /v1/batch</code>（1 回 100 件まで）</li>
+          <li>座標から引く: <code>GET /v1/reverse?lat=…&amp;lng=…</code></li>
+          <li>
+            <code>include</code> で項目を足し、<code>format</code> で json・geojson・csv
+            を選べます。項目名は abr-geocoder（デジタル庁）と同じです
+          </li>
+          <li>1 つの IP から 1 分に 300 回まで。超えると 429 を返します</li>
+        </ul>
+        <p>項目ごとの説明は <a href="/docs">仕様書</a> にあります。</p>
+      </section>
+
+      <section id="about">
+        <h2>答えの見方</h2>
+        <ul>
+          <li>
+            <code>match_level</code> は住所がどこまで当たったか、<code>coordinates_level</code>
+            は座標をどの点から取ったかです。号まで当たっても、その号に座標が無ければ町字の代表点を返し、<code
+              >coordinates_level</code
+            >
+            が町字になります
+          </li>
+          <li>座標はどれも代表点で、建物の位置ではありません</li>
+          <li>地番の住所は今は町字まで当たります。地番ごとの座標は準備中です</li>
+        </ul>
+        <h2>出典</h2>
+        <p>
+          答えを載せるときは、答えの <code>source.attribution</code> の出典も一緒に載せてください。
+        </p>
+        <ul>
+          <li>「アドレス・ベース・レジストリ」（デジタル庁）を加工して作成</li>
+          <li>「国勢調査 境界データ（小地域）」（総務省統計局、e-Stat）を加工して作成</li>
+          <li>「国土数値情報（行政区域データ）」（国土交通省）を加工して作成</li>
+          <li>地図: © OpenStreetMap contributors</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="bar">
+      <span>運営: <a href="https://queria.io">Queria</a></span>
+      <span>ベータの間は答えの形を変えることがあります</span>
+    </footer>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

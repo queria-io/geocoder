@@ -4,12 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "deploy": "wrangler deploy",
-    "dev": "wrangler dev",
+    "deploy": "pnpm build:web && wrangler deploy",
+    "dev": "pnpm build:web && wrangler dev",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web",
     "check": "oxlint && oxfmt --check .",
-    "fix": "oxlint --fix && oxfmt ."
+    "fix": "oxlint --fix && oxfmt .",
+    "build:web": "mkdir -p public && cp web/index.html node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs public/ && esbuild web/app.ts --bundle --format=esm --minify --outfile=public/app.js && esbuild web/app.css --bundle --minify --loader:.svg=dataurl --outfile=public/app.css"
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.6.3",
@@ -24,6 +25,9 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.23.0",
     "@cloudflare/workers-types": "^5.20261014.1",
+    "@protomaps/basemaps": "5.7.2",
+    "esbuild": "^0.28.2",
+    "maplibre-gl": "6.14.0",
     "oxfmt": "^0.73.0",
     "oxlint": "^1.76.0",
     "tsx": "^4.23.15",

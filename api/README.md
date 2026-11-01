@@ -68,6 +68,12 @@ GET /v1/reverse?lat=35.6812&lng=139.7671
 - `include=codes` で都道府県・市区町村コードと地域メッシュを足す
 - 座標が数値でない・範囲外は 400
 
+## ページ
+
+`/` は LP (試す欄・地図・一括変換)。`web/` を `pnpm build:web` で `public/` に組み、Workers の static assets で出す
+(`pnpm run deploy` が先に組む)。`/docs` は `/openapi.json` を読んで項目の説明を出す。
+一括変換はブラウザの中で CSV を読み、`POST /v1/batch` に 100 件ずつ住所の文字だけを送る。
+
 ## 精度
 
 境界タイルは地図用に形を簡略化している (z13、タイル 1 枚を 4096 に刻む)。境目のすぐ近くの点は

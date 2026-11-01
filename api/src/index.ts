@@ -19,6 +19,7 @@ import {
   ABR_ATTRIBUTION,
   csvColumns,
   type Extras,
+  type Include,
   forwardAnswer,
   forwardFeature,
   INCLUDES,
@@ -231,13 +232,15 @@ const app = new OpenAPIHono<{ Bindings: Env }>({
                 ? "limit は 1〜10 の整数で渡してください"
                 : result.error.issues.some((i) => i.path.includes("format"))
                   ? "format は json・geojson・csv のどれかで渡してください"
-                  : "lat と lng を数値で渡してください",
+                  : result.error.issues.some((i) => i.path.includes("addresses"))
+                    ? "addresses に住所の文字列を 1〜100 件の配列で渡してください"
+                    : "lat と lng を数値で渡してください",
           },
           "no-store",
         ),
 });
 
-app.use("*", cors({ origin: "*", allowMethods: ["GET"] }));
+app.use("*", cors({ origin: "*", allowMethods: ["GET", "POST"] }));
 
 // 鍵は呼んだ元の IP。上限は Cloudflare の拠点ごとに数えるので目安
 app.use("/v1/*", async (c, next) => {
@@ -510,6 +513,23 @@ const smallAreaOf = async (env: Env, r: MatchedResult) =>
     : (await resolveAreas(r.coordinates[0], r.coordinates[1], readTileOf(env)))
         .estat_small_area_code;
 
+/** 1 つの住所を当てて、頼まれた項目のための値も引く */
+const answer = async (env: Env, address: string, limit: number, groups: ReadonlySet<Include>) => {
+  const { results, postalCode } = await geocode(env, address, limit);
+  const extras = await Promise.all(
+    results.map(async (r): Promise<Extras> => ({
+      postal_code: groups.has("codes") ? await postalCode(r) : null,
+      estat_small_area_code: groups.has("small_area") ? await smallAreaOf(env, r) : null,
+    })),
+  );
+  return results.map((r, i) => [r, extras[i]] as const);
+};
+
+const attributionFor = (groups: ReadonlySet<Include>) => [
+  ABR_ATTRIBUTION,
+  ...(groups.has("small_area") ? [SMALL_AREA_ATTRIBUTION] : []),
+];
+
 app.openapi(geocodeRoute, async (c) => {
   const { address, limit = 1, include, format } = c.req.valid("query");
   const groups = parseInclude(include);
@@ -520,16 +540,7 @@ app.openapi(geocodeRoute, async (c) => {
       { error: `include に使えるのは ${INCLUDES.join(",")} です` },
       "no-store",
     ) as never;
-  const result = await tryCatchAsync(async () => {
-    const { results, postalCode } = await geocode(c.env, address, limit);
-    const extras = await Promise.all(
-      results.map(async (r): Promise<Extras> => ({
-        postal_code: groups.has("codes") ? await postalCode(r) : null,
-        estat_small_area_code: groups.has("small_area") ? await smallAreaOf(c.env, r) : null,
-      })),
-    );
-    return results.map((r, i) => [r, extras[i]] as const);
-  });
+  const result = await tryCatchAsync(() => answer(c.env, address, limit, groups));
   if (!result.ok) {
     if (result.error instanceof ErrEmptyAddress || result.error instanceof ErrAddressTooLong)
       return json(c, 400, { error: "address を 1〜100 文字で渡してください" }, "no-store") as never;
@@ -537,10 +548,7 @@ app.openapi(geocodeRoute, async (c) => {
     return json(c, 502, { error: "住所の表を読めませんでした" }, "no-store") as never;
   }
   const version = c.env.DATA_VERSION;
-  const attribution = [
-    ABR_ATTRIBUTION,
-    ...(groups.has("small_area") ? [SMALL_AREA_ATTRIBUTION] : []),
-  ];
+  const attribution = attributionFor(groups);
   const headers = { "Cache-Control": "public, max-age=86400" };
   if (format === "geojson") {
     const body = {
@@ -584,6 +592,88 @@ app.doc31("/openapi.json", {
   },
 });
 
+const BATCH_MAX = 100;
+
+const batchRoute = createRoute({
+  method: "post",
+  path: "/v1/batch",
+  summary: "住所をまとめて当てる",
+  description: `1 回に ${BATCH_MAX} 件まで。回数の上限は 1 回の呼び出しで 1 回と数える`,
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              addresses: z.array(z.string()).min(1).max(BATCH_MAX),
+              include: z.string().optional().openapi({ description: "/v1/geocode と同じ" }),
+            })
+            .openapi("BatchRequest"),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              results: z.array(GeocodeResult.nullable()).openapi({
+                description: "addresses と同じ順。当たらない住所・空や長すぎる住所は null",
+              }),
+              source: Source,
+            })
+            .openapi("BatchResponse"),
+        },
+      },
+      description: "住所ごとに一番強い 1 件",
+    },
+    400: { content: { "application/json": { schema: ErrorBody } }, description: "指定がおかしい" },
+    429: {
+      content: { "application/json": { schema: ErrorBody } },
+      description: "呼び出しが多すぎる",
+    },
+    502: { content: { "application/json": { schema: ErrorBody } }, description: "表を読めない" },
+  },
+});
+
+app.openapi(batchRoute, async (c) => {
+  const { addresses, include } = c.req.valid("json");
+  const groups = parseInclude(include);
+  if (groups === null)
+    return json(
+      c,
+      400,
+      { error: `include に使えるのは ${INCLUDES.join(",")} です` },
+      "no-store",
+    ) as never;
+  const one = async (address: string) => {
+    const r = await tryCatchAsync(() => answer(c.env, address, 1, groups));
+    if (r.ok) return r.value[0] ? forwardAnswer(r.value[0][0], groups, r.value[0][1]) : null;
+    if (r.error instanceof ErrEmptyAddress || r.error instanceof ErrAddressTooLong) return null;
+    throw r.error;
+  };
+  // 1 件ずつ当てる。同じ市区町村の住所が続けば、読んだ表を使い回せる
+  const result = await tryCatchAsync(async () => {
+    const out = [];
+    for (const a of addresses) out.push(await one(a));
+    return out;
+  });
+  if (!result.ok) {
+    console.error("geocoder: batch", result.error);
+    return json(c, 502, { error: "住所の表を読めませんでした" }, "no-store") as never;
+  }
+  return c.json(
+    {
+      results: result.value,
+      source: { version: c.env.DATA_VERSION, attribution: attributionFor(groups) },
+    },
+    200,
+    { "Cache-Control": "no-store" },
+  ) as never;
+});
+
 // 仕様書 (/openapi.json) を人が読める形で出す。項目の説明は手で書かず、仕様書から作る
 const DOCS_HTML = `<!doctype html>
 <html lang="ja">
@@ -599,11 +689,10 @@ const DOCS_HTML = `<!doctype html>
 </html>`;
 
 app.get("/docs", (c) => c.html(DOCS_HTML, 200, { "Cache-Control": "public, max-age=3600" }));
-// LP を置くまでは説明のページへ
-app.get("/", (c) => c.redirect("/docs", 302));
 
 app.all("/v1/reverse", (c) => c.body("Method Not Allowed", 405, { Allow: "GET" }));
 app.all("/v1/geocode", (c) => c.body("Method Not Allowed", 405, { Allow: "GET" }));
+app.all("/v1/batch", (c) => c.body("Method Not Allowed", 405, { Allow: "POST" }));
 app.notFound((c) => json(c, 404, { error: "not found" }, "no-store"));
 
 export default app satisfies ExportedHandler<Env>;

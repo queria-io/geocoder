@@ -129,6 +129,25 @@ describe("/v1/reverse", () => {
   });
 });
 
+describe("/v1/batch", () => {
+  const post = (body: unknown) =>
+    exports.default.fetch("https://geocoder.test/v1/batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  it("101 件以上は 400", async () => {
+    const response = await post({ addresses: Array.from({ length: 101 }, () => "東京") });
+    expect(response.status).toBe(400);
+  });
+
+  it("GET は 405", async () => {
+    const response = await exports.default.fetch("https://geocoder.test/v1/batch");
+    expect(response.status).toBe(405);
+  });
+});
+
 describe("/docs", () => {
   it("仕様書を読む HTML を返す", async () => {
     const response = await exports.default.fetch("https://geocoder.test/docs");
@@ -141,7 +160,7 @@ describe("/openapi.json", () => {
   it("逆引きと正引きの仕様を返す", async () => {
     const response = await exports.default.fetch("https://geocoder.test/openapi.json");
     const doc = (await response.json()) as { paths: Record<string, unknown> };
-    expect(Object.keys(doc.paths)).toEqual(["/v1/reverse", "/v1/geocode"]);
+    expect(Object.keys(doc.paths)).toEqual(["/v1/reverse", "/v1/geocode", "/v1/batch"]);
   });
 
   it("逆引きの lat・lng は数値として書く", async () => {
