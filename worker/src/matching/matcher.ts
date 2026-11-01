@@ -4,6 +4,7 @@ import type { Repository } from "../repository/types";
 import { TextForDB } from "../transform/text";
 import { NewCityBoundary, type CityBoundary } from "../util/city_boundary";
 import { buildCityPrefixMap, type CityPrefixMap } from "./city_prefix";
+import { buildCountyIndex, type CountyIndex } from "./omitted_county";
 
 export type WardCandidate = { CityWard: string; PrefCode: string };
 
@@ -13,6 +14,8 @@ export type Impl = {
   cityWardLgCodes: Map<string, string>;
   wardCandidates: Map<string, WardCandidate[]>;
   cityBoundary: CityBoundary;
+  // 上流には無い。郡を省いた住所に郡を足すための索引 (omitted_county.ts)
+  countyIndex: CountyIndex;
 };
 
 // 同じ名前を何度も正規化しないように覚えておく (市区町村の名前は数千で、isolate が冷たいときの固定費になる)
@@ -90,5 +93,6 @@ export const NewMatcher = (repo: Repository, cities: CityRow[]): Impl => {
     cityWardLgCodes: normalizeKeys(cityWardLgCodes),
     wardCandidates,
     cityBoundary: NewCityBoundary(boundary.map(norm)),
+    countyIndex: buildCountyIndex(cities),
   };
 };

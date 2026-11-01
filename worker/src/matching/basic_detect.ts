@@ -7,6 +7,7 @@ import { TextForBasicNormalized } from "../transform/text";
 import { lookupCityPrefix } from "./city_prefix";
 import { detectPrefectureCode, removePrefectureFromAddress } from "./detect_prefecture";
 import { detectMachiaza } from "./detect_machiaza";
+import { restoreCounty } from "./omitted_county";
 import type { Impl } from "./matcher";
 import { cut } from "./unmatched/unmatched";
 
@@ -47,7 +48,9 @@ export const detectBasicResultsWithBasic = async (
   const [first] = cut(normalizedAddr, " ");
   const [special] = StandardizeSpecialChars(first);
   // 漢数字を直す前に外す (三重県 が 3重県 にならないように)
-  const [searchAddr, pref] = detectAndRemovePrefecture(n, special, prefIn);
+  const [withoutPref, pref] = detectAndRemovePrefecture(n, special, prefIn);
+  // 上流には無い。郡を省いた住所に郡を足す (omitted_county.ts)
+  const searchAddr = restoreCounty(n.countyIndex, withoutPref, pref);
   const [withColon] = TextForBasicNormalized(searchAddr);
   const [base, afterColon, hasColon] = cut(withColon, ":");
 
