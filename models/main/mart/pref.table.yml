@@ -7,7 +7,6 @@ description: |
 keywords:
   - 住所
   - ジオコーディング
-published: true
 sources:
   - path: https://dataset.address-br.digital.go.jp/
 fields:
