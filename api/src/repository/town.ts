@@ -21,6 +21,8 @@ export type TownRow = {
   parcel_count?: number;
   rsdt_addr_flg: string;
   rsdt_addr_partial: boolean;
+  /** 郵便番号の列を足す前の表には無い */
+  post_code?: string | null;
   lng?: number | null;
   lat?: number | null;
 };
@@ -42,6 +44,7 @@ export const TOWN_COLUMNS = [
   "parcel_count",
   "rsdt_addr_flg",
   "rsdt_addr_partial",
+  "post_code",
   "lng",
   "lat",
 ];
@@ -82,6 +85,7 @@ export const toBasic = (t: TownRow): BasicResult => {
     hasChome: t.has_chome,
     parcelCount: Number(t.parcel_count ?? 0),
     rsdtdspCount: Number(t.rsdtdsp_count ?? 0),
+    postCode: t.post_code ?? null,
     lon: t.lng ?? null,
     lat: t.lat ?? null,
   };

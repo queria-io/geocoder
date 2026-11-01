@@ -62,38 +62,44 @@ describe("/v1/reverse", () => {
     const { status, body } = await reverse(at(0.25, 0.75));
     expect(status).toBe(200);
     expect(body).toMatchObject({
-      country: "JP",
-      prefecture_code: "13",
-      city_code: "13101",
       lg_code: "131016",
       estat_small_area_code: "131010010",
-      match: { level: "small_area", method: "polygon" },
-      source: { boundaries: env.BOUNDARY_TILES_FILE },
+      match_level: "small_area",
+      source: { version: env.BOUNDARY_TILES_FILE.replace(".pmtiles", "") },
     });
+    expect(body).not.toHaveProperty("codes");
+  });
+
+  it("include=codes でコードとメッシュを足す", async () => {
+    const { body } = await reverse(`${at(0.25, 0.75)}&include=codes`);
+    expect(body).toMatchObject({ codes: { prefecture_code: "13", city_code: "13101" } });
+  });
+
+  it("知らない include は 400", async () => {
+    const { status } = await reverse(`${at(0.25, 0.75)}&include=parts`);
+    expect(status).toBe(400);
   });
 
   it("町丁目の穴の中は市区町村まで", async () => {
     const { body } = await reverse(at(0.18, 0.18));
     expect(body).toMatchObject({
-      prefecture_code: "13",
-      city_code: "13101",
+      lg_code: "131016",
       estat_small_area_code: null,
-      match: { level: "city" },
+      match_level: "city",
     });
   });
 
   it("町丁目の外 (タイルの右半分) も市区町村まで", async () => {
     const { body } = await reverse(at(0.75, 0.5));
-    expect(body).toMatchObject({ city_code: "13101", estat_small_area_code: null });
+    expect(body).toMatchObject({ lg_code: "131016", estat_small_area_code: null });
   });
 
   it("形の無いところは全部 null", async () => {
     const { body } = await reverse("lat=34.7&lng=135.5");
     expect(body).toMatchObject({
-      prefecture_code: null,
-      city_code: null,
+      lg_code: null,
       estat_small_area_code: null,
-      match: { level: null },
+      match_level: null,
       source: { attribution: [] },
     });
   });
@@ -137,7 +143,9 @@ describe("/openapi.json", () => {
         "/v1/reverse": { get: { parameters: { name: string; schema: { type: string } }[] } };
       };
     };
-    const types = doc.paths["/v1/reverse"].get.parameters.map((p) => [p.name, p.schema.type]);
+    const types = doc.paths["/v1/reverse"].get.parameters
+      .filter((p) => p.name !== "include")
+      .map((p) => [p.name, p.schema.type]);
     expect(types).toEqual([
       ["lat", "number"],
       ["lng", "number"],
@@ -146,6 +154,12 @@ describe("/openapi.json", () => {
 });
 
 describe("/v1/geocode", () => {
+  it("知らない include や format は 400", async () => {
+    const base = "https://geocoder.test/v1/geocode?address=%E6%9D%B1%E4%BA%AC";
+    expect((await exports.default.fetch(`${base}&include=foo`)).status).toBe(400);
+    expect((await exports.default.fetch(`${base}&format=xml`)).status).toBe(400);
+  });
+
   it("limit が範囲外なら 400", async () => {
     const response = await exports.default.fetch(
       "https://geocoder.test/v1/geocode?address=%E6%9D%B1%E4%BA%AC&limit=11",

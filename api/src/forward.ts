@@ -83,10 +83,16 @@ const machiazaLoader = <T>(bucket: R2Bucket, key: string, columns: string[]) => 
   };
 };
 
-// isolate の中で使い回す。表のファイルが変われば作り直す
-let cached: { key: string; matcher: Promise<Impl> } | null = null;
+/** 当て方と、町字 1 つの行を引く口 (郵便番号を足すのに使う) */
+type Built = {
+  matcher: Impl;
+  town: (lgCode: string, machiazaId: string) => Promise<BasicResult | null>;
+};
 
-const build = async (env: ForwardEnv): Promise<Impl> => {
+// isolate の中で使い回す。表のファイルが変われば作り直す
+let cached: { key: string; matcher: Promise<Built> } | null = null;
+
+const build = async (env: ForwardEnv): Promise<Built> => {
   const [town, city, pref] = await Promise.all(
     [env.TOWN_PARQUET, env.CITY_PARQUET, env.PREF_PARQUET].map((k) => open(env.DATA, k)),
   );
@@ -107,10 +113,14 @@ const build = async (env: ForwardEnv): Promise<Impl> => {
   };
   const loadMachiaza = machiazaLoader<RsdtdspRow>(env.DATA, env.RSDTDSP_PARQUET, RSDTDSP_COLUMNS);
   const loadParcels = machiazaLoader<ParcelRow>(env.DATA, env.PARCEL_PARQUET, PARCEL_COLUMNS);
-  return NewMatcher(lazyRepository(loadCity, cities, prefs, loadMachiaza, loadParcels), cities);
+  return {
+    matcher: NewMatcher(lazyRepository(loadCity, cities, prefs, loadMachiaza, loadParcels), cities),
+    town: async (lgCode, machiazaId) =>
+      (await loadCity(lgCode)).find((b) => b.machiazaId === machiazaId) ?? null,
+  };
 };
 
-const matcherFor = (env: ForwardEnv): Promise<Impl> => {
+const matcherFor = (env: ForwardEnv): Promise<Built> => {
   const key = [
     env.TOWN_PARQUET,
     env.CITY_PARQUET,
@@ -130,10 +140,20 @@ export const geocode = async (
   env: ForwardEnv,
   address: string,
   limit: number,
-): Promise<MatchedResult[]> => {
+): Promise<{
+  results: MatchedResult[];
+  postalCode: (r: MatchedResult) => Promise<string | null>;
+}> => {
   stats = { reads: 0, bytes: 0, cities: [], rows: 0 };
   const cold = cached === null;
-  const results = await Match(await matcherFor(env), { address, category: "all", pref: "", limit });
+  const built = await matcherFor(env);
+  const results = await Match(built.matcher, { address, category: "all", pref: "", limit });
   console.log(JSON.stringify({ geocode: address, cold, ...stats }));
-  return results;
+  // 当たらなかったもの (都道府県も決まらない) は返さない
+  const found = results.filter((r) => r.match_level !== "unknown");
+  const postalCode = async (r: MatchedResult) =>
+    r.ids.lg_code && r.ids.machiaza_id
+      ? ((await built.town(r.ids.lg_code, r.ids.machiaza_id))?.postCode ?? null)
+      : null;
+  return { results: found, postalCode };
 };

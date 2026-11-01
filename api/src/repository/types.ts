@@ -32,6 +32,8 @@ export type BasicResult = {
   hasChome: boolean;
   parcelCount: number;
   rsdtdspCount: number;
+  /** 町字の郵便番号。上流には無い */
+  postCode?: string | null;
   lon: number | null;
   lat: number | null;
 };
