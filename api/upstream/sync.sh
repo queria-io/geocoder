@@ -31,6 +31,8 @@ mv "$here/cases.json.tmp" "$here/cases.json"
 # リポジトリの整形 (oxfmt) に合わせておき、取り込みの差分を試験の中身だけにする
 (cd "$here/.." && pnpm exec oxfmt upstream/cases.json > /dev/null)
 cp "$work/LICENSE" "$here/LICENSE"
+# 置き換えの表はデータなので、そのまま写す
+cp "$work/abrg/internal/transform/special_chars.tsv" "$here/../src/transform/special_chars.tsv"
 echo "$current" > "$here/UPSTREAM"
 
 echo "== $previous..$current"

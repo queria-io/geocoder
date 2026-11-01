@@ -13,9 +13,20 @@ const pmtilesFixture: Plugin = {
   },
 };
 
+/** 上流の表 (src/transform/special_chars.tsv) を文字列として import する。wrangler の rules と同じ */
+const tsvText: Plugin = {
+  name: "tsv-text",
+  load(id) {
+    return id.endsWith(".tsv")
+      ? `export default ${JSON.stringify(readFileSync(id, "utf8"))};`
+      : null;
+  },
+};
+
 export default defineConfig({
   plugins: [
     pmtilesFixture,
+    tsvText,
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },
     }),

@@ -7,6 +7,8 @@
   // 試作の間は workers.dev で測る。出すときに route を決める
   "workers_dev": true,
   "preview_urls": false,
+  // 上流の表 (src/transform/special_chars.tsv) を文字列として読み込む
+  "rules": [{ "type": "Text", "globs": ["**/*.tsv"], "fallthrough": true }],
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "queria-assets" }],
   "vars": { "BOUNDARY_TILES_FILE": "boundaries-20261027.pmtiles" },
   "observability": { "enabled": true },
