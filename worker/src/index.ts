@@ -407,7 +407,7 @@ const GeocodeResult = z
     }),
     coordinates_level: CoordinatesLevel.nullable().openapi({
       description:
-        "座標を取った点の段。値の意味は match_level と同じ。番号まで当たってもその点に座標が無ければ町字の代表点で埋め、machiaza になる。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、国交省の街区レベル位置参照情報から取る (ABR に地番の点が無いとき。位置参照情報がその町字を住居表示の区域として持つときは、同じ番号の街区の点)。どれも代表点で、建物の位置ではない",
+        "座標を取った点の段。値の意味は match_level と同じ。番号まで当たってもその点に座標が無ければ町字の代表点で埋め、machiaza になる。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、国交省の街区レベル位置参照情報から取る (ABR に地番の点が無いとき)。どれも代表点で、建物の位置ではない",
     }),
     lg_code: z
       .string()

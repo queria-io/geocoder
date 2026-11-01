@@ -35,15 +35,6 @@ describe("withParcelParent", () => {
     expect(r.coordinate_level).toBeUndefined();
   });
 
-  it("町字に住居表示の行しか無ければ、同じ番号の街区の点にする", async () => {
-    const only: IsjRow[] = [
-      { block_number: "26", is_residential_address: true, lng: 140.1, lat: 36.0 },
-    ];
-    const r = await withParcelParent(result({ unmatched_address: ["26-13"] }), async () => only);
-    expect(r.coordinates).toEqual([140.1, 36.0]);
-    expect(r.coordinate_level).toBe("parcel_parent");
-  });
-
   it("丁目の町字は丁目の無い大字・町の点に寄せない", async () => {
     const base: Record<string, IsjRow[]> = {
       "0822010051000": [
