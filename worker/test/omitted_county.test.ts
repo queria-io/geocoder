@@ -14,6 +14,7 @@ const index = buildCountyIndex([
   city("41", "杵島郡", "大町町"),
   city("01", "上川郡", "清水町"),
   city("01", "勇払郡", "清水町"),
+  city("13", "西多摩郡", "檜原村"),
 ]);
 
 describe("restoreCounty", () => {
@@ -38,5 +39,9 @@ describe("restoreCounty", () => {
 
   it("同じ都道府県で郡が割れる名前は足さない", () => {
     expect(restoreCounty(index, "清水町1", "01")).toBe("清水町1");
+  });
+
+  it("異体字をそろえた名前でも引ける (檜原村 → 桧原村)", () => {
+    expect(restoreCounty(index, "桧原村467-1", "13")).toBe("西多摩郡桧原村467-1");
   });
 });

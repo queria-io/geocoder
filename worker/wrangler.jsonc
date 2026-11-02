@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "queria-geocoder",
   "main": "src/index.ts",
-  // LP (site/ を pnpm build:web で public/ に組む)。/ はここから、/v1・/docs・/openapi.json は Worker が返す
+  // アイコンと共有画像 (site/brand を pnpm build:web で public/ に置く)。/v1・/docs・/openapi.json は Worker が返す
   "assets": { "directory": "./public" },
   "compatibility_date": "2025-12-01",
   "account_id": "57c6a116efc637fc3f21d0affea15508",
@@ -19,15 +19,10 @@
   ],
   "vars": {
     "BOUNDARY_TILES_FILE": "boundaries-20261027.pmtiles",
-    // geocoder の表の Parquet。FDL の refs/heads/main から引くまでの仮置きで、作り直したら書き換える
-    "TOWN_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/town__dbt_tmp/ducklake-01a194d4-9c00-7d9e-8490-6e14e0290b9f.parquet",
-    "CITY_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/city__dbt_tmp/ducklake-01a194d0-a974-787a-8d7f-bf2b6ba8f94d.parquet",
-    "PREF_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/pref__dbt_tmp/ducklake-01a194d0-abf6-7c3a-ad8c-98d1a5db7c5e.parquet",
-    "RSDTDSP_PARQUET": "78d98fba-a18d-44e1-b572-6346196f97fb/ducklake.duckdb.files/main/rsdtdsp__dbt_tmp/ducklake-01a194d1-978b-7ea8-9afa-a59bd0f6c8d1.parquet",
-    "PARCEL_PARQUET": "",
-    "ISJ_PARQUET": "",
-    // 上の表を作った日。表を作り直したら書き換える
-    "DATA_VERSION": "geocoder-20261101",
+    // geocoder の表の置き場 (FDL のリポジトリ)。refs/heads/main が指すバージョンを読む (src/data/source.ts)
+    "DATA_SOURCE": "78d98fba-a18d-44e1-b572-6346196f97fb/",
+    // バージョンを固定するときだけ ID を書く。空なら refs/heads/main に従う
+    "DATA_PIN": "",
   },
   // IP ごとの回数の上限 (src/index.ts)。費用を守るためのもので、ふつうの使い方では当たらない高さ
   "ratelimits": [

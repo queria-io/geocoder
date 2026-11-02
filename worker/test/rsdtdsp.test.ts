@@ -93,4 +93,15 @@ describe("住居表示の段", () => {
     expect(r.matched_address).toBe("大阪府堺市北区新金岡町5丁1-4");
     expect(r.coordinates?.[0]).toBe(5);
   });
+
+  it("「1番地4」と書かれた住居表示の住所も号まで当てる", async () => {
+    const [r] = await Match(matcher(), {
+      address: "大阪府堺市北区新金岡町5丁1番地4",
+      category: "all",
+      pref: "",
+      limit: 1,
+    });
+    expect(r.match_level).toBe("rsdtdsp_rsdt");
+    expect(r.coordinates?.[0]).toBe(5);
+  });
 });

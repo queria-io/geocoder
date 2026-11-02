@@ -79,10 +79,9 @@ GET /v1/reverse?lat=35.6812&lng=139.7671
 
 ## ページ
 
-`/` は LP (住所から場所・地図から住所・ファイルの一括変換の 3 つのタブ)。`site/` を `pnpm build:web` で `public/` に組み、Workers の static assets で出す
-(`pnpm run deploy` が先に組む)。`/docs` は `/openapi.json` を読んで項目の説明を出す。
-一括変換はブラウザの中で CSV を読み、`POST /v1/batch` に 25 件ずつ住所の文字だけを送る。
-アイコンと共有画像は `site/brand/` (元は `mark.svg`・`og.svg`、PNG と ico は `gen.py` で作る)。
+出すのは API と仕様書だけ。`/` は `/docs` へ転送する。
+
+アイコンと共有画像は `site/brand/` (元は `mark.svg`・`og.svg`、PNG と ico は `gen.py` で作る)。`pnpm build:web` で `public/` に置き、Workers の static assets で出す。
 
 ## デプロイ
 

@@ -2,7 +2,6 @@
 
 日本の住所を緯度・経度と地域コード（市区町村コード・国勢調査の小地域コード・地域メッシュコード）に変える、無料のジオコーダーです。地図上の点から住所を調べることもできます。登録はいりません。
 
-- サイト: https://geocoder.queria.io/
 - API の説明: https://geocoder.queria.io/docs
 - API 仕様（OpenAPI）: https://geocoder.queria.io/openapi.json
 
@@ -13,7 +12,8 @@ curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東�
 ## このリポジトリ
 
 - 直下: ジオコーダーが読む表を作る Queria のデータセット `geocoder`（このページの以下）
-- [`worker/`](worker/README.md): geocoder.queria.io を出す Cloudflare Worker（API・サイト・API の説明のページ）
+- [`worker/`](worker/README.md): geocoder.queria.io を出す Cloudflare Worker（API と API の説明のページ）
+- [`examples/addresses.csv`](examples/addresses.csv): `POST /v1/batch` を試すための住所の CSV（役所などの住所と、郡や都道府県を省いたものなど書き方を変えたもの）
 
 ライセンスは [MIT](LICENSE)。住所の照合の規則は [abr-geocoder](https://github.com/digital-go-jp/abr-geocoder)（デジタル庁、MIT ライセンス）を元にしている（[`worker/upstream/`](worker/upstream/README.md)）。
 
@@ -36,7 +36,7 @@ curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東�
 ```bash
 git submodule update --init
 uv sync
-scripts/build.sh   # queria sync で公開まで行う
+scripts/build.sh   # fdl checkout → dbt → fdl commit で公開まで行う
 ```
 
 address_br の更新（毎月）の翌日に、`.github/workflows/sync.yml` が作り直す。

@@ -10,7 +10,6 @@ keywords:
   - 地番
   - 街区
   - ジオコーディング
-published: true
 sources:
   - path: https://nlftp.mlit.go.jp/isj/
   - path: https://dataset.address-br.digital.go.jp/
@@ -21,7 +20,7 @@ fields:
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）"
-    semantic: { role: entity, name: city }
+    extensions: { queria: { semantic: { role: entity, name: city } } }
   - name: machiaza_id
     title: 町字ID
     description: "town と lg_code・machiaza_id で結合する"

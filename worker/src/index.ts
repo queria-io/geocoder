@@ -32,7 +32,7 @@ import {
   toCsv,
   versionOf,
 } from "./answer";
-import { geocode, nearby, type ForwardEnv } from "./forward";
+import { dataVersion, geocode, nearby, type ForwardEnv } from "./forward";
 import { ISJ_ATTRIBUTION, PARCEL_PARENT } from "./isj";
 import { ErrAddressTooLong, ErrEmptyAddress } from "./normalize/input";
 import { type Level, resolveAreas, type TilePoint } from "./lookup";
@@ -43,8 +43,6 @@ export interface Env extends ForwardEnv {
   BUCKET: R2Bucket;
   /** R2 の boundaries/ に置いた境界タイルのファイル名 (queria-web の src/lib/gis/boundary-tiles.ts と同じ) */
   BOUNDARY_TILES_FILE: string;
-  /** 町字などの表のバージョン (geocoder データセットを作った日)。表を作り直したら書き換える */
-  DATA_VERSION: string;
   /** IP ごとの回数の上限。費用を守るためのもので、ふつうの使い方では当たらない高さにする */
   LIMITER?: RateLimit;
 }
@@ -299,7 +297,14 @@ app.openapi(reverseRoute, async (c) => {
   cacheUrl.searchParams.set("lng", String(lng));
   cacheUrl.searchParams.set("tiles", c.env.BOUNDARY_TILES_FILE);
   cacheUrl.searchParams.set("include", [...groups].sort().join(","));
-  if (groups.has("address")) cacheUrl.searchParams.set("data", c.env.DATA_VERSION);
+  if (groups.has("address")) {
+    const version = await tryCatchAsync(() => dataVersion(c.env));
+    if (!version.ok) {
+      console.error("geocoder: reverse", version.error);
+      return c.json({ error: "住所の表を読めませんでした" }, 502, { "Cache-Control": "no-store" });
+    }
+    cacheUrl.searchParams.set("data", version.value);
+  }
   const cacheKey = new Request(cacheUrl, { method: "GET" });
   const cached = await caches.default.match(cacheKey);
   // 置いてあるのは下で 200 として返したものそのまま
@@ -584,7 +589,7 @@ app.openapi(geocodeRoute, async (c) => {
     console.error("geocoder: geocode", result.error);
     return json(c, 502, { error: "住所の表を読めませんでした" }, "no-store") as never;
   }
-  const version = c.env.DATA_VERSION;
+  const version = await dataVersion(c.env);
   const attribution = attributionFor(
     groups,
     result.value.map(([r]) => coordinatesLevel(r)),
@@ -627,8 +632,10 @@ app.doc31("/openapi.json", {
   info: {
     title: "Queria Geocoder",
     version: API_VERSION,
-    description:
+    description: [
       "日本の住所と座標・地域コードを相互に引く無料の API。ベータの間は答えの形を変えることがある。答えを載せるときは source.attribution の出典も一緒に載せる",
+      "概要は [queria.io/geocoder](https://queria.io/geocoder) を参照",
+    ].join("\n\n"),
   },
 });
 
@@ -709,7 +716,7 @@ app.openapi(batchRoute, async (c) => {
     {
       results: result.value,
       source: {
-        version: c.env.DATA_VERSION,
+        version: await dataVersion(c.env),
         attribution: attributionFor(
           groups,
           result.value.map((a) => a?.coordinates_level ?? null),
@@ -735,6 +742,8 @@ const DOCS_HTML = `<!doctype html>
 </body>
 </html>`;
 
+// ここは API と仕様書だけ。/ は仕様書を見せる
+app.get("/", (c) => c.redirect("/docs", 302));
 app.get("/docs", (c) => c.html(DOCS_HTML, 200, { "Cache-Control": "public, max-age=3600" }));
 
 app.all("/v1/reverse", (c) => c.body("Method Not Allowed", 405, { Allow: "GET" }));
