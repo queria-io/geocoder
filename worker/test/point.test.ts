@@ -131,7 +131,9 @@ describe("withAddressPoint", () => {
   });
 
   it("28-10-3 に点が無ければ 28-10 の点、それも無ければ 28 の点にする", async () => {
-    const withMid: Record<string, PointRow[]> = { "0822010051003": [pt("28", null), pt("28", "10", { lng: 140.3 })] };
+    const withMid: Record<string, PointRow[]> = {
+      "0822010051003": [pt("28", null), pt("28", "10", { lng: 140.3 })],
+    };
     const mid = await withAddressPoint(
       result({ unmatched_address: ["28-10-3"] }),
       async (lg, id) => withMid[lg + id] ?? [],
