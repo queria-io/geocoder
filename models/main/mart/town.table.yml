@@ -10,6 +10,7 @@ keywords:
   - 町字
   - ジオコーディング
   - 小地域
+published: true
 sources:
   - path: https://dataset.address-br.digital.go.jp/
   - path: https://www.e-stat.go.jp/gis
@@ -17,7 +18,7 @@ fields:
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）"
-    extensions: { queria: { semantic: { role: entity, name: city } } }
+    semantic: { role: entity, name: city }
   - name: machiaza_id
     title: 町字ID
   - name: machiaza_type
@@ -78,4 +79,4 @@ fields:
   - name: small_area_code
     title: 小地域コード
     description: "lng / lat の点が入る国勢調査の小地域 (KEY_CODE)。町字と小地域は 1 対 1 ではなく、これは代表点 1 点で決めたもの。代表点の無い町字は NULL"
-    extensions: { queria: { semantic: { role: entity, name: small_area } } }
+    semantic: { role: entity, name: small_area }

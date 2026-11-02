@@ -29,7 +29,7 @@ Queria のジオコーダー。住所と座標・地域コードを相互に引�
 ```bash
 # データセット (直下)
 uv sync
-scripts/build.sh            # dbt で作って fdl commit
+scripts/build.sh            # dbt で作って queria sync
 
 # API (worker/、パッケージマネージャーは pnpm)
 cd worker
