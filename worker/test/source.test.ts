@@ -21,7 +21,7 @@ describe("fromVersion", () => {
 
   it("FDL の files.json から表ごとのキーを作る", () => {
     const r = fromVersion("root/", "ducklake.duckdb.files/", record, list);
-    expect(r.version).toBe("20261101-01a196c3");
+    expect(r.version).toBe("geocoder-20261101-01a196c3");
     expect(r.tables.parcel).toEqual([
       "root/ducklake.duckdb.files/main/p1.parquet",
       "root/ducklake.duckdb.files/main/p2.parquet",

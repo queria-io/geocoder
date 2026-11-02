@@ -54,7 +54,8 @@ export const fromVersion = (
   v: VersionRecord,
   list: FileList,
 ): Resolved => ({
-  version: `${v.created_at.slice(0, 10).replaceAll("-", "")}-${v.id.slice(0, 8)}`,
+  // 前のバージョンの答えと同じ形 (geocoder-日付-ID の頭 8 桁) にそろえる
+  version: `geocoder-${v.created_at.slice(0, 10).replaceAll("-", "")}-${v.id.slice(0, 8)}`,
   tables: fill((t) => {
     const table = list.tables[TABLES[t]];
     if (!table) return [];
