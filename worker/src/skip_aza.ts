@@ -9,6 +9,9 @@ const PARCEL_PREFIX = new Set(Array.from("甲乙丙丁戊己庚辛壬癸"));
 export const splitAzaName = (rest: string): [string, string] | null => {
   const m = /^((?:小?字)?[^\d\s\-・]+?)(\d.*)$/u.exec(rest);
   if (!m) return null;
+  // 字の名前は漢字とかな (ノ・ケ・ヶ などの片仮名 1 字を含む)。片仮名の続く名前や英字は
+  // 建物名 (「サンハイツ101」) なので外さない (外すと部屋番号を地番と読む)
+  if (/[A-Za-zＡ-Ｚａ-ｚ]|[ァ-ヺー]{2,}/u.test(m[1])) return null;
   // 番地の頭の甲・乙など (「舘ノ内甲2427」) は地番の一部なので残す
   const name = Array.from(m[1]);
   const last = name[name.length - 1];

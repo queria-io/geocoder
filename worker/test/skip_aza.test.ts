@@ -23,6 +23,9 @@ describe("splitAzaName", () => {
     expect(splitAzaName("舘ノ内甲2427-27")).toEqual(["舘ノ内", "甲2427-27"]);
     expect(splitAzaName("上加茂字加茂が丘7063-163")).toEqual(["上加茂字加茂が丘", "7063-163"]);
     expect(splitAzaName("ビル")).toBeNull();
+    expect(splitAzaName("サンハイツ101")).toBeNull();
+    expect(splitAzaName("ABCビル3")).toBeNull();
+    expect(splitAzaName("樋ノ口276")).toEqual(["樋ノ口", "276"]);
   });
 });
 
