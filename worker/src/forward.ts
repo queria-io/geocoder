@@ -26,6 +26,7 @@ import {
   type TownRow,
 } from "./repository/town";
 import { PARCEL_COLUMNS, type ParcelRow } from "./repository/parcel";
+import { resolveTables, type Resolved } from "./data/source";
 import { machiazaKey, RSDTDSP_COLUMNS, type RsdtdspRow } from "./repository/rsdtdsp";
 import type { BasicResult } from "./repository/types";
 import { nearestAddress, type Nearby } from "./nearby";
@@ -33,15 +34,13 @@ import { ISJ_COLUMNS, type IsjRow, withParcelParent } from "./isj";
 
 export type ForwardEnv = {
   DATA: R2Bucket;
-  /** R2 の中の表のファイル。FDL の refs/heads/main が指すバージョンから読むまでの仮置き */
-  TOWN_PARQUET: string;
-  CITY_PARQUET: string;
-  PREF_PARQUET: string;
-  RSDTDSP_PARQUET: string;
-  /** 空なら地番の段は流さない。カンマ区切りで複数のファイルを並べられる */
-  PARCEL_PARQUET: string;
-  /** 国交省の位置参照情報の親番の点 (isj_block)。空なら町字の代表点のまま */
-  ISJ_PARQUET: string;
+  /**
+   * 表の置き場 (DATA の中のキー)。「…/」なら FDL のリポジトリで、refs/heads/main が指すバージョンを読む。
+   * 「….json」なら表ごとのファイルを並べた目録 (src/data/source.ts)
+   */
+  DATA_SOURCE: string;
+  /** FDL のバージョンを固定するときの ID。空なら refs/heads/main に従う */
+  DATA_PIN?: string;
 };
 
 /** 1 件の問い合わせで何をどれだけ読んだか。重いところを探すためにログへ出す */
@@ -66,20 +65,15 @@ const open = (bucket: R2Bucket, key: string): Promise<Table> => openR2Table(buck
 const readAll = async <T>(t: Table): Promise<T[]> =>
   (await parquetReadObjects({ file: t.file, metadata: t.metadata, compressors })) as T[];
 
-/** key はカンマ区切りで複数のファイルを並べられる (DuckLake が大きな表を何個かに分けて書く) */
-export const splitKeys = (key: string): string[] =>
-  key
-    .split(",")
-    .map((k) => k.trim())
-    .filter((k) => k !== "");
+const openAll = (bucket: R2Bucket, keys: string[]): Promise<Table[]> =>
+  Promise.all(keys.map((k) => open(bucket, k)));
 
 /**
  * 町字 1 つ分の行を読む口 (住居表示・地番の表)。表は番号まである住所で初めて開く。
  * ファイルが分かれていれば全部のフッターを開き、行グループの範囲で当たるものだけ読む。
  * 覚えるのは最近の町字だけにする (町字は全国で数十万ある)。key が空なら何も読まない
  */
-const machiazaLoader = <T>(bucket: R2Bucket, key: string, columns: string[]) => {
-  const keys = splitKeys(key);
+const machiazaLoader = <T>(bucket: R2Bucket, keys: string[], columns: string[]) => {
   let tables: Promise<Table[]> | null = null;
   const rows = new Map<string, Promise<T[]>>();
   return (lgCode: string, machiazaId: string): Promise<T[]> => {
@@ -87,7 +81,7 @@ const machiazaLoader = <T>(bucket: R2Bucket, key: string, columns: string[]) => 
     const k = machiazaKey(lgCode, machiazaId);
     const hit = rows.get(k);
     if (hit) return hit;
-    tables ??= Promise.all(keys.map((x) => open(bucket, x)));
+    tables ??= openAll(bucket, keys);
     const p = tables
       .then((ts) =>
         Promise.all(
@@ -117,48 +111,46 @@ type Built = {
 // isolate の中で使い回す。表のファイルが変われば作り直す
 let cached: { key: string; matcher: Promise<Built> } | null = null;
 
-const build = async (env: ForwardEnv): Promise<Built> => {
+const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => {
   const [town, city, pref] = await Promise.all(
-    [env.TOWN_PARQUET, env.CITY_PARQUET, env.PREF_PARQUET].map((k) => open(env.DATA, k)),
+    [tables.town, tables.city, tables.pref].map((keys) => openAll(bucket, keys)),
   );
-  const cities = (await readAll<CityTableRow>(city)).map(toCity);
-  const prefs = (await readAll<PrefTableRow>(pref)).map(toPref);
+  const cities = (await Promise.all(city.map((t) => readAll<CityTableRow>(t)))).flat().map(toCity);
+  const prefs = (await Promise.all(pref.map((t) => readAll<PrefTableRow>(t)))).flat().map(toPref);
   const towns = new Map<string, Promise<BasicResult[]>>();
   const loadCity = (lgCode: string) => {
     const hit = towns.get(lgCode);
     if (hit) return hit;
     stats.cities.push(lgCode);
-    const p = readCity<TownRow>(town, lgCode, TOWN_COLUMNS, (n) => (stats.rows += n)).then((rows) =>
-      rows.map(toBasic),
-    );
+    const p = Promise.all(
+      town.map((t) => readCity<TownRow>(t, lgCode, TOWN_COLUMNS, (n) => (stats.rows += n))),
+    ).then((parts) => parts.flat().map(toBasic));
     towns.set(lgCode, p);
     // 読めなかった市区町村は覚えずに、次の問い合わせで読み直す
     p.catch(() => towns.delete(lgCode));
     return p;
   };
-  const loadMachiaza = machiazaLoader<RsdtdspRow>(env.DATA, env.RSDTDSP_PARQUET, RSDTDSP_COLUMNS);
-  const loadParcels = machiazaLoader<ParcelRow>(env.DATA, env.PARCEL_PARQUET, PARCEL_COLUMNS);
+  const loadMachiaza = machiazaLoader<RsdtdspRow>(bucket, tables.rsdtdsp, RSDTDSP_COLUMNS);
+  const loadParcels = machiazaLoader<ParcelRow>(bucket, tables.parcel, PARCEL_COLUMNS);
   return {
     matcher: NewMatcher(lazyRepository(loadCity, cities, prefs, loadMachiaza, loadParcels), cities),
     town: async (lgCode, machiazaId) =>
       (await loadCity(lgCode)).find((b) => b.machiazaId === machiazaId) ?? null,
     towns: loadCity,
     rows: loadMachiaza,
-    isj: machiazaLoader<IsjRow>(env.DATA, env.ISJ_PARQUET, ISJ_COLUMNS),
+    isj: machiazaLoader<IsjRow>(bucket, tables.isj, ISJ_COLUMNS),
   };
 };
 
-const matcherFor = (env: ForwardEnv): Promise<Built> => {
-  const key = [
-    env.TOWN_PARQUET,
-    env.CITY_PARQUET,
-    env.PREF_PARQUET,
-    env.RSDTDSP_PARQUET,
-    env.PARCEL_PARQUET,
-    env.ISJ_PARQUET,
-  ].join("\n");
+/** 今読む表のバージョン。答えに付け、キャッシュの鍵にも使う */
+export const dataVersion = async (env: ForwardEnv): Promise<string> =>
+  (await resolveTables(env.DATA, env.DATA_SOURCE, env.DATA_PIN)).version;
+
+const matcherFor = async (env: ForwardEnv): Promise<Built> => {
+  const resolved = await resolveTables(env.DATA, env.DATA_SOURCE, env.DATA_PIN);
+  const key = JSON.stringify(resolved.tables);
   if (cached?.key !== key) {
-    const matcher = build(env);
+    const matcher = build(env.DATA, resolved);
     matcher.catch(() => (cached = null));
     cached = { key, matcher };
   }
