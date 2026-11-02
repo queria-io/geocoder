@@ -1,0 +1,23 @@
+schema: main
+name: point_priority
+title: 住所の点の優先順
+description: |
+  住所の点の種類と出どころごとの優先順と、測った誤差。address_point の既定の点はこの順で選ぶ。
+keywords:
+  - 住所
+  - ジオコーディング
+fields:
+  - name: point_type
+    title: 点の種類
+    description: "parcel は筆、parcel_parent は親番、rsdt は住居表示の号、block は街区"
+  - name: source
+    title: 出どころ
+    description: "abr はアドレス・ベース・レジストリ、isj は街区レベル位置参照情報"
+  - name: rank
+    title: 優先順
+    description: "小さいほど優先する"
+  - name: error_m
+    title: 誤差 (m)
+    description: "地価公示の地点に当てたときの距離の中央値。測っていないものは NULL"
+  - name: measured_on
+    title: 測った日

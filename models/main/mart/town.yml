@@ -46,6 +46,12 @@ models:
         data_type: varchar
       - name: rsdt_addr_partial
         data_type: boolean
+      - name: wake_num_flg
+        data_type: varchar
+      - name: numbering_id
+        data_type: varchar
+      - name: parcel_unique
+        data_type: boolean
       - name: post_code
         data_type: varchar
       - name: efct_date

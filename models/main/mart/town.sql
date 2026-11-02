@@ -62,6 +62,41 @@ parcel_count AS (
     FROM {{ ref('parcel') }}
     GROUP BY lg_code, machiaza_id
 ),
+-- 地番が振られる区域 (起番フラグ 1) が小字の大字・町。小字を省いた地番の住所は、この大字では
+-- どの小字の地番か決まらない
+koaza_numbered AS (
+    SELECT DISTINCT lg_code, left(machiaza_id, 4) AS oaza_id
+    FROM town
+    WHERE koaza IS NOT NULL AND wake_num_flg = '1'
+),
+-- 地番を探す区域の町字。小字が起番でなければ地番は大字・町で振られているので、大字・町の町字 ID にする。
+-- 地番の点の表は、町字そのものと、この区域の町字の両方で引く
+numbering AS (
+    SELECT
+        t.lg_code,
+        t.machiaza_id,
+        CASE
+            WHEN t.koaza IS NOT NULL AND t.wake_num_flg <> '1' AND p.machiaza_id IS NOT NULL THEN p.machiaza_id
+            ELSE t.machiaza_id
+        END AS numbering_id
+    FROM town t
+    LEFT JOIN town p
+        ON p.lg_code = t.lg_code
+        AND p.machiaza_id = left(t.machiaza_id, 4) || '000'
+        AND t.koaza IS NOT NULL
+),
+-- 区域の町字の中で地番が一意か。起番の小字か、起番の小字を持たない大字・町なら一意。
+-- 大字・町と小字の両方が起番の所 (柏市藤心など) は、大字・町の番号が小字の番号と重なりうるので一意としない
+numbering_area AS (
+    SELECT
+        n.lg_code,
+        n.machiaza_id,
+        n.numbering_id,
+        (a.koaza IS NOT NULL AND a.wake_num_flg = '1') OR k.oaza_id IS NULL AS parcel_unique
+    FROM numbering n
+    JOIN town a ON a.lg_code = n.lg_code AND a.machiaza_id = n.numbering_id
+    LEFT JOIN koaza_numbered k ON k.lg_code = n.lg_code AND k.oaza_id = left(n.numbering_id, 4)
+),
 small_area AS (
     SELECT CAST(key_code AS VARCHAR) AS small_area_code, geometry FROM e_stat.boundary.small_area
 )
@@ -85,6 +120,9 @@ SELECT
     t.alias_koaza,
     t.rsdt_addr_flg,
     t.rsdt_addr_partial,
+    t.wake_num_flg,
+    na.numbering_id,
+    na.parcel_unique,
     t.post_code,
     t.efct_date,
     ST_X(t.point) AS lng,
@@ -95,6 +133,7 @@ FROM located t
 LEFT JOIN oaza_has_chome h ON h.lg_code = t.lg_code AND h.oaza_cho = t.oaza_cho
 LEFT JOIN rsdtdsp_count c ON c.lg_code = t.lg_code AND c.machiaza_id = t.machiaza_id
 LEFT JOIN parcel_count pc ON pc.lg_code = t.lg_code AND pc.machiaza_id = t.machiaza_id
+LEFT JOIN numbering_area na ON na.lg_code = t.lg_code AND na.machiaza_id = t.machiaza_id
 LEFT JOIN small_area s ON ST_Contains(s.geometry, t.point)
 -- 境界が重なる場所では代表点が 2 つの小地域に入る。町字 1 行に 1 つだけ残す
 QUALIFY row_number() OVER (PARTITION BY t.lg_code, t.machiaza_id ORDER BY s.small_area_code) = 1
