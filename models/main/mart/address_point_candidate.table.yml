@@ -2,7 +2,7 @@ schema: main
 name: address_point_candidate
 title: 住所の点の候補
 description: |
-  住所ごとの点の候補。出どころごとに 1 行。座標の無い地番も、住所があることを示すために入れる。
+  住所ごとの点の候補。出どころごとに 1 行。座標のある行だけ。
   「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）、「街区レベル位置参照情報」（国土交通省）（https://nlftp.mlit.go.jp/isj/）を加工して作成。
 keywords:
   - 住所
@@ -38,7 +38,7 @@ fields:
     description: "abr はアドレス・ベース・レジストリ、isj は街区レベル位置参照情報"
   - name: lng
     title: 経度
-    description: "座標の無い候補は NULL"
+    description: "点の座標"
   - name: lat
     title: 緯度
-    description: "座標の無い候補は NULL"
+    description: "点の座標"

@@ -2,7 +2,7 @@ schema: main
 name: address_point
 title: 住所の点
 description: |
-  住所ごとに 1 つ選んだ点。その住所自身の点を point_priority の順で選び、無ければ親の番号の点を使う。地番は地番が振られた区域の町字（town.numbering_id）でも引く。
+  住所ごとに 1 つ選んだ点。点のある住所だけで、出どころが複数あれば point_priority の順で選ぶ。点の無い住所は親の番号の行を、地番は地番が振られた区域の町字（town.numbering_id）の行も引いて使う。
   「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）、「街区レベル位置参照情報」（国土交通省）（https://nlftp.mlit.go.jp/isj/）を加工して作成。
 keywords:
   - 住所
@@ -44,7 +44,7 @@ fields:
     description: "この種類と出どころの点を地価公示の地点に当てたときの距離の中央値。測っていないものは NULL"
   - name: lng
     title: 経度
-    description: "点の無い住所は NULL（町字の点を使う）"
+    description: "点の経度"
   - name: lat
     title: 緯度
-    description: "点の無い住所は NULL"
+    description: "点の緯度"
