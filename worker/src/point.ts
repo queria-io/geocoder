@@ -58,17 +58,16 @@ const ownNumber = (r: MatchedResult, parent: string): Num => {
 };
 
 /**
- * 引く番号の順: 住所自身の番号、次に親番。own は住所自身の番号か
- * (親番で引いた点は、その行が筆の点でも住所自身の点ではない)
+ * 引く番号の順: 住所自身の番号、次に親の番号 (12-3-4 なら 12-3、12)。own は住所自身の番号か
+ * (親の番号で引いた点は、その行が筆の点でも住所自身の点ではない)
  */
 const numbers = (r: MatchedResult, parent: string): { num: Num; own: boolean }[] => {
   const own = ownNumber(r, parent);
-  return own[1] === null
-    ? [{ num: [parent, null, null], own: true }]
-    : [
-        { num: own, own: true },
-        { num: [parent, null, null], own: false },
-      ];
+  const parents: Num[] = [
+    ...(own[2] === null ? [] : [[parent, own[1], null] as const]),
+    ...(own[1] === null ? [] : [[parent, null, null] as const]),
+  ];
+  return [{ num: own, own: true }, ...parents.map((num) => ({ num, own: false }))];
 };
 
 /**

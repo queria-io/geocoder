@@ -129,6 +129,19 @@ describe("withAddressPoint", () => {
     expect(r.coordinates?.[0]).toBe(140.4);
     expect(r.coordinate_level).toBe("parcel");
   });
+
+  it("28-10-3 に点が無ければ 28-10 の点、それも無ければ 28 の点にする", async () => {
+    const withMid: Record<string, PointRow[]> = { "0822010051003": [pt("28", null), pt("28", "10", { lng: 140.3 })] };
+    const mid = await withAddressPoint(
+      result({ unmatched_address: ["28-10-3"] }),
+      async (lg, id) => withMid[lg + id] ?? [],
+      noTown,
+    );
+    expect(mid.coordinates?.[0]).toBe(140.3);
+    expect(mid.coordinate_level).toBe("parcel_parent");
+    const top = await withAddressPoint(result({ unmatched_address: ["28-10-3"] }), load, noTown);
+    expect(top.coordinates?.[0]).toBe(140.0891);
+  });
 });
 
 describe("parentNumber", () => {
