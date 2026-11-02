@@ -34,6 +34,9 @@ export type BasicResult = {
   rsdtdspCount: number;
   /** 町字の郵便番号。上流には無い */
   postCode?: string | null;
+  /** 地番が振られた区域の町字 ID と、その区域で地番が一意か。上流には無い */
+  numberingId?: string | null;
+  parcelUnique?: boolean;
   lon: number | null;
   lat: number | null;
 };
