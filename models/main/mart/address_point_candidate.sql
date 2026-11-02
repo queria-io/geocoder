@@ -1,7 +1,8 @@
 {{ config(materialized='table') }}
 
 -- 住所ごとの点の候補。出どころごとに 1 行。住所は町字・住所の仕組み (rsdt は住居表示、parcel は地番)・
--- 番号 3 つで決まる。既定の点は address_point で選ぶ
+-- 番号 3 つで決まる。座標のある行だけ (地番 2 億行の大半は座標が無く、入れると Sync のメモリに収まらない)。
+-- 既定の点は address_point で選ぶ
 WITH town AS (
     SELECT lg_code, machiaza_id, koaza, wake_num_flg, numbering_id, parcel_unique FROM {{ ref('town') }}
 ),
@@ -34,9 +35,10 @@ SELECT * FROM (
         lat
     FROM {{ ref('rsdtdsp') }}
     UNION ALL
-    -- 地番 (アドレス・ベース・レジストリ)。座標の無い筆も、住所があることを残すために入れる
+    -- 地番 (アドレス・ベース・レジストリ)
     SELECT lg_code, machiaza_id, 'parcel', prc_num1, prc_num2, prc_num3, 'parcel', 'abr', lng, lat
     FROM {{ ref('parcel') }}
+    WHERE lng IS NOT NULL
     UNION ALL
     -- 住居表示の街区 (街区レベル位置参照情報)
     SELECT lg_code, machiaza_id, 'rsdt', block_number, NULL, NULL, 'block', 'isj', lng, lat
@@ -55,4 +57,3 @@ SELECT * FROM (
     WHERE NOT b.is_residential_address
         AND (t.parcel_unique OR (o.prc_num1 IS NOT NULL AND k.prc_num1 IS NULL))
 )
-ORDER BY lg_code, machiaza_id, system, num1, num2 NULLS FIRST, num3 NULLS FIRST
