@@ -49,11 +49,26 @@ export const parentNumber = (r: MatchedResult): string | null =>
 
 type Num = readonly [string, string | null, string | null];
 
-/** 引く番号の順: 地番まで当たっていればその地番、次に親番 */
-const numbers = (r: MatchedResult, parent: string): Num[] => {
+/** 住所自身の番号。地番まで当たっていればその地番、町字止まりなら残りの頭の「28-10」「28番地10」 */
+const ownNumber = (r: MatchedResult, parent: string): Num => {
   const { prc_num1: n1, prc_num2: n2, prc_num3: n3 } = r.structured_address;
-  const own: Num[] = n1 !== null && n2 !== null ? [[n1, n2, n3]] : [];
-  return [...own, [parent, null, null]];
+  if (n1 !== null) return [n1, n2, n3];
+  const m = /^\d+(?:(?:番地?|-)(\d+)(?:-(\d+))?(?!\d))?/.exec(r.unmatched_address?.[0] ?? "");
+  return [parent, m?.[1] ?? null, m?.[2] ?? null];
+};
+
+/**
+ * 引く番号の順: 住所自身の番号、次に親番。own は住所自身の番号か
+ * (親番で引いた点は、その行が筆の点でも住所自身の点ではない)
+ */
+const numbers = (r: MatchedResult, parent: string): { num: Num; own: boolean }[] => {
+  const own = ownNumber(r, parent);
+  return own[1] === null
+    ? [{ num: [parent, null, null], own: true }]
+    : [
+        { num: own, own: true },
+        { num: [parent, null, null], own: false },
+      ];
 };
 
 /**
@@ -68,8 +83,8 @@ const areas = (machiazaId: string, town: BasicResult | null): string[] =>
 const same = (a: PointRow, [n1, n2, n3]: Num) =>
   a.system === "parcel" && a.num1 === n1 && a.num2 === n2 && a.num3 === n3;
 
-const levelOf = (row: PointRow): CoordinateLevel =>
-  row.point_type === "parcel" ? "parcel" : PARCEL_PARENT;
+const levelOf = (row: PointRow, own: boolean): CoordinateLevel =>
+  own && row.point_type === "parcel" ? "parcel" : PARCEL_PARENT;
 
 export const withAddressPoint = async (
   r: MatchedResult,
@@ -80,7 +95,7 @@ export const withAddressPoint = async (
   const parent = parentNumber(r);
   if (!atMachiaza(r) || !lgCode || !machiazaId || parent === null) return r;
   const ids = areas(machiazaId, await town(lgCode, machiazaId));
-  for (const num of numbers(r, parent))
+  for (const { num, own } of numbers(r, parent))
     for (const id of ids) {
       const hit = (await load(lgCode, id)).find(
         (x) => same(x, num) && x.lng !== null && x.lat !== null,
@@ -89,7 +104,7 @@ export const withAddressPoint = async (
         return {
           ...r,
           coordinates: [hit.lng as number, hit.lat as number],
-          coordinate_level: levelOf(hit),
+          coordinate_level: levelOf(hit, own),
         };
     }
   return r;

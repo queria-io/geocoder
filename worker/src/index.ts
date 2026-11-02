@@ -412,7 +412,7 @@ const GeocodeResult = z
     }),
     coordinates_level: CoordinatesLevel.nullable().openapi({
       description:
-        "座標を取った点の段。値の意味は match_level と同じ。番号まで当たってもその点に座標が無ければ町字の代表点で埋め、machiaza になる。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、国交省の街区レベル位置参照情報から取る (ABR に地番の点が無いとき)。どれも代表点で、建物の位置ではない",
+        "座標を取った点の段。値の意味は match_level と同じ。番号まで当たってもその点に座標が無ければ町字の代表点で埋め、machiaza になる。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、ABR の親番の筆の点か国交省の街区レベル位置参照情報から取る (ABR にその地番の点が無いとき)。どれも代表点で、建物の位置ではない",
     }),
     lg_code: z
       .string()
@@ -632,8 +632,10 @@ app.doc31("/openapi.json", {
   info: {
     title: "Queria Geocoder",
     version: API_VERSION,
-    description:
+    description: [
       "日本の住所と座標・地域コードを相互に引く無料の API。ベータの間は答えの形を変えることがある。答えを載せるときは source.attribution の出典も一緒に載せる",
+      "概要は [queria.io/geocoder](https://queria.io/geocoder) を参照",
+    ].join("\n\n"),
   },
 });
 

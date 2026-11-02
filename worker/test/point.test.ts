@@ -98,7 +98,35 @@ describe("withAddressPoint", () => {
     const own: Record<string, PointRow[]> = {
       "0822010051003": [pt("28", null, { point_type: "parcel", source: "abr" })],
     };
+    const r = await withAddressPoint(
+      result({ unmatched_address: ["28番地"] }),
+      async (lg, id) => own[lg + id] ?? [],
+      noTown,
+    );
+    expect(r.coordinate_level).toBe("parcel");
+  });
+
+  it("親番の筆の点で埋めたものは段は parcel_parent", async () => {
+    const own: Record<string, PointRow[]> = {
+      "0822010051003": [pt("28", null, { point_type: "parcel", source: "abr" })],
+    };
     const r = await withAddressPoint(result({}), async (lg, id) => own[lg + id] ?? [], noTown);
+    expect(r.coordinate_level).toBe("parcel_parent");
+  });
+
+  it("町字止まりでも残りの番号の行があればその点を使う", async () => {
+    const base: Record<string, PointRow[]> = {
+      "0822010051000": [
+        pt("28", null, { lng: 140.2 }),
+        pt("28", "10", { point_type: "parcel", source: "abr", lng: 140.4 }),
+      ],
+    };
+    const r = await withAddressPoint(
+      result({ unmatched_address: ["28番地10"] }),
+      async (lg, id) => base[lg + id] ?? [],
+      townOf({ numberingId: "0051000", parcelUnique: true }),
+    );
+    expect(r.coordinates?.[0]).toBe(140.4);
     expect(r.coordinate_level).toBe("parcel");
   });
 });
