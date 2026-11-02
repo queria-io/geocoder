@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: address_point
+    description: |
+      住所ごとに 1 つ選んだ点。その住所自身の点を point_priority の順で選び、無ければ親の番号の点を使う。地番は地番が振られた区域の町字（town.numbering_id）でも引く。
+      「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）、「街区レベル位置参照情報」（国土交通省）（https://nlftp.mlit.go.jp/isj/）を加工して作成。
+    access: public
+    columns:
+      - name: machiaza_key
+        data_type: varchar
+      - name: lg_code
+        data_type: varchar
+      - name: machiaza_id
+        data_type: varchar
+      - name: system
+        data_type: varchar
+      - name: num1
+        data_type: varchar
+      - name: num2
+        data_type: varchar
+      - name: num3
+        data_type: varchar
+      - name: point_type
+        data_type: varchar
+      - name: source
+        data_type: varchar
+      - name: error_m
+        data_type: integer
+      - name: lng
+        data_type: double
+      - name: lat
+        data_type: double

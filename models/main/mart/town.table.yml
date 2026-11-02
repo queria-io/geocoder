@@ -62,6 +62,15 @@ fields:
   - name: rsdt_addr_partial
     title: 一部だけ住居表示
     description: "true は住居表示の町字の中に地番で表す住所も残っているもの。rsdt_addr_flg は '1'"
+  - name: wake_num_flg
+    title: 起番フラグ
+    description: "'1' はこの町字で地番が振られている、'2' は振られていない、'0' は登記情報に無い"
+  - name: numbering_id
+    title: 地番の区域の町字ID
+    description: "この町字の地番が振られている町字。小字が起番でなければ大字・町の町字 ID。address_point の地番は町字そのものとこの町字の両方で引く"
+  - name: parcel_unique
+    title: 地番が区域で一意
+    description: "true は numbering_id の町字の中で地番が 1 つに決まる。false は小字ごとに地番が振られた大字・町で、小字を省いた地番の住所は当てない"
   - name: post_code
     title: 郵便番号
   - name: efct_date

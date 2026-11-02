@@ -1,0 +1,50 @@
+schema: main
+name: address_point
+title: 住所の点
+description: |
+  住所ごとに 1 つ選んだ点。その住所自身の点を point_priority の順で選び、無ければ親の番号の点を使う。地番は地番が振られた区域の町字（town.numbering_id）でも引く。
+  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）、「街区レベル位置参照情報」（国土交通省）（https://nlftp.mlit.go.jp/isj/）を加工して作成。
+keywords:
+  - 住所
+  - ジオコーディング
+sources:
+  - path: https://dataset.address-br.digital.go.jp/
+  - path: https://nlftp.mlit.go.jp/isj/
+fields:
+  - name: machiaza_key
+    title: 町字キー
+    description: "lg_code と machiaza_id をつないだもの (13桁)。この順に並ぶ"
+  - name: lg_code
+    title: 全国地方公共団体コード
+    description: "6桁（検査数字あり）"
+    extensions: { queria: { semantic: { role: entity, name: city } } }
+  - name: machiaza_id
+    title: 町字ID
+    description: "town と lg_code・machiaza_id で結合する"
+  - name: system
+    title: 住所の仕組み
+    description: "rsdt は住居表示、parcel は地番"
+  - name: num1
+    title: 番号1
+    description: "住居表示は街区符号（「○番」）、地番は「○番地」の部分"
+  - name: num2
+    title: 番号2
+    description: "住居表示は住居番号（「○号」）、地番は枝番。無ければ NULL"
+  - name: num3
+    title: 番号3
+    description: "住居表示は住居番号の枝番、地番は枝番の枝番。無ければ NULL"
+  - name: point_type
+    title: 点の種類
+    description: "parcel は筆、parcel_parent は親番、rsdt は号、block は街区。point_priority を参照"
+  - name: source
+    title: 出どころ
+    description: "abr はアドレス・ベース・レジストリ、isj は街区レベル位置参照情報"
+  - name: error_m
+    title: 誤差 (m)
+    description: "この種類と出どころの点を地価公示の地点に当てたときの距離の中央値。測っていないものは NULL"
+  - name: lng
+    title: 経度
+    description: "点の無い住所は NULL（町字の点を使う）"
+  - name: lat
+    title: 緯度
+    description: "点の無い住所は NULL"

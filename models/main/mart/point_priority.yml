@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: point_priority
+    description: |
+      住所の点の種類と出どころごとの優先順と、測った誤差。address_point の既定の点はこの順で選ぶ。
+    access: public
+    columns:
+      - name: point_type
+        data_type: varchar
+      - name: source
+        data_type: varchar
+      - name: rank
+        data_type: integer
+      - name: error_m
+        data_type: integer
+      - name: measured_on
+        data_type: date
