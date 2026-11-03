@@ -19,4 +19,6 @@ jobs:
     uses: queria-io/dataset-shared/.github/workflows/sync.yml@main
     with:
       dataset_name: geocoder
+      # parcel の作成で DuckDB の一時ファイルが 11GB を超え、ランナーのディスクが足りなくなる
+      free_disk: true
     secrets: inherit
