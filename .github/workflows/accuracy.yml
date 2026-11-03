@@ -1,0 +1,86 @@
+name: Accuracy
+
+# マージ前の精度の関門: Worker を変える PR では、Workers Builds がブランチごとに作るプレビュー版と本番に
+# 同じ 3,000 件 (地価公示・指定避難所・介護サービス事業所) を流し、本番より悪くなっていれば落とす。
+# プレビュー版も本番と同じデータを読むので、比べているのは Worker の変更だけ
+on:
+  pull_request:
+    paths:
+      - "worker/**"
+      - ".github/workflows/accuracy.yml"
+
+concurrency:
+  group: accuracy-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      checks: read
+      contents: read
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: worker/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: worker/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: 実住所と座標の組を作る
+        run: uv run --with 'duckdb>=1.4,<2' python bench/truth-forward.py 1000 > bench/truth-forward.csv
+      - name: プレビュー版を待つ
+        id: preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Workers Builds の check run の summary に、その版だけを指す Preview URL が載る
+          for _ in $(seq 1 60); do
+            run=$(gh api "repos/$REPO/commits/$SHA/check-runs" \
+              -f check_name="Workers Builds: queria-geocoder" -X GET \
+              --jq '.check_runs[0] // {} | {status, conclusion, summary: .output.summary}')
+            if [ "$(jq -r .status <<< "$run")" = completed ]; then
+              if [ "$(jq -r .conclusion <<< "$run")" != success ]; then
+                echo "::error::Workers Builds: $(jq -r .conclusion <<< "$run")"
+                exit 1
+              fi
+              url=$(jq -r .summary <<< "$run" | grep -o 'Preview URL: https://[^ )]*' | head -1 | cut -d' ' -f3 || true)
+              if [ -z "$url" ]; then
+                echo "::error::Preview URL が check run に見つからない"
+                exit 1
+              fi
+              echo "url=$url" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::Workers Builds の check run が 20 分で終わらなかった (ブランチのビルドが有効か確かめる)"
+          exit 1
+      - name: 本番とプレビュー版に流す
+        env:
+          PREVIEW: ${{ steps.preview.outputs.url }}
+          # 25 件まとめは 1 回の CPU が上限に当たりやすい。5 件ずつ 4 本並べる
+          BATCH: "5"
+          LANES: "4"
+        run: |
+          BASE=https://geocoder.queria.io pnpm exec tsx bench/forward-eval.ts bench/truth-forward.csv bench/base.jsonl > bench/base.md &
+          BASE="$PREVIEW" pnpm exec tsx bench/forward-eval.ts bench/truth-forward.csv bench/head.jsonl > bench/head.md &
+          wait -n && wait -n
+      - name: 比べる
+        run: pnpm exec tsx bench/gate.ts bench/base.jsonl bench/head.jsonl | tee -a "$GITHUB_STEP_SUMMARY"; exit "${PIPESTATUS[0]}"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accuracy-${{ github.event.pull_request.number }}-${{ github.run_id }}
+          path: worker/bench/*.jsonl
+          retention-days: 30

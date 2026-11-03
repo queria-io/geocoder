@@ -2,6 +2,7 @@
 // 使い方: pnpm tsx bench/forward-eval.ts bench/truth-forward.csv [出力の JSONL]
 //   BASE=http://localhost:8787 で手元の wrangler dev にも流せる (既定は本番)
 //   PREV=前回の出力の JSONL を渡すと、全体の数字を前回と並べる
+//   BATCH=1 回に送る件数 (既定 25)、LANES=同時に送る本数 (既定 1)
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 import { chunks, parseCsv } from "./csv";
@@ -25,7 +26,9 @@ type Answer = {
 type Row = Truth & { answer: Answer; error_m: number | null };
 
 const BASE = process.env.BASE ?? "https://geocoder.queria.io";
-const BATCH = 25; // /v1/batch の上限 (src/index.ts の BATCH_MAX) にそろえる
+// 既定は /v1/batch の上限 (src/index.ts の BATCH_MAX)。小さく割って並べると、1 回の CPU が上限に当たりにくく速い
+const BATCH = Number(process.env.BATCH ?? 25);
+const LANES = Number(process.env.LANES ?? 1);
 
 // 住所に「,」「"」や改行が入るので、一括変換のページと同じ読み方で割る
 const truths: Truth[] = parseCsv(readFileSync(process.argv[2], "utf8"))
@@ -68,8 +71,18 @@ const post = async (addresses: string[], tries = 3): Promise<Answer[]> => {
   return (JSON.parse(res.body) as { results: Answer[] }).results;
 };
 
-const answers: Answer[] = [];
-for (const c of chunks(truths, BATCH)) answers.push(...(await post(c.map((t) => t.address))));
+// LANES 本の列で、まとまりを順に取って送る。答えは元の順に戻す
+const batches = chunks(truths, BATCH);
+const done: Answer[][] = [];
+const lane = async (next: { i: number }): Promise<void> => {
+  const i = next.i++;
+  if (i >= batches.length) return;
+  done[i] = await post(batches[i].map((t) => t.address));
+  return lane(next);
+};
+const cursor = { i: 0 };
+await Promise.all(Array.from({ length: LANES }, () => lane(cursor)));
+const answers: Answer[] = done.flat();
 
 // 政令市の区は区のコードで返すが、指定避難所は市のコードで持つ (横浜市の区は 14101〜、避難所は 14100)。
 // 区のコードを市のコードに戻してからも比べる
