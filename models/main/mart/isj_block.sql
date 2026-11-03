@@ -4,13 +4,15 @@
 -- 親番 (「28番地10」の「28」) の点を返すのに使う。住居表示の地域の行 (街区符号) も残す。
 -- 位置参照情報は「学園南三丁目」のように大字・町と丁目を 1 つの名前で持つので、ABR の町字の
 -- 名前を同じ形にして突き合わせる。小字のある行は同じ小字の町字に、小字の無い行は大字・町の町字に付ける。
+-- ABR は「大字頃藤」「字イサノ」のように頭に「大字」「字」を付けることがあり、位置参照情報は付けないので、
+-- 両側の頭の「大字」「字」「小字」を外して比べる
 -- ジオコーダーは町字 1 つ分だけ読むので machiaza_key の順に並べる
 WITH town AS (
     SELECT DISTINCT
         lg_code,
         machiaza_id,
-        oaza_cho || coalesce({{ chome_kanji('chome') }}, '') AS name,
-        koaza
+        regexp_replace(oaza_cho, '^大字', '') || coalesce({{ chome_kanji('chome') }}, '') AS name,
+        regexp_replace(koaza, '^小?字', '') AS koaza
     FROM address_br.main.mart_town
     WHERE status_flg <> '3' AND oaza_cho IS NOT NULL
 ),
@@ -18,8 +20,8 @@ block AS (
     -- 番号に全角の数字が混じる行がある (「２１」)。ジオコーダーは半角で引くのでそろえる
     SELECT
         lg_code,
-        oaza_chome_name,
-        koaza_name,
+        regexp_replace(oaza_chome_name, '^大字', '') AS oaza_chome_name,
+        regexp_replace(koaza_name, '^小?字', '') AS koaza_name,
         translate(block_number, '０１２３４５６７８９', '0123456789') AS block_number,
         is_residential_address,
         lng,
