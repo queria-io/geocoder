@@ -22,7 +22,8 @@ export const splitAzaName = (rest: string): [string, string] | null => {
   return [m[1], m[2]];
 };
 
-const atMachiaza = (r: MatchedResult) =>
+/** 当て方の段が町字止まり (地番・住居表示に当たっていない) */
+export const atMachiaza = (r: MatchedResult) =>
   r.match_level === "machiaza" || r.match_level === "machiaza_detail";
 
 /** 当て直しで番号まで進んだか (地番・住居表示に当たったか、残りが番号から始まる) */

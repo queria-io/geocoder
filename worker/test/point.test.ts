@@ -62,6 +62,15 @@ describe("withAddressPoint", () => {
     expect(r.coordinate_level).toBe("parcel_parent");
   });
 
+  it("住居表示に当たって座標の無いものは、残りの番号を地番として引かない", async () => {
+    const r = await withAddressPoint(
+      result({ match_level: "rsdtdsp_blk", unmatched_address: ["28"], coordinates: null }),
+      load,
+      noTown,
+    );
+    expect(r.coordinates).toBeNull();
+  });
+
   it("住居表示の街区の点は使わない", async () => {
     const r = await withAddressPoint(result({ unmatched_address: ["5-1"] }), load, noTown);
     expect(r.coordinate_level).toBeUndefined();

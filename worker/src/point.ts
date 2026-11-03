@@ -32,10 +32,13 @@ export const PARCEL_PARENT: CoordinateLevel = "parcel_parent";
 
 export const ISJ_ATTRIBUTION = "「街区レベル位置参照情報」（国土交通省）を加工して作成";
 
-/** 町字の代表点まで落ちたもの。地番まで当たっても筆にも町字にも点が無ければ (座標なし) 同じに扱う */
+/**
+ * 町字の代表点まで落ちたもの。地番まで当たっても筆にも町字にも点が無ければ (座標なし) 同じに扱う。
+ * 住居表示に当たって座標の無いものは外す (残りの番号は地番ではない)
+ */
 const atMachiaza = (r: MatchedResult): boolean => {
-  const level = coordinatesLevel(r);
-  return level === null || level === "machiaza" || level === "machiaza_detail";
+  const level = coordinatesLevel(r) ?? (r.match_level === "parcel" ? "machiaza" : r.match_level);
+  return level === "machiaza" || level === "machiaza_detail";
 };
 
 /**

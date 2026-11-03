@@ -121,6 +121,7 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
   );
   const cities = (await Promise.all(city.map((t) => readAll<CityTableRow>(t)))).flat().map(toCity);
   const prefs = (await Promise.all(pref.map((t) => readAll<PrefTableRow>(t)))).flat().map(toPref);
+  const cityByCode = new Map(cities.map((c) => [c.lgCode, c]));
   const towns = new Map<string, Promise<BasicResult[]>>();
   const loadCity = (lgCode: string) => {
     const hit = towns.get(lgCode);
@@ -143,7 +144,7 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
     towns: loadCity,
     rows: loadMachiaza,
     points: machiazaLoader<PointRow>(bucket, tables.point, POINT_COLUMNS),
-    city: (lgCode) => cities.find((c) => c.lgCode === lgCode),
+    city: (lgCode) => cityByCode.get(lgCode),
   };
 };
 
