@@ -42,6 +42,21 @@ describe("withOazaChome", () => {
     expect(r.ids.machiaza_id).toBe("0005001");
   });
 
+  it("丁目の町で地番に当たらなくても、残りが番号から始まれば丁目の答えを使う", async () => {
+    const parent = result({
+      matched_address: "埼玉県入間市扇町屋一丁目",
+      unmatched_address: ["224"],
+      ids: { ...emptyIDs(), lg_code: "112259", machiaza_id: "0005001" },
+      structured_address: { ...emptySA(), oaza_cho: "扇町屋", chome: "一丁目" },
+    });
+    const r = await withOazaChome(
+      result({ unmatched_address: ["1-224"] }),
+      "埼玉県入間市扇町屋1-224",
+      async () => [parent],
+    );
+    expect(r.ids.machiaza_id).toBe("0005001");
+  });
+
   it("「大字」と書いた住所・丁目に当たらなかったものはそのまま", async () => {
     const r = result({});
     expect(await withOazaChome(r, "埼玉県入間市大字扇町屋1-9-34", async () => [chome])).toBe(r);
