@@ -32,6 +32,7 @@ import type { BasicResult, CityResult } from "./repository/types";
 import { nearestAddress, type Nearby } from "./nearby";
 import { withAzaSkipped } from "./skip_aza";
 import { withOazaChome } from "./oaza_chome";
+import { withRenamedWard } from "./renamed_ward";
 import { POINT_COLUMNS, type PointRow, withAddressPoint } from "./point";
 import { withParentPoint } from "./parent_point";
 
@@ -178,7 +179,10 @@ export const geocode = async (
     Match(built.matcher, { address: preNormalize(a), category: "all", pref: "", limit });
   const results = await Promise.all(
     (await match(address)).map(async (r) =>
-      withAzaSkipped(await withOazaChome(r, address, match), match),
+      withAzaSkipped(
+        await withOazaChome(await withRenamedWard(r, address, match), address, match),
+        match,
+      ),
     ),
   );
   // 住所は残さない。読んだ量と時間だけを書く
