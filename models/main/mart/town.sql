@@ -118,6 +118,16 @@ numbering_area AS (
 ),
 small_area AS (
     SELECT CAST(key_code AS VARCHAR) AS small_area_code, geometry FROM e_stat.boundary.small_area
+),
+-- ABR の町字マスタは多くの町字で郵便番号が空なので、japan_address_code の町字と郵便番号の対応で補う。
+-- 町域名が一致したもの (name)、町域が細分されていて全部同じ番号のもの (sub)、ABR の番号 (abr) だけを使い、
+-- 町字 1 つに番号が 1 つに決まるものに限る。町域名の前方一致 (prefix) と市区町村全体の番号 (city) は使わない
+postal AS (
+    SELECT lg_code, machiaza_id, any_value(zipcode) AS post_code
+    FROM japan_address_code.main.town_postal_code
+    WHERE match_type IN ('abr', 'name', 'sub')
+    GROUP BY lg_code, machiaza_id
+    HAVING count(DISTINCT zipcode) = 1
 )
 SELECT
     t.lg_code,
@@ -142,7 +152,7 @@ SELECT
     t.wake_num_flg,
     na.numbering_id,
     na.parcel_unique,
-    t.post_code,
+    coalesce(t.post_code, z.post_code) AS post_code,
     t.efct_date,
     ST_X(t.point) AS lng,
     ST_Y(t.point) AS lat,
@@ -153,6 +163,7 @@ LEFT JOIN oaza_has_chome h ON h.lg_code = t.lg_code AND h.oaza_cho = t.oaza_cho
 LEFT JOIN rsdtdsp_count c ON c.lg_code = t.lg_code AND c.machiaza_id = t.machiaza_id
 LEFT JOIN parcel_count pc ON pc.lg_code = t.lg_code AND pc.machiaza_id = t.machiaza_id
 LEFT JOIN numbering_area na ON na.lg_code = t.lg_code AND na.machiaza_id = t.machiaza_id
+LEFT JOIN postal z ON z.lg_code = t.lg_code AND z.machiaza_id = t.machiaza_id
 LEFT JOIN small_area s ON ST_Contains(s.geometry, t.point)
 -- 境界が重なる場所では代表点が 2 つの小地域に入る。町字 1 行に 1 つだけ残す
 QUALIFY row_number() OVER (PARTITION BY t.lg_code, t.machiaza_id ORDER BY s.small_area_code) = 1
