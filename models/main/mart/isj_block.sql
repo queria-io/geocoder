@@ -5,14 +5,17 @@
 -- 位置参照情報は「学園南三丁目」のように大字・町と丁目を 1 つの名前で持つので、ABR の町字の
 -- 名前を同じ形にして突き合わせる。小字のある行は同じ小字の町字に、小字の無い行は大字・町の町字に付ける。
 -- ABR は「大字頃藤」「字イサノ」のように頭に「大字」「字」を付けることがあり、位置参照情報は付けないので、
--- 両側とも、大字・町の名前は頭の「大字」を、小字の名前は頭の「字」「小字」を外して照合する
+-- 両側とも、大字・町の名前は頭の「大字」「字」を、小字の名前は頭の「字」「小字」を外して照合する。
+-- 外したことで同じ名前の町字が複数当たるときは、外す前の名前まで一致する町字を優先する
 -- ジオコーダーは町字 1 つ分だけ読むので machiaza_key の順に並べる
 WITH town AS (
     SELECT DISTINCT
         lg_code,
         machiaza_id,
-        regexp_replace(oaza_cho, '^大字', '') || coalesce({{ chome_kanji('chome') }}, '') AS name,
-        regexp_replace(koaza, '^小?字', '') AS koaza
+        regexp_replace(oaza_cho, '^大?字', '') || coalesce({{ chome_kanji('chome') }}, '') AS name,
+        regexp_replace(koaza, '^小?字', '') AS koaza,
+        oaza_cho || coalesce({{ chome_kanji('chome') }}, '') AS raw_name,
+        koaza AS raw_koaza
     FROM address_br.main.mart_town
     WHERE status_flg <> '3' AND oaza_cho IS NOT NULL
 ),
@@ -20,8 +23,10 @@ block AS (
     -- 番号に全角の数字が混じる行がある (「２１」)。ジオコーダーは半角で引くのでそろえる
     SELECT
         lg_code,
-        regexp_replace(oaza_chome_name, '^大字', '') AS oaza_chome_name,
+        regexp_replace(oaza_chome_name, '^大?字', '') AS oaza_chome_name,
         regexp_replace(koaza_name, '^小?字', '') AS koaza_name,
+        oaza_chome_name AS raw_name,
+        koaza_name AS raw_koaza,
         translate(block_number, '０１２３４５６７８９', '0123456789') AS block_number,
         is_residential_address,
         lng,
@@ -32,11 +37,11 @@ block AS (
 ),
 matched AS (
     SELECT
-        b.*,
+        b.* EXCLUDE (raw_name, raw_koaza),
         t.machiaza_id,
         row_number() OVER (
             PARTITION BY b.lg_code, b.oaza_chome_name, b.koaza_name, b.block_number, b.is_residential_address
-            ORDER BY t.machiaza_id
+            ORDER BY (t.raw_name = b.raw_name AND t.raw_koaza IS NOT DISTINCT FROM b.raw_koaza) DESC, t.machiaza_id
         ) AS rank
     FROM block b
     JOIN town t
