@@ -4,6 +4,7 @@
 
 - API の説明: https://geocoder.queria.io/docs
 - API 仕様（OpenAPI）: https://geocoder.queria.io/openapi.json
+- 精度: 日本の住所 3,000 件で、ほかの無料のジオコーダーと比べた結果を [BENCHMARK.md](BENCHMARK.md) に置いている
 
 ```bash
 curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東京都千代田区紀尾井町1-3"
