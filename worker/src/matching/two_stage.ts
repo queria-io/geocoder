@@ -143,6 +143,7 @@ const searchParcel = async (
   machiazaId: string,
   parsed: ParsedAddress,
   basic: MatchedResult,
+  chomeId?: string,
 ): Promise<MatchedResult | null> => {
   const [num1, num2 = "", num3 = ""] = numericParts(parsed);
   if (num1 === undefined) return null;
@@ -161,6 +162,10 @@ const searchParcel = async (
         }
     return null;
   };
+  if (chomeId !== undefined) {
+    const hit = await find(chomeId);
+    return hit ? ParcelResultToNormalized(hit) : null;
+  }
   if (parcelCount > 0) {
     const hit = await find(machiazaId);
     if (hit) return ParcelResultToNormalized(hit);
@@ -179,11 +184,12 @@ const normalizeParcelWithBasic = async (
   n: Impl,
   basicResults: MatchedResult[],
   parsed: ParsedAddress,
+  chomeId?: string,
 ): Promise<MatchedResult[] | null> => {
   const basic = basicResults[0];
   const { lg_code: lgCode, machiaza_id: machiazaId } = basic?.ids ?? {};
   if (!lgCode || !machiazaId) return null;
-  const result = await searchParcel(n, lgCode, machiazaId, parsed, basic);
+  const result = await searchParcel(n, lgCode, machiazaId, parsed, basic, chomeId);
   if (!result) return null;
   const ids = { ...result.ids, rsdt_addr_flg: result.ids.rsdt_addr_flg ?? basic.ids.rsdt_addr_flg };
   const sa = mergeFrom(result.structured_address, basic.structured_address);
@@ -243,12 +249,15 @@ export const tryTwoStageParcel = async (
     );
   // 丁目のある町で丁目の印が無ければ、まず最初の番号を丁目と読み ("南2条西1-5-2F" → 1丁目 5番)、
   // 当たらなければそのまま ("舞浜2-11" → 地番 2-11)。住居表示の段と同じく、当たった町字が
-  // もう丁目まで持っていれば読み替えない (上流は読み替える)
+  // もう丁目まで持っていれば読み替えない (上流は読み替える)。
+  // 丁目と読んだ番号の地番は、その丁目の町字 ID の下で探す。上流は丁目を外した番号を丁目の無い町で探すので、
+  // 丁目のある町の「1762番10」を地番 10 に当ててしまう。丁目にならない番号 (1762) なら読み替えない
   const parsed = parseSearchAddr(searchAddr);
   if (basic.machiaza.hasChome && basic.structured_address.chome === null && !parsed.HasChome) {
     const adjusted = convertColonToChome(parsed);
-    if (parsedString(adjusted) !== searchAddr) {
-      const results = await normalizeParcelWithBasic(n, nctx.State.BasicResults, adjusted);
+    const chomeId = adjustMachiazaIDForChome(machiazaId, adjusted.Chome);
+    if (parsedString(adjusted) !== searchAddr && chomeId !== machiazaId) {
+      const results = await normalizeParcelWithBasic(n, nctx.State.BasicResults, adjusted, chomeId);
       if (results) return finalize(results, adjusted);
     }
   }
