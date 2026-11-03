@@ -11,6 +11,24 @@
 curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東京都千代田区紀尾井町1-3"
 ```
 
+## 利用条件
+
+- 無料で提供している。有料化の予定はない
+- 費用と負荷を抑えるため、1 つの IP アドレスから 1 分に 300 回までに制限している。超えると 429 を返す
+- 稼働率と結果の正しさは保証しない。ベータの間は答えの形を変えることがある。元データの利用条件が変わった場合は、提供の内容を変えることがある
+- 結果を公開するときは、答えの `source.attribution` に入っている出典も表示する
+
+## 統計データとの結合
+
+`include=small_area` を付けると、国勢調査の小地域コード（`estat_small_area_code`）を返す。[Queria](https://queria.io) の公開データセットは同じコードで国勢調査の表を持っているので、SQL で結合できる。
+
+```sql
+-- 東京都千代田区紀尾井町1-3 の estat_small_area_code は 131010100
+SELECT key_code, city_name, area_name, jinko, setai
+FROM e_stat.boundary.small_area
+WHERE key_code = '131010100'
+```
+
 ## このリポジトリ
 
 - 直下: ジオコーダーが読む表を作る Queria のデータセット `geocoder`（このページの以下）
