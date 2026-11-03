@@ -1,0 +1,43 @@
+import { describe, expect, it } from "vitest";
+
+import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "../src/model/model";
+import { withOazaChome } from "../src/oaza_chome";
+
+const result = (over: Partial<MatchedResult>): MatchedResult => ({
+  matched_address: "埼玉県入間市大字扇町屋",
+  unmatched_address: ["1-9-34"],
+  match_level: "machiaza",
+  score: 1,
+  ids: { ...emptyIDs(), lg_code: "112259", machiaza_id: "0002000" },
+  structured_address: { ...emptySA(), oaza_cho: "大字扇町屋" },
+  coordinates: [139.39, 35.83],
+  machiaza: emptyMachiaza(),
+  ...over,
+});
+const chome = result({
+  matched_address: "埼玉県入間市扇町屋一丁目9-34",
+  unmatched_address: null,
+  match_level: "rsdtdsp_rsdt",
+  ids: { ...emptyIDs(), lg_code: "112259", machiaza_id: "0005001" },
+  structured_address: { ...emptySA(), oaza_cho: "扇町屋", chome: "一丁目" },
+});
+
+describe("withOazaChome", () => {
+  it("大字を書かない住所は、大字を外した名前の丁目で当て直す", async () => {
+    const asked: string[] = [];
+    const r = await withOazaChome(result({}), "埼玉県入間市扇町屋1-9-34", async (a) => {
+      asked.push(a);
+      return [chome];
+    });
+    expect(asked).toEqual(["埼玉県入間市扇町屋1丁目9-34"]);
+    expect(r.ids.machiaza_id).toBe("0005001");
+  });
+
+  it("「大字」と書いた住所・丁目に当たらなかったものはそのまま", async () => {
+    const r = result({});
+    expect(await withOazaChome(r, "埼玉県入間市大字扇町屋1-9-34", async () => [chome])).toBe(r);
+    expect(await withOazaChome(r, "埼玉県入間市扇町屋1-9-34", async () => [r])).toBe(r);
+    const one = result({ unmatched_address: ["72"] });
+    expect(await withOazaChome(one, "埼玉県入間市扇町屋72", async () => [chome])).toBe(one);
+  });
+});
