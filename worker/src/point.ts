@@ -110,6 +110,7 @@ export const withAddressPoint = async (
           ...r,
           coordinates: [hit.lng as number, hit.lat as number],
           coordinate_level: levelOf(hit, own),
+          coordinate_source: hit.source,
         };
     }
   return withBlockPoint(r, load, lgCode, machiazaId, parent);
@@ -137,6 +138,11 @@ const withBlockPoint = async (
       x.lat !== null,
   );
   return hit
-    ? { ...r, coordinates: [hit.lng as number, hit.lat as number], coordinate_level: PARCEL_PARENT }
+    ? {
+        ...r,
+        coordinates: [hit.lng as number, hit.lat as number],
+        coordinate_level: PARCEL_PARENT,
+        coordinate_source: hit.source,
+      }
     : r;
 };
