@@ -23,6 +23,9 @@ export type TownRow = {
   rsdt_addr_partial: boolean;
   /** 郵便番号の列を足す前の表には無い */
   post_code?: string | null;
+  /** 地番の区域の列を足す前の表には無い */
+  numbering_id?: string | null;
+  parcel_unique?: boolean | null;
   lng?: number | null;
   lat?: number | null;
 };
@@ -45,6 +48,8 @@ export const TOWN_COLUMNS = [
   "rsdt_addr_flg",
   "rsdt_addr_partial",
   "post_code",
+  "numbering_id",
+  "parcel_unique",
   "lng",
   "lat",
 ];
@@ -86,6 +91,8 @@ export const toBasic = (t: TownRow): BasicResult => {
     parcelCount: Number(t.parcel_count ?? 0),
     rsdtdspCount: Number(t.rsdtdsp_count ?? 0),
     postCode: t.post_code ?? null,
+    numberingId: t.numbering_id ?? null,
+    parcelUnique: t.parcel_unique ?? false,
     lon: t.lng ?? null,
     lat: t.lat ?? null,
   };

@@ -12,7 +12,7 @@ export const TABLES = {
   pref: "main.pref",
   rsdtdsp: "main.rsdtdsp",
   parcel: "main.parcel",
-  isj: "main.isj_block",
+  point: "main.address_point",
 } as const;
 export type TableName = keyof typeof TABLES;
 

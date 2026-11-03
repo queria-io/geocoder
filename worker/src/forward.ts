@@ -30,7 +30,8 @@ import { resolveTables, type Resolved } from "./data/source";
 import { machiazaKey, RSDTDSP_COLUMNS, type RsdtdspRow } from "./repository/rsdtdsp";
 import type { BasicResult } from "./repository/types";
 import { nearestAddress, type Nearby } from "./nearby";
-import { ISJ_COLUMNS, type IsjRow, withParcelParent } from "./isj";
+import { withAzaSkipped } from "./skip_aza";
+import { POINT_COLUMNS, type PointRow, withAddressPoint } from "./point";
 
 export type ForwardEnv = {
   DATA: R2Bucket;
@@ -105,7 +106,7 @@ type Built = {
   town: (lgCode: string, machiazaId: string) => Promise<BasicResult | null>;
   towns: (lgCode: string) => Promise<BasicResult[]>;
   rows: (lgCode: string, machiazaId: string) => Promise<RsdtdspRow[]>;
-  isj: (lgCode: string, machiazaId: string) => Promise<IsjRow[]>;
+  points: (lgCode: string, machiazaId: string) => Promise<PointRow[]>;
 };
 
 // isolate の中で使い回す。表のファイルが変われば作り直す
@@ -138,7 +139,7 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
       (await loadCity(lgCode)).find((b) => b.machiazaId === machiazaId) ?? null,
     towns: loadCity,
     rows: loadMachiaza,
-    isj: machiazaLoader<IsjRow>(bucket, tables.isj, ISJ_COLUMNS),
+    points: machiazaLoader<PointRow>(bucket, tables.point, POINT_COLUMNS),
   };
 };
 
@@ -168,17 +169,16 @@ export const geocode = async (
   stats = emptyStats();
   const cold = cached === null;
   const built = await matcherFor(env);
-  const results = await Match(built.matcher, {
-    address: preNormalize(address),
-    category: "all",
-    pref: "",
-    limit,
-  });
+  const match = (a: string) =>
+    Match(built.matcher, { address: preNormalize(a), category: "all", pref: "", limit });
+  const results = await Promise.all((await match(address)).map((r) => withAzaSkipped(r, match)));
   // 住所は残さない。読んだ量と時間だけを書く
   console.log(JSON.stringify({ geocode: true, cold, ...stats }));
   // 当たらなかったもの (都道府県も決まらない) は返さない
   const found = await Promise.all(
-    results.filter((r) => r.match_level !== "unknown").map((r) => withParcelParent(r, built.isj)),
+    results
+      .filter((r) => r.match_level !== "unknown")
+      .map((r) => withAddressPoint(r, built.points, built.town)),
   );
   const postalCode = async (r: MatchedResult) =>
     r.ids.lg_code && r.ids.machiaza_id

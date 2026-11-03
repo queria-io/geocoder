@@ -33,7 +33,7 @@ import {
   versionOf,
 } from "./answer";
 import { dataVersion, geocode, nearby, type ForwardEnv } from "./forward";
-import { ISJ_ATTRIBUTION, PARCEL_PARENT } from "./isj";
+import { ISJ_ATTRIBUTION, PARCEL_PARENT } from "./point";
 import { ErrAddressTooLong, ErrEmptyAddress } from "./normalize/input";
 import { type Level, resolveAreas, type TilePoint } from "./lookup";
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "./model/model";
@@ -412,7 +412,7 @@ const GeocodeResult = z
     }),
     coordinates_level: CoordinatesLevel.nullable().openapi({
       description:
-        "座標を取った点の段。値の意味は match_level と同じ。番号まで当たってもその点に座標が無ければ町字の代表点で埋め、machiaza になる。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、国交省の街区レベル位置参照情報から取る (ABR に地番の点が無いとき)。どれも代表点で、建物の位置ではない",
+        "座標を取った点の段。値の意味は match_level と同じ。番号まで当たってもその点に座標が無ければ町字の代表点で埋め、machiaza になる。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、ABR の親番の筆の点か国交省の街区レベル位置参照情報から取る (ABR にその地番の点が無いとき)。どれも代表点で、建物の位置ではない",
     }),
     lg_code: z
       .string()
