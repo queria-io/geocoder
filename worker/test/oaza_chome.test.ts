@@ -33,6 +33,15 @@ describe("withOazaChome", () => {
     expect(r.ids.machiaza_id).toBe("0005001");
   });
 
+  it("頭に 0 の付く番号 (「01-9-34」) も同じ丁目と見る", async () => {
+    const r = await withOazaChome(
+      result({ unmatched_address: ["01-9-34"] }),
+      "埼玉県入間市扇町屋01-9-34",
+      async () => [chome],
+    );
+    expect(r.ids.machiaza_id).toBe("0005001");
+  });
+
   it("「大字」と書いた住所・丁目に当たらなかったものはそのまま", async () => {
     const r = result({});
     expect(await withOazaChome(r, "埼玉県入間市大字扇町屋1-9-34", async () => [chome])).toBe(r);

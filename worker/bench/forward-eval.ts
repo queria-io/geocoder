@@ -45,13 +45,15 @@ const wait = (status: number | string, ms: number) => {
 };
 
 const post = async (addresses: string[], tries = 3): Promise<Answer[]> => {
-  // 答えが返らないまま止まる問い合わせもあるので、60 秒で切って送り直す
+  // 答えが返らないまま止まる問い合わせもあるので、本文を読み終えるまでを 60 秒で切って送り直す
   const res = await fetch(`${BASE}/v1/batch`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ addresses }),
     signal: AbortSignal.timeout(60_000),
-  }).catch((e: Error) => e);
+  })
+    .then(async (r) => ({ status: r.status, ok: r.ok, body: await r.text() }))
+    .catch((e: Error) => e);
   if (res instanceof Error) {
     if (tries === 0) throw res;
     await wait(res.name, 5_000);
@@ -62,8 +64,8 @@ const post = async (addresses: string[], tries = 3): Promise<Answer[]> => {
     await wait(res.status, res.status === 429 ? 60_000 : 5_000);
     return post(addresses, res.status === 429 ? tries : tries - 1);
   }
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-  return ((await res.json()) as { results: Answer[] }).results;
+  if (!res.ok) throw new Error(`${res.status} ${res.body}`);
+  return (JSON.parse(res.body) as { results: Answer[] }).results;
 };
 
 const answers: Answer[] = [];
