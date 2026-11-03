@@ -5,6 +5,7 @@ description: |
   全国の町字の名前・別名・代表点と、代表点が入る国勢調査の小地域。住所の文字列を町字に当てるのに使う。名前の中の全角の英数字・記号は半角にそろえる。
   「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
   小地域は「国勢調査 町丁・字等別境界データ」（総務省統計局）（https://www.e-stat.go.jp/gis）を使用。
+  どこにも代表点の無い大字・町は「大字・町丁目レベル位置参照情報」（国土交通省）（https://nlftp.mlit.go.jp/isj/）の点で埋める。
 keywords:
   - 住所
   - 町字
@@ -13,6 +14,7 @@ keywords:
 sources:
   - path: https://dataset.address-br.digital.go.jp/
   - path: https://www.e-stat.go.jp/gis
+  - path: https://nlftp.mlit.go.jp/isj/
 fields:
   - name: lg_code
     title: 全国地方公共団体コード
@@ -83,7 +85,7 @@ fields:
     description: "代表点の緯度。元データ (ABR 位置参照拡張) のまま。出どころは point_level"
   - name: point_level
     title: 代表点の出どころ
-    description: "town は町字自身の代表点、parent_town は代表点の無い小字などに同じ大字・町の代表点を使ったもの、oaza_mean は大字・町にも代表点が無いときに同じ大字・町の小字などの代表点を平均したもの。どれも無い町字は NULL"
+    description: "town は町字自身の代表点、parent_town は代表点の無い小字などに同じ大字・町の代表点を使ったもの、oaza_mean は大字・町にも代表点が無いときに同じ大字・町の小字などの代表点を平均したもの。isj_oaza はそれも無いときに位置参照情報の大字・町丁目の点を名前で当てたもの。どれも無い町字は NULL"
   - name: small_area_code
     title: 小地域コード
     description: "lng / lat の点が入る国勢調査の小地域 (KEY_CODE)。町字と小地域は 1 対 1 ではなく、これは代表点 1 点で決めたもの。代表点の無い町字は NULL"

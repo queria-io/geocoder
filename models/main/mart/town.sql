@@ -31,14 +31,23 @@ oaza_mean AS (
     WHERE geometry IS NOT NULL
     GROUP BY lg_code, left(machiaza_id, 4)
 ),
+-- 大字・町にも小字にも代表点が無いときは、位置参照情報の大字・町丁目の点を名前で当てる。
+-- 同じ市区町村に同じ名前が 2 つ以上あるものは、どちらか決まらないので使わない
+isj_oaza AS (
+    SELECT lg_code, oaza_chome_name AS name, ST_Point(any_value(lng), any_value(lat)) AS geometry
+    FROM nlftp.isj.oaza
+    GROUP BY lg_code, oaza_chome_name
+    HAVING count(*) = 1
+),
 located AS (
     SELECT
         t.*,
-        coalesce(t.geometry, p.geometry, m.geometry) AS point,
+        coalesce(t.geometry, p.geometry, m.geometry, i.geometry) AS point,
         CASE
             WHEN t.geometry IS NOT NULL THEN 'town'
             WHEN p.geometry IS NOT NULL THEN 'parent_town'
             WHEN m.geometry IS NOT NULL THEN 'oaza_mean'
+            WHEN i.geometry IS NOT NULL THEN 'isj_oaza'
         END AS point_level
     FROM town t
     LEFT JOIN town p
@@ -48,6 +57,10 @@ located AS (
     LEFT JOIN oaza_mean m
         ON m.lg_code = t.lg_code
         AND m.oaza_id = left(t.machiaza_id, 4)
+        AND t.geometry IS NULL
+    LEFT JOIN isj_oaza i
+        ON i.lg_code = t.lg_code
+        AND i.name = replace(t.oaza_cho, '大字', '') || coalesce(t.chome, '')
         AND t.geometry IS NULL
 ),
 -- 住居表示の住所の数。番・号の段は、これが 0 の町字では住居表示の表を読まない
