@@ -39,16 +39,27 @@ const truths: Truth[] = parseCsv(readFileSync(process.argv[2], "utf8"))
     city,
   }));
 
+const wait = (status: number | string, ms: number) => {
+  process.stderr.write(`${status}: ${ms / 1000} 秒待って送り直す\n`);
+  return new Promise((r) => setTimeout(r, ms));
+};
+
 const post = async (addresses: string[], tries = 3): Promise<Answer[]> => {
+  // 答えが返らないまま止まる問い合わせもあるので、60 秒で切って送り直す
   const res = await fetch(`${BASE}/v1/batch`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ addresses }),
-  });
+    signal: AbortSignal.timeout(60_000),
+  }).catch((e: Error) => e);
+  if (res instanceof Error) {
+    if (tries === 0) throw res;
+    await wait(res.name, 5_000);
+    return post(addresses, tries - 1);
+  }
   // 回数の上限 (429) と、R2 の一時的な失敗や CPU の超過 (5xx) は待って送り直す。何千件も流すので、1 回の失敗で全部を捨てない
   if ((res.status === 429 || res.status >= 500) && tries > 0) {
-    process.stderr.write(`${res.status}: ${res.status === 429 ? 60 : 5} 秒待って送り直す\n`);
-    await new Promise((r) => setTimeout(r, res.status === 429 ? 60_000 : 5_000));
+    await wait(res.status, res.status === 429 ? 60_000 : 5_000);
     return post(addresses, res.status === 429 ? tries : tries - 1);
   }
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
