@@ -8,6 +8,8 @@ Queria のジオコーダー。住所と座標・地域コードを相互に引�
 - `worker/`: Cloudflare Workers の API。DuckDB もデータベースも使わない。逆引き (`/v1/reverse`) は R2 の境界 PMTiles、
   正引き (予定) は直下のデータセットの Parquet を Range で読む
 
+直すときは [DESIGN.md](DESIGN.md) の 5 つの観点（精度・速さ・メモリ・データの形・説明しやすさ）で確かめ、PR に書く。
+
 表の列・並び・行グループは `worker/` の読み方に合わせて決めている。片方だけ変えない。
 
 `worker/` は DuckLake のカタログを読まず、DuckLake が書いた Parquet を直接読む。そのために守ること:
