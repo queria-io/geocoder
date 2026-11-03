@@ -19,7 +19,7 @@ curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東�
 
 ## データセット
 
-元にするのは Queria の公開データセット [address_br](https://github.com/queria-io/dataset-address-br)（アドレス・ベース・レジストリ）、e_stat（国勢調査の小地域境界）、nlftp（国交省の街区レベル位置参照情報）。取得はせず、それを読んで次の表を作る。
+元にするのは Queria の公開データセット [address_br](https://github.com/queria-io/dataset-address-br)（アドレス・ベース・レジストリ）、e_stat（国勢調査の小地域境界）、nlftp（国交省の街区・大字町丁目レベル位置参照情報）。取得はせず、それを読んで次の表を作る。
 
 | 表 | 中身 |
 |---|---|
