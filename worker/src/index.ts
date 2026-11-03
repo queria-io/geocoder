@@ -17,7 +17,6 @@ import { cors } from "hono/cors";
 
 import {
   ABR_ATTRIBUTION,
-  coordinatesLevel,
   csvColumns,
   type Extras,
   type Include,
@@ -33,7 +32,7 @@ import {
   versionOf,
 } from "./answer";
 import { dataVersion, geocode, nearby, type ForwardEnv } from "./forward";
-import { ISJ_ATTRIBUTION, PARCEL_PARENT } from "./point";
+import { ISJ_ATTRIBUTION } from "./point";
 import { ErrAddressTooLong, ErrEmptyAddress } from "./normalize/input";
 import { type Level, resolveAreas, type TilePoint } from "./lookup";
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "./model/model";
@@ -412,7 +411,7 @@ const GeocodeResult = z
     }),
     coordinates_level: CoordinatesLevel.nullable().openapi({
       description:
-        "座標を取った点の段。値の意味は match_level と同じ。番号まで当たってもその点に座標が無ければ町字の代表点で埋め、machiaza になる。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、ABR の親番の筆の点か国交省の街区レベル位置参照情報から取る (ABR にその地番の点が無いとき)。どれも代表点で、建物の位置ではない",
+        "座標を取った点の段。値の意味は match_level と同じ。番号まで当たってもその点に座標が無ければ町字の代表点で埋め、machiaza になる。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、ABR の親番の筆の点、国交省の街区レベル位置参照情報の点、ABR の枝番の筆の点の平均の順に取る (ABR にその地番の点が無いとき)。どれも代表点で、建物の位置ではない",
     }),
     lg_code: z
       .string()
@@ -565,10 +564,13 @@ const answer = async (env: Env, address: string, limit: number, groups: Readonly
   return results.map((r, i) => [r, extras[i]] as const);
 };
 
-/** levels は答えごとの coordinates_level。位置参照情報の点を使った答えがあれば、その出典も足す */
-const attributionFor = (groups: ReadonlySet<Include>, levels: readonly (string | null)[]) => [
+/** 位置参照情報の点で座標を埋めた答え */
+const usesIsj = (r: MatchedResult) => r.coordinate_source === "isj";
+
+/** isj は位置参照情報の点を使った答えがあるか。あればその出典も足す */
+const attributionFor = (groups: ReadonlySet<Include>, isj: boolean) => [
   ABR_ATTRIBUTION,
-  ...(levels.includes(PARCEL_PARENT) ? [ISJ_ATTRIBUTION] : []),
+  ...(isj ? [ISJ_ATTRIBUTION] : []),
   ...(groups.has("small_area") ? [SMALL_AREA_ATTRIBUTION] : []),
 ];
 
@@ -592,7 +594,7 @@ app.openapi(geocodeRoute, async (c) => {
   const version = await dataVersion(c.env);
   const attribution = attributionFor(
     groups,
-    result.value.map(([r]) => coordinatesLevel(r)),
+    result.value.some(([r]) => usesIsj(r)),
   );
   const headers = { "Cache-Control": "public, max-age=86400" };
   if (format === "geojson") {
@@ -698,7 +700,7 @@ app.openapi(batchRoute, async (c) => {
     ) as never;
   const one = async (address: string) => {
     const r = await tryCatchAsync(() => answer(c.env, address, 1, groups));
-    if (r.ok) return r.value[0] ? forwardAnswer(r.value[0][0], groups, r.value[0][1]) : null;
+    if (r.ok) return r.value[0] ?? null;
     if (r.error instanceof ErrEmptyAddress || r.error instanceof ErrAddressTooLong) return null;
     throw r.error;
   };
@@ -714,12 +716,12 @@ app.openapi(batchRoute, async (c) => {
   }
   return c.json(
     {
-      results: result.value,
+      results: result.value.map((a) => (a ? forwardAnswer(a[0], groups, a[1]) : null)),
       source: {
         version: await dataVersion(c.env),
         attribution: attributionFor(
           groups,
-          result.value.map((a) => a?.coordinates_level ?? null),
+          result.value.some((a) => a !== null && usesIsj(a[0])),
         ),
       },
     },

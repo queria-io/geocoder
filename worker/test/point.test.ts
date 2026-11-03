@@ -129,6 +129,8 @@ describe("withAddressPoint", () => {
       noTown,
     );
     expect(r.coordinate_level).toBe("parcel");
+    // 出典の表示は点の出典で決める (ABR の点に位置参照情報の出典を付けない)
+    expect(r.coordinate_source).toBe("abr");
   });
 
   it("親番の筆の点で埋めたものは段は parcel_parent", async () => {
@@ -192,6 +194,7 @@ describe("地番の区域の町の街区の点", () => {
     );
     expect(r.coordinates?.[0]).toBe(140.1);
     expect(r.coordinate_level).toBe("parcel_parent");
+    expect(r.coordinate_source).toBe("isj");
   });
 
   it("住居表示の町では使わない", async () => {

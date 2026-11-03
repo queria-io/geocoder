@@ -66,6 +66,8 @@ export type MatchedResult = {
    * 埋めたときだけ入れる。無ければ match_level と同じ段の点
    */
   coordinate_level?: CoordinateLevel;
+  /** 座標を取った点の出典 (address_point の source)。上流には無い。address_point の点で埋めたときだけ入れる */
+  coordinate_source?: string | null;
   machiaza: MachiazaData;
 };
 

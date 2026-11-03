@@ -2,7 +2,7 @@
 // 「扇町屋一丁目」(住居表示) があると、上流は大字を省いた名前で大字に当て、残りを丁目と読まない。
 // 大字に当たって残りが番号から始まるとき、大字を外した名前に先頭の番号を丁目として付けて当て直す。上流には無い段
 import type { MatchedResult } from "./model/model";
-import { atMachiaza } from "./skip_aza";
+import { advanced, atMachiaza } from "./skip_aza";
 import { KanjiToArabic } from "./transform/kanji_numbers";
 import { StripChomeSuffix } from "./util/suffix";
 
@@ -28,7 +28,8 @@ export const withOazaChome = async (
       x.structured_address.chome !== null &&
       // 似た名前の別の丁目に当てたもの (「5丁目」が無くて「3丁目」) は使わない
       chomeNumber(x.structured_address.chome) === Number(m[1]) &&
-      !atMachiaza(x),
+      // 地番が無く町字止まりでも、残りが番号から始まれば親番の点を引ける (「平須賀2-224」)
+      advanced(x),
   );
   return retried ?? r;
 };

@@ -27,7 +27,8 @@ export const atMachiaza = (r: MatchedResult) =>
   r.match_level === "machiaza" || r.match_level === "machiaza_detail";
 
 /** 当て直しで番号まで進んだか (地番・住居表示に当たったか、残りが番号から始まる) */
-const advanced = (r: MatchedResult) => !atMachiaza(r) || /^\d/.test(r.unmatched_address?.[0] ?? "");
+export const advanced = (r: MatchedResult) =>
+  !atMachiaza(r) || /^\d/.test(r.unmatched_address?.[0] ?? "");
 
 export const withAzaSkipped = async (
   r: MatchedResult,
