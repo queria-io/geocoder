@@ -1,9 +1,10 @@
 // 正引きの物差し。truth-forward.py の実住所を API に流し、当たった段・市区町村の一致・座標の誤差を出す。
 // 使い方: pnpm tsx bench/forward-eval.ts bench/truth-forward.csv [出力の JSONL]
 //   BASE=http://localhost:8787 で手元の wrangler dev にも流せる (既定は本番)
-import { readFileSync, writeFileSync } from "node:fs";
+//   PREV=前回の出力の JSONL を渡すと、全体の数字を前回と並べる
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
-import { chunks, parseCsv } from "../site/csv";
+import { chunks, parseCsv } from "./csv";
 import { distanceM } from "../src/nearby";
 
 type Truth = {
@@ -126,6 +127,21 @@ const header =
 const table = (groups: [string, Row[]][]) =>
   [header, ...groups.map(([k, rs]) => `| ${summary(k, rs)} |`)].join("\n");
 
+const prev = process.env.PREV;
+if (prev && existsSync(prev)) {
+  const before = readFileSync(prev, "utf8")
+    .split("\n")
+    .filter((l) => l !== "")
+    .map((l) => JSON.parse(l) as Row);
+  console.log("## 前回と今回\n");
+  console.log(
+    table([
+      ["前回", before],
+      ["今回", rows],
+    ]),
+  );
+  console.log("");
+}
 console.log(`## 元データごと (${BASE})\n`);
 console.log(table([...groupBy(rows, (r) => r.source), ["全体", rows]]));
 console.log("\n## 当たった段ごと\n");
