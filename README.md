@@ -4,8 +4,8 @@
 
 - API の説明: https://geocoder.queria.io/docs
 - API 仕様（OpenAPI）: https://geocoder.queria.io/openapi.json
-- 精度: 日本の住所 3,000 件で、ほかの無料のジオコーダーと比較した結果を [BENCHMARK.md](BENCHMARK.md) に置いている
-- 設計の観点: 直すときに守る 5 つの観点（精度・速さ・メモリ・データの形・説明しやすさ）を [DESIGN.md](DESIGN.md) に置いている
+- 精度の比較: 日本の住所 3,000 件でほかの無料のジオコーダーと比較した結果（[BENCHMARK.md](BENCHMARK.md)）
+- 設計方針: 改修で守る 5 つの観点（精度・処理速度・メモリ使用量・データモデル・説明可能性）（[DESIGN.md](DESIGN.md)）
 
 ```bash
 curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東京都千代田区紀尾井町1-3"
