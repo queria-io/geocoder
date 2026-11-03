@@ -28,10 +28,11 @@ import {
 import { PARCEL_COLUMNS, type ParcelRow } from "./repository/parcel";
 import { resolveTables, type Resolved } from "./data/source";
 import { machiazaKey, RSDTDSP_COLUMNS, type RsdtdspRow } from "./repository/rsdtdsp";
-import type { BasicResult } from "./repository/types";
+import type { BasicResult, CityResult } from "./repository/types";
 import { nearestAddress, type Nearby } from "./nearby";
 import { withAzaSkipped } from "./skip_aza";
 import { POINT_COLUMNS, type PointRow, withAddressPoint } from "./point";
+import { withParentPoint } from "./parent_point";
 
 export type ForwardEnv = {
   DATA: R2Bucket;
@@ -107,6 +108,7 @@ type Built = {
   towns: (lgCode: string) => Promise<BasicResult[]>;
   rows: (lgCode: string, machiazaId: string) => Promise<RsdtdspRow[]>;
   points: (lgCode: string, machiazaId: string) => Promise<PointRow[]>;
+  city: (lgCode: string) => CityResult | undefined;
 };
 
 // isolate の中で使い回す。表のファイルが変われば作り直す
@@ -140,6 +142,7 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
     towns: loadCity,
     rows: loadMachiaza,
     points: machiazaLoader<PointRow>(bucket, tables.point, POINT_COLUMNS),
+    city: (lgCode) => cities.find((c) => c.lgCode === lgCode),
   };
 };
 
@@ -178,7 +181,13 @@ export const geocode = async (
   const found = await Promise.all(
     results
       .filter((r) => r.match_level !== "unknown")
-      .map((r) => withAddressPoint(r, built.points, built.town)),
+      .map(async (r) =>
+        withParentPoint(
+          await withAddressPoint(r, built.points, built.town),
+          built.town,
+          built.city,
+        ),
+      ),
   );
   const postalCode = async (r: MatchedResult) =>
     r.ids.lg_code && r.ids.machiaza_id

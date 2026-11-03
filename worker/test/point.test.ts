@@ -46,6 +46,22 @@ describe("withAddressPoint", () => {
     expect(r.coordinate_level).toBe("parcel_parent");
   });
 
+  it("地番まで当たって筆にも町字にも点が無ければ、親番の点にする", async () => {
+    const sa = { ...emptySA(), prc_num1: "28", prc_num2: "10" };
+    const r = await withAddressPoint(
+      result({
+        match_level: "parcel",
+        unmatched_address: null,
+        structured_address: sa,
+        coordinates: null,
+      }),
+      load,
+      noTown,
+    );
+    expect(r.coordinates).toEqual([140.0891, 36.073632]);
+    expect(r.coordinate_level).toBe("parcel_parent");
+  });
+
   it("住居表示の街区の点は使わない", async () => {
     const r = await withAddressPoint(result({ unmatched_address: ["5-1"] }), load, noTown);
     expect(r.coordinate_level).toBeUndefined();
@@ -143,6 +159,39 @@ describe("withAddressPoint", () => {
     expect(mid.coordinate_level).toBe("parcel_parent");
     const top = await withAddressPoint(result({ unmatched_address: ["28-10-3"] }), load, noTown);
     expect(top.coordinates?.[0]).toBe(140.0891);
+  });
+});
+
+describe("地番の区域の町の街区の点", () => {
+  const block = {
+    "0822010051003": [pt("5", null, { system: "rsdt", point_type: "block", lng: 140.1 })],
+  };
+  const loadBlock = async (lg: string, id: string) =>
+    (block as Record<string, PointRow[]>)[lg + id] ?? [];
+  const flag = (f: string | null) => ({
+    ...emptyIDs(),
+    lg_code: "082201",
+    machiaza_id: "0051003",
+    rsdt_addr_flg: f,
+  });
+
+  it("地番にも親番にも点が無ければ、同じ番号の街区の点を使う", async () => {
+    const r = await withAddressPoint(
+      result({ unmatched_address: ["5-1"], ids: flag("0") }),
+      loadBlock,
+      noTown,
+    );
+    expect(r.coordinates?.[0]).toBe(140.1);
+    expect(r.coordinate_level).toBe("parcel_parent");
+  });
+
+  it("住居表示の町では使わない", async () => {
+    const r = await withAddressPoint(
+      result({ unmatched_address: ["5-1"], ids: flag("1") }),
+      loadBlock,
+      noTown,
+    );
+    expect(r.coordinate_level).toBeUndefined();
   });
 });
 

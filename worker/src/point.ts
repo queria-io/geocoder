@@ -32,10 +32,10 @@ export const PARCEL_PARENT: CoordinateLevel = "parcel_parent";
 
 export const ISJ_ATTRIBUTION = "「街区レベル位置参照情報」（国土交通省）を加工して作成";
 
-/** 町字の代表点 (または点が無い) まで落ちたもの */
+/** 町字の代表点まで落ちたもの。地番まで当たっても筆にも町字にも点が無ければ (座標なし) 同じに扱う */
 const atMachiaza = (r: MatchedResult): boolean => {
-  const level = coordinatesLevel(r) ?? r.match_level;
-  return level === "machiaza" || level === "machiaza_detail";
+  const level = coordinatesLevel(r);
+  return level === null || level === "machiaza" || level === "machiaza_detail";
 };
 
 /**
@@ -106,5 +106,31 @@ export const withAddressPoint = async (
           coordinate_level: levelOf(hit, own),
         };
     }
-  return r;
+  return withBlockPoint(r, load, lgCode, machiazaId, parent);
+};
+
+/**
+ * 地番の区域の町 (住居表示でない) では、位置参照情報が「○番」の点を街区として持つことがある
+ * (ひたちなか市小砂町一丁目の 8 番)。地番にも親番にも点が無ければ、同じ番号の街区の点を使う
+ */
+const withBlockPoint = async (
+  r: MatchedResult,
+  load: (lgCode: string, machiazaId: string) => Promise<PointRow[]>,
+  lgCode: string,
+  machiazaId: string,
+  parent: string,
+): Promise<MatchedResult> => {
+  if (r.ids.rsdt_addr_flg !== "0") return r;
+  const hit = (await load(lgCode, machiazaId)).find(
+    (x) =>
+      x.system === "rsdt" &&
+      x.point_type === "block" &&
+      x.num1 === parent &&
+      x.num2 === null &&
+      x.lng !== null &&
+      x.lat !== null,
+  );
+  return hit
+    ? { ...r, coordinates: [hit.lng as number, hit.lat as number], coordinate_level: PARCEL_PARENT }
+    : r;
 };
