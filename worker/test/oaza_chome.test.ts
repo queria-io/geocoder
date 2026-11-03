@@ -37,6 +37,9 @@ describe("withOazaChome", () => {
     const r = result({});
     expect(await withOazaChome(r, "埼玉県入間市大字扇町屋1-9-34", async () => [chome])).toBe(r);
     expect(await withOazaChome(r, "埼玉県入間市扇町屋1-9-34", async () => [r])).toBe(r);
+    // 「5丁目」が無くて似た名前の別の丁目に当たったものは使わない
+    const five = result({ unmatched_address: ["5-9-34"] });
+    expect(await withOazaChome(five, "埼玉県入間市扇町屋5-9-34", async () => [chome])).toBe(five);
     const one = result({ unmatched_address: ["72"] });
     expect(await withOazaChome(one, "埼玉県入間市扇町屋72", async () => [chome])).toBe(one);
   });

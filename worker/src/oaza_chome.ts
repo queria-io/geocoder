@@ -2,9 +2,8 @@
 // 「扇町屋一丁目」(住居表示) があると、上流は大字を省いた名前で大字に当て、残りを丁目と読まない。
 // 大字に当たって残りが番号から始まるとき、大字を外した名前に先頭の番号を丁目として付けて当て直す。上流には無い段
 import type { MatchedResult } from "./model/model";
-
-const atMachiaza = (r: MatchedResult) =>
-  r.match_level === "machiaza" || r.match_level === "machiaza_detail";
+import { atMachiaza } from "./skip_aza";
+import { KanjiToArabic } from "./transform/kanji_numbers";
 
 export const withOazaChome = async (
   r: MatchedResult,
@@ -23,6 +22,8 @@ export const withOazaChome = async (
       x.ids.lg_code === r.ids.lg_code &&
       x.structured_address.oaza_cho === name &&
       x.structured_address.chome !== null &&
+      // 似た名前の別の丁目に当てたもの (「5丁目」が無くて「3丁目」) は使わない
+      KanjiToArabic(x.structured_address.chome)[0] === `${m[1]}丁目` &&
       !atMachiaza(x),
   );
   return retried ?? r;

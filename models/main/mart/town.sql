@@ -7,7 +7,9 @@ WITH town AS (
         *,
         -- 一部だけ住居表示を実施した町字は、同じ町字 ID に住居表示 ('1') と地番 ('0') の
         -- 2 行がある (約 1,200 組、ほかの列は同じ)。1 行にまとめ、地番の住所もあることを残す
-        count(DISTINCT rsdt_addr_flg) OVER (PARTITION BY lg_code, machiaza_id) > 1 AS rsdt_addr_partial
+        count(DISTINCT rsdt_addr_flg) OVER (PARTITION BY lg_code, machiaza_id) > 1 AS rsdt_addr_partial,
+        -- 位置参照情報の大字・町丁目の名前の書き方 (頭の「大字」なし、丁目は「三丁目」) にした名前
+        regexp_replace(oaza_cho, '^大字', '') || coalesce({{ chome_kanji('chome') }}, '') AS isj_name
     FROM address_br.main.mart_town
     -- 状態フラグ 3 は存在しない町字
     WHERE status_flg <> '3'
@@ -60,7 +62,7 @@ located AS (
         AND t.geometry IS NULL
     LEFT JOIN isj_oaza i
         ON i.lg_code = t.lg_code
-        AND i.name = replace(t.oaza_cho, '大字', '') || coalesce(t.chome, '')
+        AND i.name = t.isj_name
         AND t.geometry IS NULL
 ),
 -- 住居表示の住所の数。番・号の段は、これが 0 の町字では住居表示の表を読まない
