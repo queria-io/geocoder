@@ -31,6 +31,7 @@ Workers の 1 つの実行は 128MB まで。辞書をまるごと載せる作�
 表は少なく、つなぎ方は 1 つにする。
 
 - 住所はすべて ABR の町字 ID（lg_code + machiaza_id）でつなぐ。出どころが増えても新しい表やつなぎ方を作らず、`address_point_candidate` に出どころの行を足し、選ぶ順は [`point_priority`](models/main/mart/point_priority.sql) で測って決める
+- 町字 ID どうしの対応（小地域・郵便番号・町字の形）は japan_address_code を読み、ここで作り直さない。向きは address_br → japan_address_code → geocoder の一方通行で、japan_address_code からジオコーダーを呼ばない（循環させない）。japan_address_code に無い新しい町字は、今のやり方に戻す
 - Worker に出どころごとの分岐を書かない。Worker は選んだ点（`address_point`）と町字の点を読むだけにする
 - 公開・所有・商用利用できるデータだけを使い、行ごとに出どころを持つ
 - 確かめ方: 新しい出どころを足す PR で、Worker の変更が要らないか（要るなら、なぜか）
