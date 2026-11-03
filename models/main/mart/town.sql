@@ -8,7 +8,8 @@ WITH town AS (
         -- 一部だけ住居表示を実施した町字は、同じ町字 ID に住居表示 ('1') と地番 ('0') の
         -- 2 行がある (約 1,200 組、ほかの列は同じ)。1 行にまとめ、地番の住所もあることを残す
         count(DISTINCT rsdt_addr_flg) OVER (PARTITION BY lg_code, machiaza_id) > 1 AS rsdt_addr_partial,
-        -- 位置参照情報の大字・町丁目の名前の書き方 (頭の「大字」なし、丁目は「三丁目」) にした名前
+        -- 位置参照情報の大字・町丁目と突き合わせる名前 (頭の「大字」を外し、丁目は「三丁目」)。
+        -- 頭の「大字」は ABR と位置参照情報のどちらにも、書く所と書かない所があるので両方で外す
         regexp_replace(oaza_cho, '^大字', '') || coalesce({{ chome_kanji('chome') }}, '') AS isj_name
     FROM address_br.main.mart_town
     -- 状態フラグ 3 は存在しない町字
@@ -36,9 +37,12 @@ oaza_mean AS (
 -- 大字・町にも小字にも代表点が無いときは、位置参照情報の大字・町丁目の点を名前で当てる。
 -- 同じ市区町村に同じ名前が 2 つ以上あるものは、どちらか決まらないので使わない
 isj_oaza AS (
-    SELECT lg_code, oaza_chome_name AS name, ST_Point(any_value(lng), any_value(lat)) AS geometry
+    SELECT
+        lg_code,
+        regexp_replace(oaza_chome_name, '^大字', '') AS name,
+        ST_Point(any_value(lng), any_value(lat)) AS geometry
     FROM nlftp.isj.oaza
-    GROUP BY lg_code, oaza_chome_name
+    GROUP BY lg_code, regexp_replace(oaza_chome_name, '^大字', '')
     HAVING count(*) = 1
 ),
 located AS (

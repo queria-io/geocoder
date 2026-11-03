@@ -4,6 +4,7 @@
 import { coordinatesLevel } from "./answer";
 import type { CoordinateLevel, MatchedResult } from "./model/model";
 import type { BasicResult } from "./repository/types";
+import { atMachiaza } from "./skip_aza";
 
 /** address_point の表の 1 行 */
 export type PointRow = {
@@ -36,9 +37,11 @@ export const ISJ_ATTRIBUTION = "「街区レベル位置参照情報」（国土
  * 町字の代表点まで落ちたもの。地番まで当たっても筆にも町字にも点が無ければ (座標なし) 同じに扱う。
  * 住居表示に当たって座標の無いものは外す (残りの番号は地番ではない)
  */
-const atMachiaza = (r: MatchedResult): boolean => {
-  const level = coordinatesLevel(r) ?? (r.match_level === "parcel" ? "machiaza" : r.match_level);
-  return level === "machiaza" || level === "machiaza_detail";
+const pointAtMachiaza = (r: MatchedResult): boolean => {
+  const level = coordinatesLevel(r);
+  return level === null
+    ? r.match_level === "parcel" || atMachiaza(r)
+    : level === "machiaza" || level === "machiaza_detail";
 };
 
 /**
@@ -95,7 +98,7 @@ export const withAddressPoint = async (
 ): Promise<MatchedResult> => {
   const { lg_code: lgCode, machiaza_id: machiazaId } = r.ids;
   const parent = parentNumber(r);
-  if (!atMachiaza(r) || !lgCode || !machiazaId || parent === null) return r;
+  if (!pointAtMachiaza(r) || !lgCode || !machiazaId || parent === null) return r;
   const ids = areas(machiazaId, await town(lgCode, machiazaId));
   for (const { num, own } of numbers(r, parent))
     for (const id of ids) {

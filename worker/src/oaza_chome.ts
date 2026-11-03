@@ -4,6 +4,10 @@
 import type { MatchedResult } from "./model/model";
 import { atMachiaza } from "./skip_aza";
 import { KanjiToArabic } from "./transform/kanji_numbers";
+import { StripChomeSuffix } from "./util/suffix";
+
+/** 丁目の番号 (「三丁目」「3丁」→ 3) */
+const chomeNumber = (chome: string): number => Number(KanjiToArabic(StripChomeSuffix(chome))[0]);
 
 export const withOazaChome = async (
   r: MatchedResult,
@@ -23,7 +27,7 @@ export const withOazaChome = async (
       x.structured_address.oaza_cho === name &&
       x.structured_address.chome !== null &&
       // 似た名前の別の丁目に当てたもの (「5丁目」が無くて「3丁目」) は使わない
-      KanjiToArabic(x.structured_address.chome)[0] === `${m[1]}丁目` &&
+      chomeNumber(x.structured_address.chome) === Number(m[1]) &&
       !atMachiaza(x),
   );
   return retried ?? r;
