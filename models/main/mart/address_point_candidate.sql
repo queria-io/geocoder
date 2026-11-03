@@ -40,6 +40,14 @@ SELECT * FROM (
     FROM {{ ref('parcel') }}
     WHERE lng IS NOT NULL
     UNION ALL
+    -- 地番の親番 (アドレス・ベース・レジストリ)。枝番の付いた地番 (「5094-1」「5094-2」) だけがあり、
+    -- 親番そのもの (「5094」) の地番が無い住所のために、枝番の地番の点の平均を親番の点とする。
+    -- 親番の地番に点があれば、point_priority の順でそちらが選ばれる
+    SELECT lg_code, machiaza_id, 'parcel', prc_num1, NULL, NULL, 'parcel_parent', 'abr', avg(lng), avg(lat)
+    FROM {{ ref('parcel') }}
+    WHERE lng IS NOT NULL AND prc_num2 IS NOT NULL
+    GROUP BY lg_code, machiaza_id, prc_num1
+    UNION ALL
     -- 住居表示の街区 (街区レベル位置参照情報)
     SELECT lg_code, machiaza_id, 'rsdt', block_number, NULL, NULL, 'block', 'isj', lng, lat
     FROM {{ ref('isj_block') }}
