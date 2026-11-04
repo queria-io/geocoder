@@ -35,6 +35,7 @@ import { withOazaChome } from "./oaza_chome";
 import { withRenamedWard } from "./renamed_ward";
 import { FORMER_CITY_COLUMNS, type FormerCityRow, withFormerCity } from "./former_city";
 import {
+  MAX_LIMIT,
   orderCandidates,
   TOWN_NAME_COLUMNS,
   type TownNameRow,
@@ -183,9 +184,6 @@ const matcherFor = async (env: ForwardEnv): Promise<Built> => {
   }
   return cached.matcher;
 };
-
-/** limit の上限 (src/index.ts の limit と同じ) */
-const MAX_LIMIT = 10;
 
 /**
  * 結果を絞る地域に入るか。area は都道府県コード (2 桁) か市区町村コード (5 桁)。

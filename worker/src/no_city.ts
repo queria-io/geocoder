@@ -21,10 +21,10 @@ export type TownNameRow = {
 export const TOWN_NAME_COLUMNS = ["name_key", "name", "lg_code", "chome", "koaza", "numbers"];
 
 /**
- * 当て直す市区町村の上限。住所に書かれた町名・小字・丁目・番号が同じ深さまで実在する市区町村がこれより多いときは、
- * 人口の多い順にこの数だけ当て直す (市区町村ごとに町字の表を読むので、全部読むと応答時間が延びる)
+ * limit の上限 (src/index.ts の limit と同じ)。市区町村を推定するときも、人口の多い順にこの数の市区町村まで当て直す。
+ * 一度に返せるのはこの数までなので、それより先の市区町村は当て直しても返らない
  */
-export const MAX_CANDIDATE_CITIES = 16;
+export const MAX_LIMIT = 10;
 
 export const PREF = /^(東京都|北海道|(京都|大阪)府|.{2,3}県)/;
 
@@ -239,12 +239,12 @@ export const withoutCity = async (
     .map((d) => d.city)
     .toSorted((a, b) => (b.population ?? 0) - (a.population ?? 0));
   const tried = (
-    await Promise.all(candidates.slice(0, MAX_CANDIDATE_CITIES).map((c) => retry(c, rest, match)))
+    await Promise.all(candidates.slice(0, MAX_LIMIT).map((c) => retry(c, rest, match)))
   ).flat();
   if (tried.length === 0) return [r];
   const found = byCity(tried, rest, (code) => byCode.get(code)?.population ?? 0);
   // 上限で当て直さなかった市区町村も候補の数に含める (当て直して当たらなかった市区町村は数えない)
-  const count = found.length + Math.max(0, candidates.length - MAX_CANDIDATE_CITIES);
+  const count = found.length + Math.max(0, candidates.length - MAX_LIMIT);
   return count > 1 ? found.map((x) => ({ ...x, candidates: count })) : found;
 };
 

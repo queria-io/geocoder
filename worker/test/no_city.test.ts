@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "../src/model/model";
 import {
+  MAX_LIMIT,
   numeralsOf,
   orderCandidates,
   townNameOf,
@@ -173,7 +174,7 @@ describe("withoutCity", () => {
         return c === undefined ? [] : [hit(c.lgCode, "machiaza")];
       },
     );
-    expect(asked).toHaveLength(16);
+    expect(asked).toHaveLength(MAX_LIMIT);
     expect(asked).not.toContain("愛知県市0天神5-9-2");
     expect(found[0].ids.lg_code).toBe("100019");
     expect(found[0].candidates).toBe(20);

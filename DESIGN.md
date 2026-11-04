@@ -8,7 +8,7 @@ Queria Geocoder の改修で守る 5 つの観点と、それぞれの検証方�
 
 - 照合規則は [abr-geocoder](https://github.com/digital-go-jp/abr-geocoder)（デジタル庁）の移植を維持する（[`worker/upstream/`](worker/upstream/README.md)）。規則を上流と揃えることで、上流のテストと issue をそのまま取り込め、照合結果の根拠を上流の規則で説明できる。上流にない再照合が必要な場合は、上流の規則を書き換えず、照合に失敗したときだけ実行する段として追加する（`oaza_chome.ts`・`skip_aza.ts`・`renamed_ward.ts`・`no_city.ts` と同じ構成）
 - 代表点が不足している箇所は、照合規則より先にオープンデータの点の追加で補う
-- 検証方法: Worker を変更する PR は、プレビュー環境と本番に同じ 3,000 件を投入する精度チェック（[`accuracy.yml`](.github/workflows/accuracy.yml)）を通す。データを変更した場合は、再構築後のベンチマークを前回の結果と比較する
+- 検証方法: Worker またはデータのモデルを変更する PR は、精度チェック（[`accuracy.yml`](.github/workflows/accuracy.yml)）を通す。変更したモデルとその下流の表だけを再構築し、PR の Worker でベンチマークの住所を照合して本番の結果と比較する
 
 ## 2. 処理速度
 
