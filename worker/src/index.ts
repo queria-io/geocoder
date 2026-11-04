@@ -118,10 +118,10 @@ const ErrorBody = z.object({ error: z.string() }).openapi("Error");
 
 const Source = z
   .object({
-    version: z.string().openapi({ description: "答えに使ったデータのバージョン" }),
+    version: z.string().openapi({ description: "結果に使ったデータのバージョン" }),
     attribution: z
       .array(z.string())
-      .openapi({ description: "出典の表示。答えを載せるときは一緒に載せる" }),
+      .openapi({ description: "出典の表示。結果を公開するときは一緒に表示する" }),
   })
   .openapi("Source");
 
@@ -635,7 +635,7 @@ app.doc31("/openapi.json", {
     title: "Queria Geocoder",
     version: API_VERSION,
     description: [
-      "日本の住所と座標・地域コードを相互に引く無料の API。有料化の予定はない。1 つの IP アドレスから 1 分に 300 回まで。稼働率と結果の正しさは保証せず、ベータの間は API の仕様（レスポンスの項目など）を予告なく変更することがある。結果を公開するときは source.attribution の出典も表示する",
+      "日本の住所と座標・地域コードを相互に引く無料の API。有料化の予定はない。1 つの IP アドレスから 1 分に 300 回まで。稼働率と結果の正しさは保証せず、ベータの間は API のレスポンスの項目や形式（JSON の構造）を予告なく変更することがある。結果を公開するときは source.attribution の出典も表示する",
       "概要は [queria.io/geocoder](https://queria.io/geocoder) を参照",
     ].join("\n\n"),
   },
