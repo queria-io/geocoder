@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 
 type Row = {
   source: string;
+  /** 住所の書き方の型 (truth-forward.py の PATTERNS) */
+  pattern?: string;
   address: string;
   answer: { match_level: string; coordinates_level: string | null } | null;
   error_m: number | null;
@@ -56,6 +58,26 @@ const failures = [
   worse.length > better.length && `${FAR}m 以上遠ざかった住所が、近づいた住所より多い`,
 ].filter((f): f is string => f !== false);
 
+// 誤照合: 座標を返したが、正解から 1km を超えて離れているもの。間違った場所を返すと利用者は気づけないので、
+// 書き方の型ごとに 1 件でも増えたら失敗にする (「字」を読み飛ばして別の町字に当てるなど)
+const MISS = 1000;
+const isMiss = (r: Row) => r.error_m !== null && r.error_m > MISS;
+const patterns = [...new Set(base.map((r) => r.pattern ?? "-"))].sort();
+const misses = patterns.map((p) => {
+  const ids = base.flatMap((r, i) => ((r.pattern ?? "-") === p ? [i] : []));
+  return {
+    pattern: p,
+    count: ids.length,
+    base: ids.filter((i) => isMiss(base[i])).length,
+    head: ids.filter((i) => isMiss(head[i])).length,
+  };
+});
+failures.push(
+  ...misses
+    .filter((m) => m.head > m.base)
+    .map((m) => `書き方の型「${m.pattern}」で誤照合 (${MISS / 1000}km 超) が ${m.base} 件から ${m.head} 件に増えた`),
+);
+
 const pct = (x: number) => `${x.toFixed(1)}%`;
 const line = (label: string, s: Stats) =>
   `| ${label} | ${pct(s.answered)} | ${pct(s.located)} | ${pct(s.fine)} | ${Math.round(s.median)} | ${pct(s.over1km)} |`;
@@ -63,7 +85,7 @@ const km = (x: number | null) => (x === null ? "なし" : `${Math.round(x)}m`);
 
 console.log(
   [
-    `## 精度の関門: ${failures.length === 0 ? "通過" : "不合格"}`,
+    `## 精度チェック: ${failures.length === 0 ? "合格" : "不合格"}`,
     "",
     ...failures.map((f) => `- ${f}`),
     "",
@@ -71,6 +93,12 @@ console.log(
     "|---|---|---|---|---|---|",
     line("本番", s0),
     line("この PR", s1),
+    "",
+    "書き方の型ごとの誤照合 (座標を返したが正解から 1km 超)",
+    "",
+    "| 型 | 件数 | 本番 | この PR |",
+    "|---|---|---|---|",
+    ...misses.map((m) => `| ${m.pattern} | ${m.count} | ${m.base} | ${m.head} |`),
     "",
     `${FAR}m 以上 近づいた ${better.length} 件、遠ざかった ${worse.length} 件 (座標を失ったものを含む)`,
     "",
