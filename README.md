@@ -36,6 +36,24 @@ FROM e_stat.boundary.small_area
 WHERE key_code = '131010100'
 ```
 
+## セルフホスト
+
+自分の Cloudflare アカウントの Worker として動かせる。Node.js と pnpm があれば、次のコマンドでデプロイできる。
+
+```bash
+cd worker
+pnpm install
+npx wrangler login
+pnpm self-host
+```
+
+`https://geocoder.<アカウントのサブドメイン>.workers.dev` で API が動く。データ (住所の表と境界タイル) は Queria が公開している `https://data.queria.io/geocoder/` と `https://assets.queria.io/boundaries/` から HTTP の Range で読むので、データのコピーもバケットも要らない。住所の表は Queria の毎月の更新にそのまま追従する。境界タイルは設定の `BOUNDARY_TILES_FILE` が指すファイルに固定されるので、新しい境界を使うときはこの値を書き換えてデプロイし直す。入力の住所や座標は Queria に送られない。ただし Queria はファイルのどの範囲が読まれたかを受け取り、そこから問い合わせた市区町村 (正引き) やおおよその位置 (逆引きのタイル) が分かる。これも避けるときは、下の自分の R2 に取り込む形にする。
+
+設定は [`worker/wrangler.self-host.jsonc`](worker/wrangler.self-host.jsonc) にある。
+
+- Queria に依存せずに動かすときは、R2 のバケットを作り (`npx wrangler r2 bucket create geocoder-data`)、設定の `r2_buckets` と `triggers` のコメントを外してデプロイし直す。毎日 1 回、新しいバージョンがあれば自分のバケットに取り込み (約 4GB)、そこから読む。取り込みが終わるまでは公開の URL から読む
+- リクエストのログは記録しない。回数の上限 (IP ごと) も付けていない
+
 ## このリポジトリ
 
 - 直下: ジオコーダーが読む表を作る Queria のデータセット `geocoder`（このページの以下）

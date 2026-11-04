@@ -1,0 +1,23 @@
+// セルフホスト用の設定 (pnpm self-host)。Cloudflare のアカウントは wrangler login で選ぶ。
+// データは Queria の公開の URL から読むので、バケットもデータのコピーも要らない
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "geocoder",
+  "main": "src/self-host.ts",
+  "assets": { "directory": "./public" },
+  "compatibility_date": "2025-12-01",
+  "workers_dev": true,
+  "rules": [{ "type": "Text", "globs": ["**/*.tsv"], "fallthrough": true }],
+  "vars": {
+    "DATA_URL": "https://data.queria.io/",
+    "DATA_SOURCE": "geocoder/",
+    "DATA_PIN": "",
+    "ASSETS_URL": "https://assets.queria.io/",
+    "BOUNDARY_TILES_FILE": "boundaries-20261027.pmtiles",
+  },
+  // 自分の R2 に取り込んで、そこから読むとき (Queria が止まっても答える) は、バケットを作り
+  // (npx wrangler r2 bucket create geocoder-data)、次の 2 つのコメントを外す。取り込みは毎日 1 回、
+  // 新しいバージョンがあるときだけ行う
+  // "r2_buckets": [{ "binding": "STORE", "bucket_name": "geocoder-data" }],
+  // "triggers": { "crons": ["0 20 * * *"] },
+}
