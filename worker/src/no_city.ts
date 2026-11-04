@@ -22,6 +22,29 @@ export const townNameOf = (s: string): string =>
     .replace(/^大字/, "")
     .replace(/[ヶヵ]/g, "ケ");
 
+const KANJI = "〇一二三四五六七八九";
+
+/** 「十七」→ 17 (1〜99)。それ以外は undefined */
+const kanjiNumber = (k: string): number | undefined => {
+  const m = /^([一二三四五六七八九]?)(十?)([一二三四五六七八九]?)$/.exec(k);
+  if (m === null || k === "") return undefined;
+  const [, tens, ten, ones] = m;
+  if (ten === "") return k.length === 1 ? KANJI.indexOf(k) : undefined;
+  const t = ten === "" ? 0 : tens === "" ? 1 : KANJI.indexOf(tens);
+  return t * 10 + (ones === "" ? 0 : KANJI.indexOf(ones));
+};
+
+/** 町名の中の「八条」「十七丁目」の数字を算用数字にする。住所は「8条」と書くことが多い */
+export const numeralsOf = (s: string): string =>
+  s.replace(/[一二三四五六七八九十]{1,3}(?=条|丁|線|地割)/g, (k) => String(kanjiNumber(k) ?? k));
+
+/** 頭 2 文字の索引の鍵。住所が「北1条」なら、表の「北一条」の鍵「北一」も引く */
+const keysOf = (rest: string): string[] => {
+  const key = rest.slice(0, 2);
+  const kanji = key.replace(/[0-9]/g, (d) => KANJI[Number(d)]);
+  return kanji === key ? [key] : [key, kanji];
+};
+
 const cityName = (c: CityResult) => c.pref + (c.county ?? "") + c.city + (c.ward ?? "");
 
 /**
@@ -67,8 +90,9 @@ export const withoutCity = async (
   const byCode = new Map(inPref.map((c) => [c.lgCode, c]));
   const candidates = [
     ...new Set(
-      (await names(rest.slice(0, 2)))
-        .filter((n) => rest.startsWith(n.name))
+      (await Promise.all(keysOf(rest).map(names)))
+        .flat()
+        .filter((n) => numeralsOf(rest).startsWith(numeralsOf(n.name)))
         .map((n) => byCode.get(n.lg_code))
         .filter((c) => c !== undefined),
     ),

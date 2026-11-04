@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "../src/model/model";
-import { townNameOf, withLeadingNoise, withoutCity, type TownNameRow } from "../src/no_city";
+import {
+  numeralsOf,
+  townNameOf,
+  withLeadingNoise,
+  withoutCity,
+  type TownNameRow,
+} from "../src/no_city";
 import type { CityResult } from "../src/repository/types";
 
 const unmatched = (over: Partial<MatchedResult> = {}): MatchedResult => ({
@@ -176,5 +182,27 @@ describe("withoutCity の区と余計な文字", () => {
     });
     expect(asked).toEqual(["静岡県浜松市中央区元城町103-2"]);
     expect(r.ids.lg_code).toBe("221384");
+  });
+});
+
+describe("町名の数字", () => {
+  it("「八条」「十七丁目」を算用数字にする", () => {
+    expect(numeralsOf("前田八条十七丁目")).toBe("前田8条17丁目");
+    expect(numeralsOf("北二十一条")).toBe("北21条");
+  });
+
+  it("住所が算用数字でも、漢数字の町名の市区町村を候補にする", async () => {
+    const asked: string[] = [];
+    await withoutCity(
+      unmatched(),
+      "北1条西2丁目",
+      names([row("北一条西", "072010")]),
+      Object.values(cities),
+      async (a) => {
+        asked.push(a);
+        return [];
+      },
+    );
+    expect(asked).toEqual(["福島県福島市北1条西2丁目"]);
   });
 });
