@@ -6,6 +6,7 @@
   "scripts": {
     "deploy": "pnpm build:web && wrangler deploy",
     "dev": "pnpm build:web && wrangler dev",
+    "self-host": "pnpm build:web && wrangler deploy -c wrangler.self-host.jsonc",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check": "oxlint && oxfmt --check .",

@@ -2,6 +2,7 @@
 declare namespace Cloudflare {
   interface Env {
     BUCKET: R2Bucket;
+    DATA: R2Bucket;
     BOUNDARY_TILES_FILE: string;
   }
   interface GlobalProps {
