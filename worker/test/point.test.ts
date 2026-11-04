@@ -208,6 +208,22 @@ describe("街区の点", () => {
     expect(r.coordinate_source).toBe("isj");
   });
 
+  it("住居表示の町では、同じ番号の地番の点より街区の点を使う", async () => {
+    const withParcel = {
+      "0822010051003": [
+        pt("5", "1", { point_type: "parcel", source: "abr", lng: 140.2 }),
+        pt("5", null, { system: "rsdt", point_type: "block", lng: 140.1 }),
+      ],
+    };
+    const r = await withAddressPoint(
+      result({ unmatched_address: ["5番1号"], ids: flag("1") }),
+      async (lg, id) => (withParcel as Record<string, PointRow[]>)[lg + id] ?? [],
+      noTown,
+    );
+    expect(r.coordinates?.[0]).toBe(140.1);
+    expect(r.coordinate_level).toBe("rsdtdsp_blk");
+  });
+
   it("住居表示かどうか分からない町字では使わない", async () => {
     const r = await withAddressPoint(
       result({ unmatched_address: ["5-1"], ids: flag(null) }),

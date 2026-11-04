@@ -99,6 +99,13 @@ export const withAddressPoint = async (
   const { lg_code: lgCode, machiaza_id: machiazaId } = r.ids;
   const parent = parentNumber(r);
   if (!pointAtMachiaza(r) || !lgCode || !machiazaId || parent === null) return r;
+  // 住居表示の町字の残りの番号は街区符号・住居番号なので、同じ番号の地番より先に街区の点を引く
+  // (住居表示の町字にも ABR の地番の点がある。番号が同じでも別の場所)
+  const rsdt = r.ids.rsdt_addr_flg === "1";
+  if (rsdt) {
+    const block = await withBlockPoint(r, load, lgCode, machiazaId, parent);
+    if (block !== r) return block;
+  }
   const ids = areas(machiazaId, await town(lgCode, machiazaId));
   for (const { num, own } of numbers(r, parent))
     for (const id of ids) {
@@ -113,7 +120,7 @@ export const withAddressPoint = async (
           coordinate_source: hit.source,
         };
     }
-  return withBlockPoint(r, load, lgCode, machiazaId, parent);
+  return rsdt ? r : withBlockPoint(r, load, lgCode, machiazaId, parent);
 };
 
 /**
