@@ -26,7 +26,7 @@ export const TOWN_NAME_COLUMNS = ["name_key", "name", "lg_code", "chome", "koaza
  */
 export const MAX_CANDIDATE_CITIES = 16;
 
-const PREF = /^(東京都|北海道|(京都|大阪)府|.{2,3}県)/;
+export const PREF = /^(東京都|北海道|(京都|大阪)府|.{2,3}県)/;
 
 /** 索引と同じ形にそろえる。全角の英数字・空白を直し、頭の「大字」を外し、「ヶ」を「ケ」にする */
 export const townNameOf = (s: string): string =>
@@ -62,12 +62,19 @@ const keysOf = (rest: string): string[] => {
   return [...new Set([key, kanji, rest.slice(0, 1)])];
 };
 
-/** 番号の並びの頭の 2 つ。「5-9-2」「5丁目9番2号」なら [5, 9]、「1928番1」なら [1928, 1] */
-const leadingNumbers = (tail: string): number[] => {
-  const m = /^([0-9]+)(?:丁目|丁|番地?|[-－ー‐の]|$)(?:([0-9]+)(?:番地?|号|[-－ー‐の]|$))?/.exec(
+/**
+ * 番号の並びの頭の 2 つ。「5-9-2」「5丁目9番2号」なら [5, 9]、「1928番1」なら [1928, 1]。
+ * 頭の番号に「番」「番地」が付いていれば (「3番地5」) 丁目ではないので、banchi を true にする
+ */
+const leadingNumbers = (tail: string): { numbers: number[]; banchi: boolean } => {
+  const m = /^([0-9]+)(丁目|丁|番地?|[-－ー‐の]|$)(?:([0-9]+)(?:番地?|号|[-－ー‐の]|$))?/.exec(
     tail,
   );
-  return m === null ? [] : [m[1], m[2]].filter((x) => x !== undefined).map(Number);
+  if (m === null) return { numbers: [], banchi: false };
+  return {
+    numbers: [m[1], m[3]].filter((x) => x !== undefined).map(Number),
+    banchi: m[2].startsWith("番"),
+  };
 };
 
 /**
@@ -84,16 +91,21 @@ const depthOf = (rows: readonly TownNameRow[], tail: string): number => {
       (m, k) => (m === undefined || k.length > m.length ? k : m),
       undefined,
     );
-  const [first, second] = leadingNumbers(koaza === undefined ? tail : plain.slice(koaza.length));
-  const chomeRows = rows.filter((n) => first !== undefined && n.chome === first);
+  // 小字まで書いてあれば、丁目と番号はその小字の町字の中で探す
+  const scoped = koaza === undefined ? rows : rows.filter((n) => n.koaza === koaza);
+  const {
+    numbers: [first, second],
+    banchi,
+  } = leadingNumbers(koaza === undefined ? tail : plain.slice(koaza.length));
+  const chomeRows = scoped.filter((n) => !banchi && first !== undefined && n.chome === first);
   const number = chomeRows.length > 0 ? second : first;
-  const numberRows = chomeRows.length > 0 ? chomeRows : rows.filter((n) => n.chome == null);
+  const numberRows = chomeRows.length > 0 ? chomeRows : scoped.filter((n) => n.chome == null);
   const numberHit =
     number !== undefined && numberRows.some((n) => (n.numbers ?? []).includes(number));
   return Number(koaza !== undefined) + Number(chomeRows.length > 0) + Number(numberHit);
 };
 
-const cityName = (c: CityResult) => c.pref + (c.county ?? "") + c.city + (c.ward ?? "");
+export const cityName = (c: CityResult) => c.pref + (c.county ?? "") + c.city + (c.ward ?? "");
 
 /**
  * 当たった町字の名前 (大字・町、丁目、小字) のうち、住所の頭にそのまま書かれている部分の長さ。
@@ -231,8 +243,8 @@ export const withoutCity = async (
   ).flat();
   if (tried.length === 0) return [r];
   const found = byCity(tried, rest, (code) => byCode.get(code)?.population ?? 0);
-  // 上限で当て直さなかった市区町村も候補の数に含める
-  const count = Math.max(found.length, candidates.length);
+  // 上限で当て直さなかった市区町村も候補の数に含める (当て直して当たらなかった市区町村は数えない)
+  const count = found.length + Math.max(0, candidates.length - MAX_CANDIDATE_CITIES);
   return count > 1 ? found.map((x) => ({ ...x, candidates: count })) : found;
 };
 

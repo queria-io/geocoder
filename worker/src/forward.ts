@@ -254,10 +254,13 @@ export const geocode = async (
             await withOazaChome(await withRenamedWard(c, address, match), address, match),
             match,
           );
-          // 当て直した結果に、市区町村を推定した候補の数を引き継ぐ
-          return c.candidates === undefined || out === c
-            ? out
-            : { ...out, candidates: c.candidates };
+          // 当て直した結果に、市区町村を推定した候補の数と、旧市区町村名を読み替えた印を引き継ぐ
+          if (out === c) return out;
+          return {
+            ...out,
+            ...(c.candidates === undefined ? {} : { candidates: c.candidates }),
+            ...(c.former_city === true ? { former_city: true } : {}),
+          };
         }),
       );
       // 当たらなかったもの (都道府県も決まらない) は返さない

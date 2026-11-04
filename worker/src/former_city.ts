@@ -4,7 +4,7 @@
 import { Detail, type MatchedResult } from "./model/model";
 import { compareResultStrength, strongestResult } from "./matching/search";
 import type { CityResult } from "./repository/types";
-import { townNameOf } from "./no_city";
+import { cityName, PREF, townNameOf } from "./no_city";
 
 /** 索引の 1 行。name は旧市区町村名 (郡を付けた形と付けない形)、town_prefix は郡を除いた形 */
 export type FormerCityRow = {
@@ -37,10 +37,6 @@ const uniqueNames = (rows: readonly FormerCityRow[]): Set<string> => {
     [...prefs].filter(([, fs]) => new Set(fs.map((f) => f.pref_code)).size === 1).map(([n]) => n),
   );
 };
-
-const PREF = /^(東京都|北海道|(京都|大阪)府|.{2,3}県)/;
-
-const cityName = (c: CityResult) => c.pref + (c.county ?? "") + c.city + (c.ward ?? "");
 
 export const withFormerCity = async (
   r: MatchedResult,
