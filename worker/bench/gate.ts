@@ -75,7 +75,10 @@ const misses = patterns.map((p) => {
 failures.push(
   ...misses
     .filter((m) => m.head > m.base)
-    .map((m) => `書き方の型「${m.pattern}」で誤照合 (${MISS / 1000}km 超) が ${m.base} 件から ${m.head} 件に増えた`),
+    .map(
+      (m) =>
+        `書き方の型「${m.pattern}」で誤照合 (${MISS / 1000}km 超) が ${m.base} 件から ${m.head} 件に増えた`,
+    ),
 );
 
 const pct = (x: number) => `${x.toFixed(1)}%`;
