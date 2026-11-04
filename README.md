@@ -52,7 +52,6 @@ pnpm self-host
 設定は [`worker/wrangler.self-host.jsonc`](worker/wrangler.self-host.jsonc) にある。
 
 - Queria に依存せずに動かすときは、R2 のバケットを作り (`npx wrangler r2 bucket create geocoder-data`)、設定の `r2_buckets` と `triggers` のコメントを外してデプロイし直す。毎日 1 回、新しいバージョンがあれば自分のバケットに取り込み (約 4GB)、そこから読む。取り込みが終わるまでは公開の URL から読む
-- 多く呼ぶときは、Queria の API キーを `npx wrangler secret put QUERIA_TOKEN` で入れる。data.queria.io の回数の上限が IP ごと (1 分 300 回) から API キーごと (1 分 3,000 回) になる
 - リクエストのログは記録しない。回数の上限 (IP ごと) も付けていない
 
 ## このリポジトリ

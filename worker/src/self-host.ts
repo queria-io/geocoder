@@ -13,12 +13,10 @@ type SelfHostEnv = Omit<Env, "DATA" | "BUCKET"> & {
   /** 境界タイル (boundaries/BOUNDARY_TILES_FILE) の置き場の URL */
   ASSETS_URL: string;
   STORE?: R2Bucket;
-  /** Queria の API キー (任意、wrangler secret put QUERIA_TOKEN)。data.queria.io の回数の上限がキーごとになる */
-  QUERIA_TOKEN?: string;
 };
 
 const buckets = (env: SelfHostEnv) => {
-  const data = httpBucket(env.DATA_URL, env.QUERIA_TOKEN);
+  const data = httpBucket(env.DATA_URL);
   const assets = httpBucket(env.ASSETS_URL);
   return env.STORE
     ? { data, assets, DATA: withFallback(env.STORE, data), BUCKET: withFallback(env.STORE, assets) }

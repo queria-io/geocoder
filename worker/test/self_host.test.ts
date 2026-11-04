@@ -124,7 +124,7 @@ describe("withFallback", () => {
 describe("httpBucket", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("Range とトークンを付けて読み、404 は null にする", async () => {
+  it("Range を付けて読み、404 は null にする", async () => {
     const seen: Request[] = [];
     vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
       seen.push(new Request(url, init));
@@ -132,14 +132,13 @@ describe("httpBucket", () => {
         ? new Response(null, { status: 404 })
         : new Response("ab", { status: 206, headers: { "Content-Range": "bytes 0-1/10" } });
     });
-    const b = httpBucket("https://data.example/", "qk_test");
+    const b = httpBucket("https://data.example/");
     expect((await b.head("geocoder/x"))?.size).toBe(10);
     const o = await b.get("geocoder/x", { range: { offset: 0, length: 2 } });
     expect(await o?.text()).toBe("ab");
     expect(await b.get("geocoder/missing")).toBeNull();
     expect(seen[1].url).toBe("https://data.example/geocoder/x");
     expect(seen[1].headers.get("Range")).toBe("bytes=0-1");
-    expect(seen[1].headers.get("Authorization")).toBe("Bearer qk_test");
   });
 
   it("Range を付けた読みに 200 (ファイル全体) が返ったら止める", async () => {
