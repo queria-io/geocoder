@@ -30,6 +30,8 @@ jobs:
     env:
       # data.queria.io の回数の上限を、ランナーの IP ではなくこのトークンで数える
       QUERIA_TOKEN: ${{ secrets.QUERIA_TOKEN }}
+      # fdl checkout は fdl.json と refs をこのトークンで読む (sync.yml と同じ)
+      FDL_TOKEN: ${{ secrets.QUERIA_TOKEN }}
       QUERIA_USER_AGENT: queria-build/accuracy
     defaults:
       run:
