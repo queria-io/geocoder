@@ -207,7 +207,7 @@ export const geocode = async (
         ),
       ),
   );
-  // ログには住所を書かない。読んだ量と時間だけ (照合しきれなかった住所は src/misses.ts で別に記録する)
+  // ログには住所を書かない。読んだ量と時間だけ (住所と結果は src/request_log.ts で別に記録する)
   console.log(JSON.stringify({ geocode: true, cold, ...stats }));
   // 当たらなかったもの (都道府県も決まらない) は返さない
   const found = await Promise.all(

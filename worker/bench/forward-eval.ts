@@ -72,7 +72,11 @@ const post = async (addresses: string[], tries = 3): Promise<Answer[]> => {
     return post(addresses, res.status === 429 ? tries : tries - 1);
   }
   if (!res.ok) throw new Error(`${res.status} ${res.body}`);
-  return (JSON.parse(res.body) as { results: Answer[] }).results;
+  // 今の形は住所ごとに { address, results }。以前の版は住所ごとに 1 件か null
+  type Item = { address: string; results: Answer[] } | Answer | null;
+  return (JSON.parse(res.body) as { results: Item[] }).results.map((x) =>
+    x !== null && "address" in x && Array.isArray(x.results) ? (x.results[0] ?? null) : (x as Answer),
+  );
 };
 
 // LANES 本の列で、まとまりを順に取って送る。答えは元の順に戻す

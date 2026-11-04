@@ -411,9 +411,17 @@ const GeocodeResult = z
   })
   .openapi("GeocodeResult");
 
-const GeocodeResponse = z
-  .object({ results: z.array(GeocodeResult).openapi({ description: "強い順" }), source: Source })
-  .openapi("GeocodeResponse");
+/** 1 つの住所の答え。単発も一括もこの形 */
+const ForwardItem = z
+  .object({
+    address: z.string().openapi({ description: "渡した住所" }),
+    results: z.array(GeocodeResult).openapi({
+      description: "強い順。照合できない住所、空や長すぎる住所 (一括のとき) は空の配列",
+    }),
+  })
+  .openapi("ForwardItem");
+
+const GeocodeResponse = ForwardItem.extend({ source: Source }).openapi("GeocodeResponse");
 
 const GeocodeFeatureCollection = z
   .object({
@@ -484,6 +492,18 @@ const cityCodeParam = z
 const areaOf = (prefecture_code?: string, city_code?: string) =>
   city_code?.slice(0, 5) ?? prefecture_code;
 
+const limitParam = z
+  .string()
+  .regex(/^\d+$/)
+  .transform(Number)
+  .pipe(z.number().int().min(1).max(10))
+  .optional()
+  .openapi({
+    param: { name: "limit", in: "query", description: "返す候補の数の上限 (1〜10、既定 1)" },
+    type: "integer",
+    example: 1,
+  } as never);
+
 const forwardRoute = createRoute({
   method: "get",
   path: "/v1/forward",
@@ -499,17 +519,7 @@ const forwardRoute = createRoute({
           param: { name: "address", in: "query", description: "住所。URL エンコードして渡す" },
           example: "東京都千代田区紀尾井町1-3",
         }),
-      limit: z
-        .string()
-        .regex(/^\d+$/)
-        .transform(Number)
-        .pipe(z.number().int().min(1).max(10))
-        .optional()
-        .openapi({
-          param: { name: "limit", in: "query", description: "返す候補の数の上限 (1〜10、既定 1)" },
-          type: "integer",
-          example: 1,
-        } as never),
+      limit: limitParam,
       prefecture_code: prefectureCodeParam,
       city_code: cityCodeParam,
       include: includeParam(INCLUDES),
@@ -607,48 +617,112 @@ const attributionFor = (groups: ReadonlySet<Include>, isj: boolean) => [
   ...(groups.has("small_area") ? [SMALL_AREA_ATTRIBUTION] : []),
 ];
 
+/** 単発と一括で共通の引数 */
+type ForwardOptions = {
+  limit?: number;
+  include?: string;
+  prefecture_code?: string;
+  city_code?: string;
+};
+
+type Answered = Awaited<ReturnType<typeof answer>>;
+
+/**
+ * 1 つの住所を照合する。単発も一括もこれを通す。空や長すぎる住所は null。
+ * 表を読めないときは投げる
+ */
+const forwardOne = async (
+  env: Env,
+  address: string,
+  limit: number,
+  groups: ReadonlySet<Include>,
+  area: string | undefined,
+): Promise<Answered | null> => {
+  const r = await tryCatchAsync(() => answer(env, address, limit, groups, area));
+  if (r.ok) return r.value;
+  if (r.error instanceof ErrEmptyAddress || r.error instanceof ErrAddressTooLong) return null;
+  throw r.error;
+};
+
+/** 照合した住所たちを応答の形にし、記録も送る。単発は 1 件、一括は住所の数だけ */
+const forwardItems = async (
+  c: Context<{ Bindings: Env }>,
+  endpoint: string,
+  addresses: readonly string[],
+  options: ForwardOptions,
+) => {
+  const groups = parseInclude(options.include);
+  if (groups === null) return { error: `include に使えるのは ${INCLUDES.join(",")} です` } as const;
+  const area = areaOf(options.prefecture_code, options.city_code);
+  const limit = options.limit ?? 1;
+  // 1 件ずつ照合する。同じ市区町村の住所が続けば、読んだ表を使い回せる
+  const answered = await tryCatchAsync(async () => {
+    const out: (Answered | null)[] = [];
+    for (const a of addresses) out.push(await forwardOne(c.env, a, limit, groups, area));
+    return out;
+  });
+  if (!answered.ok) return { failed: answered.error } as const;
+  const pairs = answered.value;
+  record(
+    c.env,
+    c.executionCtx,
+    addresses.flatMap((a, i) =>
+      pairs[i] === null
+        ? []
+        : [
+            logEntry(
+              endpoint,
+              a,
+              (pairs[i] ?? []).map(([r]) => r),
+            ),
+          ],
+    ),
+  );
+  const flat = pairs.flatMap((p) => p ?? []);
+  return {
+    groups,
+    limit,
+    pairs,
+    items: addresses.map((address, i) => ({
+      address,
+      results: (pairs[i] ?? []).map(([r, x]) => forwardAnswer(r, groups, x)),
+    })),
+    source: {
+      version: await dataVersion(c.env),
+      attribution: attributionFor(
+        groups,
+        flat.some(([r]) => usesIsj(r)),
+      ),
+    },
+  } as const;
+};
+
 app.openapi(forwardRoute, async (c) => {
-  const { address, limit = 1, include, format, prefecture_code, city_code } = c.req.valid("query");
-  const groups = parseInclude(include);
-  if (groups === null)
-    return json(
-      c,
-      400,
-      { error: `include に使えるのは ${INCLUDES.join(",")} です` },
-      "no-store",
-    ) as never;
-  const area = areaOf(prefecture_code, city_code);
-  const result = await tryCatchAsync(() => answer(c.env, address, limit, groups, area));
-  if (!result.ok) {
-    if (result.error instanceof ErrEmptyAddress || result.error instanceof ErrAddressTooLong)
-      return json(c, 400, { error: "address を 1〜100 文字で渡してください" }, "no-store") as never;
-    console.error("geocoder: geocode", result.error);
+  const { address, format, ...options } = c.req.valid("query");
+  const out = await forwardItems(c, "forward", [address], options);
+  if ("error" in out) return json(c, 400, { error: out.error }, "no-store") as never;
+  if ("failed" in out) {
+    console.error("geocoder: forward", out.failed);
     return json(c, 502, { error: "住所の表を読めませんでした" }, "no-store") as never;
   }
-  record(c.env, c.executionCtx, [
-    logEntry(
-      "geocode",
-      address,
-      result.value.map(([r]) => r),
-    ),
-  ]);
-  const version = await dataVersion(c.env);
-  const attribution = attributionFor(
-    groups,
-    result.value.some(([r]) => usesIsj(r)),
-  );
+  const [answered] = out.pairs;
+  if (answered === null)
+    return json(c, 400, { error: "address を 1〜100 文字で渡してください" }, "no-store") as never;
+  const { groups, limit, items, source } = out;
+  const [{ results }] = items;
+  const { version, attribution } = source;
   const headers = { "Cache-Control": "public, max-age=86400" };
   if (format === "geojson") {
     const body = {
       type: "FeatureCollection",
       query: { address, limit },
       result_info: {
-        count: result.value.length,
+        count: answered.length,
         limit,
         api_version: API_VERSION,
         db_version: version,
       },
-      features: result.value.map(([r, x]) => forwardFeature(r, groups, x)),
+      features: answered.map(([r, x]) => forwardFeature(r, groups, x)),
       attribution,
     };
     return c.body(JSON.stringify(body), 200, {
@@ -656,7 +730,6 @@ app.openapi(forwardRoute, async (c) => {
       "Content-Type": "application/geo+json",
     }) as never;
   }
-  const results = result.value.map(([r, x]) => forwardAnswer(r, groups, x));
   if (format === "csv") {
     // 行が無くても列名は出す。列は頼まれた組で決まる
     const columns = csvColumns(forwardAnswer(EMPTY_RESULT, groups, NO_EXTRAS));
@@ -667,7 +740,7 @@ app.openapi(forwardRoute, async (c) => {
       "X-Attribution": attribution.map(encodeURIComponent).join(","),
     }) as never;
   }
-  return c.json({ results, source: { version, attribution } }, 200, headers) as never;
+  return c.json({ address, results, source }, 200, headers) as never;
 });
 
 app.doc31("/openapi.json", {
@@ -691,16 +764,15 @@ const BATCH_RESPONSES = {
       "application/json": {
         schema: z
           .object({
-            results: z.array(GeocodeResult.nullable()).openapi({
-              description: "住所と同じ順。当たらない住所・空や長すぎる住所は null",
+            results: z.array(ForwardItem).openapi({
+              description: "渡した住所と同じ順・同じ数。中身は /v1/forward と同じ",
             }),
             source: Source,
           })
           .openapi("BatchResponse"),
       },
     },
-    description:
-      "住所ごとに一番強い 1 件。市区町村を推定した住所は ambiguous が true で、人口の最も多い候補。全部の候補は /v1/forward の limit で受け取る",
+    description: "住所ごとに、/v1/forward と同じ results を返す。limit も同じく効く",
   },
   400: { content: { "application/json": { schema: ErrorBody } }, description: "指定がおかしい" },
   429: {
@@ -722,6 +794,13 @@ const batchRoute = createRoute({
           schema: z
             .object({
               addresses: z.array(z.string()).min(1).max(BATCH_MAX),
+              limit: z
+                .number()
+                .int()
+                .min(1)
+                .max(10)
+                .optional()
+                .openapi({ description: "/v1/forward と同じ。住所ごとに効く" }),
               include: z.string().optional().openapi({ description: "/v1/forward と同じ" }),
               prefecture_code: z
                 .string()
@@ -760,6 +839,7 @@ const batchGetRoute = createRoute({
           type: "array",
           items: { type: "string" },
         } as never),
+      limit: limitParam,
       include: includeParam(INCLUDES),
       prefecture_code: prefectureCodeParam,
       city_code: cityCodeParam,
@@ -768,69 +848,30 @@ const batchGetRoute = createRoute({
   responses: BATCH_RESPONSES,
 });
 
-type BatchInput = {
-  addresses: string[];
-  include?: string;
-  prefecture_code?: string;
-  city_code?: string;
-};
-
-/** 住所をまとめて照合する。GET と POST で同じ */
-const batch = async (c: Context<{ Bindings: Env }>, input: BatchInput) => {
-  const { addresses, include, prefecture_code, city_code } = input;
-  const area = areaOf(prefecture_code, city_code);
-  const groups = parseInclude(include);
-  if (groups === null)
-    return json(
-      c,
-      400,
-      { error: `include に使えるのは ${INCLUDES.join(",")} です` },
-      "no-store",
-    ) as never;
-  const one = async (address: string) => {
-    const r = await tryCatchAsync(() => answer(c.env, address, 1, groups, area));
-    if (r.ok) return r.value[0] ?? null;
-    if (r.error instanceof ErrEmptyAddress || r.error instanceof ErrAddressTooLong) return null;
-    throw r.error;
-  };
-  // 1 件ずつ当てる。同じ市区町村の住所が続けば、読んだ表を使い回せる
-  const result = await tryCatchAsync(async () => {
-    const out = [];
-    for (const a of addresses) out.push(await one(a));
-    return out;
-  });
-  if (!result.ok) {
-    console.error("geocoder: batch", result.error);
+/** 住所をまとめて照合する。GET と POST で同じ。1 件ごとの処理は /v1/forward と同じ forwardItems */
+const batch = async (
+  c: Context<{ Bindings: Env }>,
+  addresses: string[],
+  options: ForwardOptions,
+) => {
+  const out = await forwardItems(c, "forward/batch", addresses, options);
+  if ("error" in out) return json(c, 400, { error: out.error }, "no-store") as never;
+  if ("failed" in out) {
+    console.error("geocoder: batch", out.failed);
     return json(c, 502, { error: "住所の表を読めませんでした" }, "no-store") as never;
   }
-  record(
-    c.env,
-    c.executionCtx,
-    addresses.flatMap((a, i) => {
-      const hit = result.value[i];
-      return a.trim() === "" ? [] : [logEntry("batch", a, hit ? [hit[0]] : [])];
-    }),
-  );
-  return c.json(
-    {
-      results: result.value.map((a) => (a ? forwardAnswer(a[0], groups, a[1]) : null)),
-      source: {
-        version: await dataVersion(c.env),
-        attribution: attributionFor(
-          groups,
-          result.value.some((a) => a !== null && usesIsj(a[0])),
-        ),
-      },
-    },
-    200,
-    { "Cache-Control": "no-store" },
-  ) as never;
+  return c.json({ results: out.items, source: out.source }, 200, {
+    "Cache-Control": "no-store",
+  }) as never;
 };
 
-app.openapi(batchRoute, async (c) => (await batch(c, c.req.valid("json"))) as never);
+app.openapi(batchRoute, async (c) => {
+  const { addresses, ...options } = c.req.valid("json");
+  return (await batch(c, addresses, options)) as never;
+});
 app.openapi(batchGetRoute, async (c) => {
-  const { address, ...rest } = c.req.valid("query");
-  return (await batch(c, { addresses: address, ...rest })) as never;
+  const { address, ...options } = c.req.valid("query");
+  return (await batch(c, address, options)) as never;
 });
 
 // 仕様書 (/openapi.json) を人が読める形で出す。項目の説明は手で書かず、仕様書から作る

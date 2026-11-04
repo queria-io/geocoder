@@ -78,7 +78,7 @@ describe("withoutCity", () => {
     expect(r.ids.lg_code).toBe("072010");
   });
 
-  it("同じ町名を持つ市区町村が 2 つあれば、番地まで当たるのが 1 つでも両方を人口の多い順に返す", async () => {
+  it("同じ町名を持つ市区町村が 2 つあれば、番地まで当たるのが 1 つでも両方を返し、細かい段まで当たった順に並べる", async () => {
     const got = await withoutCity(
       unmatched(),
       "松川町1",
@@ -87,9 +87,20 @@ describe("withoutCity", () => {
       async (a) => [a.startsWith("福島県") ? hit("072010", "parcel") : hit("202011", "machiaza")],
     );
     expect(got.map((x) => [x.ids.lg_code, x.candidates])).toEqual([
-      ["202011", 2],
       ["072010", 2],
+      ["202011", 2],
     ]);
+  });
+
+  it("同じ段まで当たった候補は人口の多い順に並べる", async () => {
+    const got = await withoutCity(
+      unmatched(),
+      "松川町1",
+      names([row("松川町", "072010"), row("松川町", "202011")]),
+      Object.values(cities),
+      async (a) => [a.startsWith("福島県") ? hit("072010", "parcel") : hit("202011", "parcel")],
+    );
+    expect(got.map((x) => x.ids.lg_code)).toEqual(["202011", "072010"]);
   });
 
   it("住所に書かれた長い町名で当たる市区町村が 1 つなら、それを採る", async () => {

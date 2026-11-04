@@ -155,6 +155,21 @@ describe("/v1/forward/batch", () => {
     expect(((await response.json()) as { error: string }).error).toContain("1〜25 件");
   });
 
+  it("単発と一括で 1 件の答えの形 (ForwardItem) を共有する", async () => {
+    const doc = (await (
+      await exports.default.fetch("https://geocoder.test/openapi.json")
+    ).json()) as {
+      components: {
+        schemas: Record<string, { properties: Record<string, unknown>; allOf?: unknown }>;
+      };
+    };
+    const { BatchResponse, GeocodeResponse } = doc.components.schemas;
+    expect(BatchResponse.properties.results).toMatchObject({
+      items: { $ref: "#/components/schemas/ForwardItem" },
+    });
+    expect(JSON.stringify(GeocodeResponse)).toContain("#/components/schemas/ForwardItem");
+  });
+
   it("PUT は 405", async () => {
     const response = await exports.default.fetch("https://geocoder.test/v1/forward/batch", {
       method: "PUT",

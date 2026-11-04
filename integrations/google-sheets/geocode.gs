@@ -10,21 +10,13 @@ function GEOCODE(addresses) {
   const list = (Array.isArray(addresses) ? addresses : [[addresses]]).map((row) =>
     String(row[0] ?? "").trim(),
   );
-  // 空のセルは送らず、結果を元の位置に戻す。1 回の呼び出しに 25 件まで
-  const filled = list.flatMap((a, i) => (a === "" ? [] : [i]));
+  // 1 回の呼び出しに 25 件まで。API は住所と同じ順・同じ数で返し、空のセルは結果が空になる
   const chunks = [];
-  for (let i = 0; i < filled.length; i += 25) chunks.push(filled.slice(i, i + 25));
+  for (let i = 0; i < list.length; i += 25) chunks.push(list.slice(i, i + 25));
   // カスタム関数は 30 秒で打ち切られるので、まとめた呼び出しは並べて送る
-  const responses =
-    chunks.length === 0
-      ? []
-      : UrlFetchApp.fetchAll(chunks.map((chunk) => request(chunk.map((j) => list[j]))));
-  const results = list.map(() => null);
-  responses.forEach((response, n) =>
-    parse(response).forEach((r, k) => (results[chunks[n][k]] = r)),
-  );
-  return results.map((r) =>
-    r === null
+  const responses = chunks.length === 0 ? [] : UrlFetchApp.fetchAll(chunks.map(request));
+  return responses.flatMap(parse).map(({ results: [r] }) =>
+    r === undefined
       ? ["", "", "", "", "", "", ""]
       : [
           r.lat,

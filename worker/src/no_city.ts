@@ -77,9 +77,10 @@ const uniqueStrongest = (found: MatchedResult[], rest: string): MatchedResult | 
 };
 
 /**
- * 住所に書かれた町字の名前で最も長く当たった市区町村ごとに一番強いものを採り、人口の多い順に並べる。
- * 2 つ以上なら市区町村を推定したことになるので、候補の数を付ける。番地まで当たったかどうかでは
- * 選ばない (片方の市区町村に番地の点が無いだけのことがある)
+ * 住所に書かれた町字の名前で最も長く当たった市区町村ごとに一番強いものを採り、細かい段まで
+ * 当たった順、同じ段なら人口の多い順に並べる。2 つ以上なら市区町村を推定したことになるので、
+ * 候補の数を付ける。番地まで当たらない市区町村も候補から外さない (片方の市区町村に番地の点が
+ * 無いだけのことがある)
  */
 const byCity = (
   found: MatchedResult[],
@@ -91,7 +92,11 @@ const byCity = (
   const each = codes
     .map((code) => strongestResult(best.filter((x) => x.ids.lg_code === code)))
     .filter((x) => x !== undefined)
-    .toSorted((a, b) => population(b.ids.lg_code ?? "") - population(a.ids.lg_code ?? ""));
+    .toSorted(
+      (a, b) =>
+        Detail(b.match_level) - Detail(a.match_level) ||
+        population(b.ids.lg_code ?? "") - population(a.ids.lg_code ?? ""),
+    );
   return each.length > 1 ? each.map((x) => ({ ...x, candidates: each.length })) : each;
 };
 
