@@ -36,3 +36,10 @@ models:
             - "CREATE SCHEMA IF NOT EXISTS geocoder.town"
             - "CALL geocoder.set_option('parquet_row_group_size', 4096, schema => 'town')"
             - "CALL geocoder.set_option('parquet_compression', 'zstd', schema => 'town')"
+        # 町名の索引も頭 2 文字で 1 つの行グループだけを読むので、町字の表と同じ置き場にする
+        town_name:
+          +schema: town
+          +pre-hook:
+            - "CREATE SCHEMA IF NOT EXISTS geocoder.town"
+            - "CALL geocoder.set_option('parquet_row_group_size', 4096, schema => 'town')"
+            - "CALL geocoder.set_option('parquet_compression', 'zstd', schema => 'town')"

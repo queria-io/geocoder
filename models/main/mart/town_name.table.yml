@@ -1,0 +1,20 @@
+schema: town
+name: town_name
+title: 町名の索引
+description: |
+  大字・町の名前から、その名前を持つ市区町村を引く索引。市区町村名を書かない住所の照合に使う。
+  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
+keywords:
+  - 住所
+  - ジオコーディング
+sources:
+  - path: https://dataset.address-br.digital.go.jp/
+fields:
+  - name: name_key
+    title: 名前の頭 2 文字
+  - name: name
+    title: 大字・町名
+    description: "頭の「大字」を外し、「ヶ」「ヵ」を「ケ」にそろえた名前"
+  - name: lg_code
+    title: 全国地方公共団体コード
+    description: "6桁（検査数字あり）"

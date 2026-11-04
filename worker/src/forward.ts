@@ -33,6 +33,7 @@ import { nearestAddress, type Nearby } from "./nearby";
 import { withAzaSkipped } from "./skip_aza";
 import { withOazaChome } from "./oaza_chome";
 import { withRenamedWard } from "./renamed_ward";
+import { TOWN_NAME_COLUMNS, type TownNameRow, withLeadingNoise, withoutCity } from "./no_city";
 import { POINT_COLUMNS, type PointRow, withAddressPoint } from "./point";
 import { withParentPoint } from "./parent_point";
 
@@ -73,34 +74,40 @@ const openAll = (bucket: R2Bucket, keys: string[]): Promise<Table[]> =>
   Promise.all(keys.map((k) => open(bucket, k)));
 
 /**
- * 町字 1 つ分の行を読む口 (住居表示・地番の表)。表は番号まである住所で初めて開く。
+ * 列 column が value の行を読む口。表は初めて引くときに開く。
  * ファイルが分かれていれば全部のフッターを開き、行グループの範囲で当たるものだけ読む。
- * 覚えるのは最近の町字だけにする (町字は全国で数十万ある)。key が空なら何も読まない
+ * 覚えるのは最近の 1,024 個の値だけにする。keys が空なら何も読まない
  */
-const machiazaLoader = <T>(bucket: R2Bucket, keys: string[], columns: string[]) => {
+const keyLoader = <T>(bucket: R2Bucket, keys: string[], column: string, columns: string[]) => {
   let tables: Promise<Table[]> | null = null;
   const rows = new Map<string, Promise<T[]>>();
-  return (lgCode: string, machiazaId: string): Promise<T[]> => {
+  return (value: string): Promise<T[]> => {
     if (keys.length === 0) return Promise.resolve([]);
-    const k = machiazaKey(lgCode, machiazaId);
-    const hit = rows.get(k);
+    const hit = rows.get(value);
     if (hit) return hit;
     tables ??= openAll(bucket, keys);
     const p = tables
       .then((ts) =>
         Promise.all(
-          ts.map((t) => readWhere<T>(t, "machiaza_key", k, columns, (n) => (stats.rows += n))),
+          ts.map((t) => readWhere<T>(t, column, value, columns, (n) => (stats.rows += n))),
         ),
       )
       .then((parts) => parts.flat());
     if (rows.size >= 1024) rows.delete(rows.keys().next().value as string);
-    rows.set(k, p);
+    rows.set(value, p);
     p.catch(() => {
-      rows.delete(k);
+      rows.delete(value);
       tables = null;
     });
     return p;
   };
+};
+
+/** 町字 1 つ分の行を読む口 (住居表示・地番・代表点の表)。表は番号まである住所で初めて開く */
+const machiazaLoader = <T>(bucket: R2Bucket, keys: string[], columns: string[]) => {
+  const load = keyLoader<T>(bucket, keys, "machiaza_key", columns);
+  return (lgCode: string, machiazaId: string): Promise<T[]> =>
+    load(machiazaKey(lgCode, machiazaId));
 };
 
 /** 当て方と、町字 1 つの行を引く口 (郵便番号を足すのに使う) */
@@ -111,6 +118,8 @@ type Built = {
   rows: (lgCode: string, machiazaId: string) => Promise<RsdtdspRow[]>;
   points: (lgCode: string, machiazaId: string) => Promise<PointRow[]>;
   city: (lgCode: string) => CityResult | undefined;
+  names: (key: string) => Promise<TownNameRow[]>;
+  cities: readonly CityResult[];
 };
 
 // isolate の中で使い回す。表のファイルが変われば作り直す
@@ -146,6 +155,8 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
     rows: loadMachiaza,
     points: machiazaLoader<PointRow>(bucket, tables.point, POINT_COLUMNS),
     city: (lgCode) => cityByCode.get(lgCode),
+    cities,
+    names: keyLoader<TownNameRow>(bucket, tables.town_name, "name_key", TOWN_NAME_COLUMNS),
   };
 };
 
@@ -180,7 +191,21 @@ export const geocode = async (
   const results = await Promise.all(
     (await match(address)).map(async (r) =>
       withAzaSkipped(
-        await withOazaChome(await withRenamedWard(r, address, match), address, match),
+        await withOazaChome(
+          await withRenamedWard(
+            await withoutCity(
+              await withLeadingNoise(r, address, match),
+              address,
+              built.names,
+              built.cities,
+              match,
+            ),
+            address,
+            match,
+          ),
+          address,
+          match,
+        ),
         match,
       ),
     ),
