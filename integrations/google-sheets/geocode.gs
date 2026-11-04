@@ -10,11 +10,15 @@ function GEOCODE(addresses) {
   const list = (Array.isArray(addresses) ? addresses : [[addresses]]).map((row) =>
     String(row[0] ?? "").trim(),
   );
-  const results = [];
-  // 1 回の呼び出しに 25 件まで
-  for (let i = 0; i < list.length; i += 25) results.push(...post(list.slice(i, i + 25)));
-  return results.map((r, i) =>
-    list[i] === "" || r === null
+  // 空のセルは送らず、結果を元の位置に戻す。1 回の呼び出しに 25 件まで
+  const filled = list.flatMap((a, i) => (a === "" ? [] : [i]));
+  const results = list.map(() => null);
+  for (let i = 0; i < filled.length; i += 25) {
+    const chunk = filled.slice(i, i + 25);
+    post(chunk.map((j) => list[j])).forEach((r, k) => (results[chunk[k]] = r));
+  }
+  return results.map((r) =>
+    r === null
       ? ["", "", "", "", "", "", ""]
       : [
           r.lat,
@@ -33,7 +37,7 @@ function post(addresses) {
     method: "post",
     contentType: "application/json",
     payload: JSON.stringify({
-      addresses: addresses.map((a) => a || "-"),
+      addresses,
       include: "ids,codes,small_area",
     }),
     muteHttpExceptions: true,

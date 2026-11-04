@@ -15,11 +15,16 @@ SELECT
 FROM (
   SELECT filename, results[1] AS r
   FROM read_json(
+    -- 渡す住所が 1 つも無いと read_json が落ちるので、そのときは当たらない住所「-」を 1 つ送って、下で外す
     list_transform(
-      list_distinct(list_filter(addresses, a -> length(trim(a)) BETWEEN 1 AND 100)),
+      coalesce(
+        nullif(list_distinct(list_filter(addresses, a -> length(trim(a)) BETWEEN 1 AND 100)), []),
+        ['-']
+      ),
       a -> 'https://geocoder.queria.io/v1/geocode?include=ids,codes,small_area&address=' || url_encode(a)
     ),
     filename = true,
     columns = {results: 'STRUCT(matched_address VARCHAR, lat DOUBLE, lng DOUBLE, match_level VARCHAR, coordinates_level VARCHAR, lg_code VARCHAR, ids STRUCT(machiaza_id VARCHAR), codes STRUCT(postal_code VARCHAR), estat_small_area_code VARCHAR)[]'}
   )
-);
+)
+WHERE address <> '-';
