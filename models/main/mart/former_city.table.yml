@@ -1,0 +1,31 @@
+schema: town
+name: former_city
+title: 旧市区町村名の索引
+description: |
+  合併などで無くなった市区町村の名前から、その範囲を引き継いだ今の市区町村を引く索引。旧市区町村名で書いた住所の照合に使う。
+  『歴史的行政区域データセットβ版』（CODH作成） doi:10.20676/00000447（CC BY 4.0、https://geoshape.ex.nii.ac.jp/city/）を加工して作成。
+keywords:
+  - 住所
+  - ジオコーディング
+  - 市町村合併
+sources:
+  - path: https://geoshape.ex.nii.ac.jp/city/
+fields:
+  - name: name_key
+    title: 名前の頭 2 文字
+  - name: name
+    title: 旧市区町村名
+    description: "郡を付けた形（員弁郡員弁町）と付けない形（員弁町）の両方。「ヶ」「ヵ」は「ケ」にそろえる"
+  - name: town_prefix
+    title: 郡を除いた旧市区町村名
+    description: "今の町字名の頭に残っていることがある（いなべ市員弁町笠田新田）"
+  - name: pref_code
+    title: 都道府県コード
+    description: "2桁"
+  - name: lg_code
+    title: 全国地方公共団体コード
+    description: "範囲を引き継いだ今の市区町村。6桁（検査数字あり）。政令市は区"
+    annotations: { queria: { semantic: { role: entity, name: city } } }
+  - name: share
+    title: 範囲の割合
+    description: "旧市区町村の面積のうち、今の市区町村に入る割合（0〜1）"

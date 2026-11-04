@@ -18,6 +18,7 @@ import { cors } from "hono/cors";
 
 import {
   ABR_ATTRIBUTION,
+  FORMER_CITY_ATTRIBUTION,
   csvColumns,
   type Extras,
   type Include,
@@ -609,9 +610,11 @@ const record = (c: Context<{ Bindings: Env }>, entries: RequestLogEntry[]) => {
 const usesIsj = (r: MatchedResult) => r.coordinate_source === "isj";
 
 /** isj は位置参照情報の点を使った答えがあるか。あればその出典も足す */
-const attributionFor = (groups: ReadonlySet<Include>, isj: boolean) => [
+const attributionFor = (groups: ReadonlySet<Include>, isj: boolean, former = false) => [
   ABR_ATTRIBUTION,
+  FORMER_CITY_ATTRIBUTION,
   ...(isj ? [ISJ_ATTRIBUTION] : []),
+  ...(former ? [FORMER_CITY_ATTRIBUTION] : []),
   ...(groups.has("small_area") ? [SMALL_AREA_ATTRIBUTION] : []),
 ];
 
@@ -689,6 +692,7 @@ const forwardItems = async (
       attribution: attributionFor(
         groups,
         flat.some(([r]) => usesIsj(r)),
+        flat.some(([r]) => r.former_city === true),
       ),
     },
   } as const;
