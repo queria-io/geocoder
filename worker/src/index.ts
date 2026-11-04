@@ -598,13 +598,11 @@ const answer = async (
 };
 
 /** 照合の記録を応答の後に送る。記録先が無ければ何もしない。送れなくても応答には響かせない */
-const record = (
-  env: Env,
-  ctx: { waitUntil: (p: Promise<unknown>) => void },
-  entries: RequestLogEntry[],
-) => {
-  if (!env.REQUEST_LOG_URL) return;
-  ctx.waitUntil(sendLog(env, entries).catch((e: unknown) => console.error("geocoder: log", e)));
+const record = (c: Context<{ Bindings: Env }>, entries: RequestLogEntry[]) => {
+  if (!c.env.REQUEST_LOG_URL) return;
+  c.executionCtx.waitUntil(
+    sendLog(c.env, entries).catch((e: unknown) => console.error("geocoder: log", e)),
+  );
 };
 
 /** 位置参照情報の点で座標を埋めた答え */
@@ -659,13 +657,12 @@ const forwardItems = async (
   const answered = await tryCatchAsync(async () => {
     const out: (Answered | null)[] = [];
     for (const a of addresses) out.push(await forwardOne(c.env, a, limit, groups, area));
-    return out;
+    return { pairs: out, version: await dataVersion(c.env) };
   });
   if (!answered.ok) return { failed: answered.error } as const;
-  const pairs = answered.value;
+  const { pairs, version } = answered.value;
   record(
-    c.env,
-    c.executionCtx,
+    c,
     addresses.flatMap((a, i) =>
       pairs[i] === null
         ? []
@@ -688,7 +685,7 @@ const forwardItems = async (
       results: (pairs[i] ?? []).map(([r, x]) => forwardAnswer(r, groups, x)),
     })),
     source: {
-      version: await dataVersion(c.env),
+      version,
       attribution: attributionFor(
         groups,
         flat.some(([r]) => usesIsj(r)),

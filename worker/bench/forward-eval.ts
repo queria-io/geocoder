@@ -49,7 +49,7 @@ const wait = (status: number | string, ms: number) => {
 
 const post = async (addresses: string[], tries = 3): Promise<Answer[]> => {
   // 答えが返らないまま止まる問い合わせもあるので、本文を読み終えるまでを 60 秒で切って送り直す
-  // 名前を変える前の版 (/v1/batch) とも比べられるよう、404 なら以前の名前で送り直す
+  // 名前を変える前の版 (/v1/batch) とも比較できるよう、404 なら以前の名前で送り直す
   const send = (path: string) =>
     fetch(`${BASE}${path}`, {
       method: "POST",
