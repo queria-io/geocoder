@@ -2,13 +2,14 @@ schema: town
 name: town_name
 title: 町名の索引
 description: |
-  大字・町の名前から、その名前を持つ市区町村を引く索引。市区町村名を書かない住所の照合に使う。
-  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
+  町字ごとの名前・丁目・小字と、その町字にある番号の索引。市区町村名を書かない住所から、その住所を持つ市区町村を引くのに使う。
+  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）と「街区レベル位置参照情報　国土交通省」を加工して作成。
 keywords:
   - 住所
   - ジオコーディング
 sources:
   - path: https://dataset.address-br.digital.go.jp/
+  - path: https://nlftp.mlit.go.jp/isj/
 fields:
   - name: name_key
     title: 名前の頭 2 文字
@@ -18,9 +19,12 @@ fields:
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）"
-  - name: chomes
+  - name: chome
     title: 丁目の番号
-    description: "その大字・町にある丁目の番号（「5丁目」なら 5）。丁目の無い大字・町は空"
-  - name: koazas
+    description: "町字の丁目の番号（「5丁目」なら 5）。丁目の無い町字は空"
+  - name: koaza
     title: 小字の名前
-    description: "その大字・町にある小字の名前（頭の「字」を外し、「ヶ」「ヵ」を「ケ」にそろえる）。小字の無い大字・町は空"
+    description: "町字の小字の名前（頭の「字」を外し、「ヶ」「ヵ」を「ケ」にそろえる）。小字の無い町字は空"
+  - name: numbers
+    title: 町字にある番号
+    description: "住居表示の街区符号・地番の本番・位置参照情報の街区と地番の番号を、続く番号ごとに [始め, 終わり] で順に並べたもの（1〜120 と 122〜300 なら [1, 120, 122, 300]）"

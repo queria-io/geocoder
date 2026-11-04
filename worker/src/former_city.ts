@@ -28,10 +28,15 @@ export const FORMER_CITY_COLUMNS = [
 const MAX_SUCCESSORS = 6;
 
 /**
- * 都道府県名の無い住所で使う名前。郡まで書いたものか市だけにする。郡の無い町村名 (「本町」「大宮町」) は
- * 全国に同じ名前が多く、今の町字名とも重なるので、市区町村名の無い住所の段 (no_city.ts) に任せる
+ * 都道府県名の無い住所で使う名前。その名前の旧市区町村が全国で 1 つの都道府県にしか無いものだけにする。
+ * 2 つ以上の都道府県にある名前 (「大宮町」) は、どの都道府県のものか決められないので使わない
  */
-const specific = (f: FormerCityRow) => f.name !== f.town_prefix || f.name.endsWith("市");
+const uniqueNames = (rows: readonly FormerCityRow[]): Set<string> => {
+  const prefs = Map.groupBy(rows, (f) => f.name);
+  return new Set(
+    [...prefs].filter(([, fs]) => new Set(fs.map((f) => f.pref_code)).size === 1).map(([n]) => n),
+  );
+};
 
 const PREF = /^(東京都|北海道|(京都|大阪)府|.{2,3}県)/;
 
@@ -49,9 +54,12 @@ export const withFormerCity = async (
   const all = townNameOf(input);
   const rest = prefCode === undefined ? all : all.replace(PREF, "");
   if (rest.length < 2 || (prefCode !== undefined && rest === all)) return r;
-  const rows = (await formers(rest.slice(0, 2))).filter(
+  const keyed = await formers(rest.slice(0, 2));
+  const unique = uniqueNames(keyed);
+  const rows = keyed.filter(
     (f) =>
-      rest.startsWith(f.name) && (prefCode === undefined ? specific(f) : f.pref_code === prefCode),
+      rest.startsWith(f.name) &&
+      (prefCode === undefined ? unique.has(f.name) : f.pref_code === prefCode),
   );
   if (rows.length === 0) return r;
   // 「員弁郡員弁町」と「員弁町」の両方に当たれば、長い方 (郡まで書いたもの) だけを使う

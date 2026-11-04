@@ -48,6 +48,8 @@ const ROWS = [
   row("員弁郡員弁町", "員弁町", "242144"),
   row("員弁町", "員弁町", "242144"),
   row("桑名郡七和村", "七和村", "242055", 0.99),
+  row("大安町", "大安町", "242144"),
+  { ...row("大安町", "大安町", "112038"), pref_code: "11" },
 ];
 const formers = async (key: string) => ROWS.filter((r) => r.name_key === key);
 
@@ -95,14 +97,14 @@ describe("withFormerCity", () => {
     expect(await withFormerCity(r, "三重県四日市1", formers, (c) => CITIES.get(c), never)).toBe(r);
   });
 
-  it("都道府県名の無い住所では、郡の無い町村名を使わない", async () => {
+  it("都道府県名の無い住所では、全国で 1 つの都道府県にしか無い名前だけを使う", async () => {
     const r = pref({ match_level: "unknown", ids: emptyIDs(), matched_address: "" });
     const hit = async () => [town("242144", "三重県いなべ市員弁町笠田新田")];
     const lookup = (c: string) => CITIES.get(c);
-    expect(await withFormerCity(r, "員弁町笠田新田", formers, lookup, hit)).toBe(r);
-    expect(
-      (await withFormerCity(r, "員弁郡員弁町笠田新田", formers, lookup, hit)).ids.lg_code,
-    ).toBe("242144");
+    expect((await withFormerCity(r, "員弁町笠田新田", formers, lookup, hit)).ids.lg_code).toBe(
+      "242144",
+    );
+    expect(await withFormerCity(r, "大安町石榑東", formers, lookup, hit)).toBe(r);
   });
 
   it("別の都道府県の同じ名前は使わない", async () => {

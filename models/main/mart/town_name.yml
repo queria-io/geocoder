@@ -3,8 +3,8 @@ version: 2
 models:
   - name: town_name
     description: |
-      大字・町の名前から、その名前を持つ市区町村を引く索引。市区町村名を書かない住所の照合に使う。
-      「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
+      町字ごとの名前・丁目・小字と、その町字にある番号の索引。市区町村名を書かない住所から、その住所を持つ市区町村を引くのに使う。
+      「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）と「街区レベル位置参照情報　国土交通省」を加工して作成。
     access: public
     columns:
       - name: name_key
@@ -13,7 +13,9 @@ models:
         data_type: varchar
       - name: lg_code
         data_type: varchar
-      - name: chomes
+      - name: chome
+        data_type: integer
+      - name: koaza
+        data_type: varchar
+      - name: numbers
         data_type: integer[]
-      - name: koazas
-        data_type: varchar[]

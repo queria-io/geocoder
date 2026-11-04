@@ -63,40 +63,54 @@ const row = (name: string, lg_code: string): TownNameRow => ({
 });
 
 describe("withoutCity", () => {
-  it("よくある町名は、番号の頭の丁目を持つ市区町村に絞って当て直す", async () => {
+  const asking = (index: TownNameRow[], input: string) => {
     const asked: string[] = [];
-    await withoutCity(
-      unmatched({ unmatched_address: ["天神5-9-2"] }),
-      "天神5-9-2",
-      names([
-        { ...row("天神", "072010"), chomes: [1, 2] },
-        { ...row("天神", "202011"), chomes: [1, 2, 3, 4, 5] },
-      ]),
-      Object.values(cities),
-      async (a) => {
-        asked.push(a);
-        return [];
-      },
-    );
-    expect(asked).toEqual(["長野県長野市天神5-9-2"]);
+    return withoutCity(unmatched(), input, names(index), Object.values(cities), async (a) => {
+      asked.push(a);
+      return [];
+    }).then(() => asked);
+  };
+
+  it("住所の番号の頭の丁目を持つ市区町村に絞って当て直す", async () => {
+    const index = [
+      { ...row("天神", "072010"), chome: 1 },
+      { ...row("天神", "072010"), chome: 2 },
+      { ...row("天神", "202011"), chome: 5 },
+    ];
+    expect(await asking(index, "天神5-9-2")).toEqual(["長野県長野市天神5-9-2"]);
   });
 
-  it("小字まで書いた住所は、その小字を持つ市区町村に絞って当て直す", async () => {
-    const asked: string[] = [];
-    await withoutCity(
-      unmatched({ unmatched_address: ["新田字羽広1928番1"] }),
-      "大字新田字羽広1928番1",
-      names([
-        { ...row("新田", "072010"), koazas: ["小羽広"] },
-        { ...row("新田", "202011"), koazas: ["羽広", "前田"] },
-      ]),
-      Object.values(cities),
-      async (a) => {
-        asked.push(a);
-        return [];
-      },
-    );
-    expect(asked).toEqual(["長野県長野市新田字羽広1928番1"]);
+  it("丁目まで同じなら、その丁目に次の番号の街区がある市区町村に絞る", async () => {
+    const index = [
+      { ...row("天神", "072010"), chome: 1, numbers: [1, 7] },
+      { ...row("天神", "202011"), chome: 1, numbers: [1, 5, 8, 12] },
+    ];
+    expect(await asking(index, "天神1-8-35")).toEqual(["長野県長野市天神1-8-35"]);
+  });
+
+  it("丁目の無い町名は、頭の番号の地番がある市区町村に絞る", async () => {
+    const index = [
+      { ...row("新田", "072010"), numbers: [1, 900] },
+      { ...row("新田", "202011"), numbers: [1, 2000] },
+    ];
+    expect(await asking(index, "新田1928番1")).toEqual(["長野県長野市新田1928番1"]);
+  });
+
+  it("小字まで書いた住所は、その小字を持つ市区町村に絞る", async () => {
+    const index = [
+      { ...row("新田", "072010"), koaza: "小羽広", numbers: [1, 2000] },
+      { ...row("新田", "202011"), koaza: "羽広" },
+      { ...row("新田", "202011"), numbers: [1, 900] },
+    ];
+    expect(await asking(index, "大字新田字羽広1928番1")).toEqual(["長野県長野市新田字羽広1928番1"]);
+  });
+
+  it("どの市区町村にも番号が無ければ、町名を持つ市区町村をすべて当て直す", async () => {
+    const index = [
+      { ...row("天神", "072010"), chome: 1, numbers: [1, 7] },
+      { ...row("天神", "202011"), chome: 1, numbers: [1, 5] },
+    ];
+    expect(await asking(index, "天神1-9-1")).toHaveLength(2);
   });
 
   it("1 文字の町名は、すぐ後ろに番号があるときだけ使う", async () => {
@@ -137,6 +151,7 @@ describe("withoutCity", () => {
     expect(asked).toHaveLength(16);
     expect(asked).not.toContain("愛知県市0天神5-9-2");
     expect(found[0].ids.lg_code).toBe("100019");
+    expect(found[0].candidates).toBe(20);
   });
 
   it("町名を持つ市区町村が 1 つなら、市区町村名を補って当て直す", async () => {
