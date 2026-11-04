@@ -3,7 +3,7 @@
 // DuckDB もデータベースも使わない。地図用に R2 へ置いた境界の PMTiles から、点の入るタイルを
 // Range で 1 枚だけ読み、点を含む多角形を JS で探す。待機中の費用はかからず、1 回の問い合わせは
 // R2 の読み 1〜2 回と数ミリ秒の計算で済む
-import { missPoint } from "./misses";
+import { logEntry, type RequestLog, type RequestLogEntry } from "./request_log";
 import {
   EtagMismatch,
   PMTiles,
@@ -45,8 +45,8 @@ export interface Env extends ForwardEnv {
   BOUNDARY_TILES_FILE: string;
   /** IP ごとの回数の上限。費用を守るためのもので、ふつうの使い方では当たらない高さにする */
   LIMITER?: RateLimit;
-  /** 照合しきれなかった住所の記録 (src/misses.ts)。無ければ記録しない */
-  MISSES?: AnalyticsEngineDataset;
+  /** 照合の記録 (src/request_log.ts)。Cloudflare Pipelines のストリーム。無ければ記録しない */
+  REQUEST_LOG?: RequestLog;
 }
 
 /** R2 のオブジェクトを PMTiles の Source として読む (queria-web の workers/basemap と同じ) */
@@ -610,8 +610,6 @@ const answer = async (
   area?: string,
 ) => {
   const { results, postalCode } = await geocode(env, address, limit, area);
-  const miss = missPoint(address, results);
-  if (miss !== null) env.MISSES?.writeDataPoint(miss);
   const extras = await Promise.all(
     results.map(async (r): Promise<Extras> => ({
       postal_code: groups.has("codes") ? await postalCode(r) : null,
@@ -619,6 +617,18 @@ const answer = async (
     })),
   );
   return results.map((r, i) => [r, extras[i]] as const);
+};
+
+/** 照合の記録を応答の後に送る。記録先が無ければ何もしない。送れなくても応答には響かせない */
+const record = (
+  env: Env,
+  ctx: { waitUntil: (p: Promise<unknown>) => void },
+  entries: RequestLogEntry[],
+) => {
+  if (env.REQUEST_LOG === undefined || entries.length === 0) return;
+  ctx.waitUntil(
+    env.REQUEST_LOG.send(entries).catch((e: unknown) => console.error("geocoder: log", e)),
+  );
 };
 
 /** 位置参照情報の点で座標を埋めた答え */
@@ -649,6 +659,13 @@ app.openapi(geocodeRoute, async (c) => {
     console.error("geocoder: geocode", result.error);
     return json(c, 502, { error: "住所の表を読めませんでした" }, "no-store") as never;
   }
+  record(c.env, c.executionCtx, [
+    logEntry(
+      "geocode",
+      address,
+      result.value.map(([r]) => r),
+    ),
+  ]);
   const version = await dataVersion(c.env);
   const attribution = attributionFor(
     groups,
@@ -784,6 +801,14 @@ app.openapi(batchRoute, async (c) => {
     console.error("geocoder: batch", result.error);
     return json(c, 502, { error: "住所の表を読めませんでした" }, "no-store") as never;
   }
+  record(
+    c.env,
+    c.executionCtx,
+    addresses.flatMap((a, i) => {
+      const hit = result.value[i];
+      return a.trim() === "" ? [] : [logEntry("batch", a, hit ? [hit[0]] : [])];
+    }),
+  );
   return c.json(
     {
       results: result.value.map((a) => (a ? forwardAnswer(a[0], groups, a[1]) : null)),
