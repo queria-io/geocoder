@@ -1,4 +1,4 @@
-// マージ前の精度の関門。同じ住所を本番 (基準) と PR のプレビューに流した 2 つの JSONL を比べ、
+// マージ前の精度チェック。同じ住所を本番 (基準) と PR のプレビューに送った 2 つの JSONL を比較し、
 // 悪くなっていれば 1 で終わる。表と、遠ざかった住所の一覧を Markdown で出す
 // 使い方: pnpm tsx bench/gate.ts 基準.jsonl PR.jsonl
 import { readFileSync } from "node:fs";
@@ -48,9 +48,9 @@ const better = moved.filter(
 const [s0, s1] = [stats(base), stats(head)];
 // 止める条件。数パーセントの揺れは R2 の読みの失敗などでも出るので、わずかな幅は見逃す
 const failures = [
-  s1.answered < s0.answered - 0.1 && "答えありが減った",
-  s1.located < s0.located - 0.1 && "座標ありが減った",
-  s1.fine < s0.fine - 0.2 && "番地より細かい点が減った",
+  s1.answered < s0.answered - 0.1 && "回答率が下がった",
+  s1.located < s0.located - 0.1 && "座標付与率が下がった",
+  s1.fine < s0.fine - 0.2 && "地番・街区レベル以上の割合が下がった",
   s1.median > s0.median + 2 && "誤差の中央値が 2m を超えて悪くなった",
   s1.over1km > s0.over1km + 0.2 && "1km 超が増えた",
   worse.length > better.length && `${FAR}m 以上遠ざかった住所が、近づいた住所より多い`,
@@ -67,7 +67,7 @@ console.log(
     "",
     ...failures.map((f) => `- ${f}`),
     "",
-    "| | 答えあり | 座標あり | 番地より細かい点 | 誤差の中央値 (m) | 1km 超 |",
+    "| | 回答率 | 座標付与率 | 地番・街区レベル以上 | 誤差の中央値 (m) | 1km 超 |",
     "|---|---|---|---|---|---|",
     line("本番", s0),
     line("この PR", s1),

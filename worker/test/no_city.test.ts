@@ -92,6 +92,21 @@ describe("withoutCity", () => {
     ]);
   });
 
+  it("番号まで照合できても点が町字の代表点なら、親番の点を持つ候補より後ろに並べる", async () => {
+    const got = await withoutCity(
+      unmatched(),
+      "松川町1",
+      names([row("松川町", "072010"), row("松川町", "202011")]),
+      Object.values(cities),
+      async (a) => [
+        a.startsWith("福島県")
+          ? { ...hit("072010", "parcel"), coordinate_level: "parcel_parent" as const }
+          : { ...hit("202011", "parcel"), coordinate_level: "machiaza" as const },
+      ],
+    );
+    expect(got.map((x) => x.ids.lg_code)).toEqual(["072010", "202011"]);
+  });
+
   it("同じ段まで当たった候補は人口の多い順に並べる", async () => {
     const got = await withoutCity(
       unmatched(),

@@ -1,7 +1,7 @@
 // 市区町村名を書かない住所 (「松川町字市坂3-1」「福島県松川町字市坂3-1」)。上流は都道府県止まりか、何も返さない。
 // 町名の索引 (town.town_name) から、その町名を持つ市区町村を引き、市区町村名を補って当て直す。
 // 同じ町名の市区町村が複数あれば、候補を全部、人口の多い順に返す。上流には無い段
-import { Detail, type MatchedResult } from "./model/model";
+import { type CoordinateLevel, Detail, type MatchedResult } from "./model/model";
 import { compareResultStrength, strongestResult } from "./matching/search";
 import type { CityResult } from "./repository/types";
 
@@ -77,8 +77,25 @@ const uniqueStrongest = (found: MatchedResult[], rest: string): MatchedResult | 
 };
 
 /**
- * 住所に書かれた町字の名前で最も長く当たった市区町村ごとに一番強いものを採り、細かい段まで
- * 当たった順、同じ段なら人口の多い順に並べる。2 つ以上なら市区町村を推定したことになるので、
+ * 座標を取った点の細かさ。号と地番の点が最も細かく、街区と親番の点が次。
+ * 住所の文字を番号まで照合できても、点が町字の代表点なら町字と同じに数える
+ */
+const POINT_RANK: Record<CoordinateLevel, number> = {
+  rsdtdsp_rsdt: 5,
+  parcel: 5,
+  rsdtdsp_blk: 4,
+  parcel_parent: 4,
+  machiaza_detail: 3,
+  machiaza: 2,
+  city: 1,
+  pref: 0,
+  unknown: 0,
+};
+const pointRank = (x: MatchedResult) => POINT_RANK[x.coordinate_level ?? x.match_level];
+
+/**
+ * 住所に書かれた町字の名前で最も長く当たった市区町村ごとに一番強いものを採り、座標を取った点の
+ * 細かい順、照合レベルの細かい順、人口の多い順に並べる。2 つ以上なら市区町村を推定したことになるので、
  * 候補の数を付ける。番地まで当たらない市区町村も候補から外さない (片方の市区町村に番地の点が
  * 無いだけのことがある)
  */
@@ -94,6 +111,7 @@ const byCity = (
     .filter((x) => x !== undefined)
     .toSorted(
       (a, b) =>
+        pointRank(b) - pointRank(a) ||
         Detail(b.match_level) - Detail(a.match_level) ||
         population(b.ids.lg_code ?? "") - population(a.ids.lg_code ?? ""),
     );
