@@ -54,9 +54,16 @@ located AS (
             WHEN p.geometry IS NOT NULL THEN 'parent_town'
             WHEN m.geometry IS NOT NULL THEN 'oaza_mean'
             WHEN i.geometry IS NOT NULL THEN 'isj_oaza'
-        END AS point_level
+        END AS point_level,
+        -- 地番を探す区域の町字。小字が起番でなければ地番は大字・町で振られているので、大字・町の町字 ID にする。
+        -- 地番の点の表は、町字そのものと、この区域の町字の両方で引く
+        CASE
+            WHEN t.koaza IS NOT NULL AND t.wake_num_flg <> '1' AND p.machiaza_id IS NOT NULL THEN p.machiaza_id
+            ELSE t.machiaza_id
+        END AS numbering_id
     -- ON に左の表だけを見る条件 (t.geometry IS NULL など) を入れない。入れると DuckDB がハッシュ結合を
-    -- 使えず、町字どうしの総当たりになる。代表点がある町字は coalesce と CASE が先に t.geometry を採る
+    -- 使えず、町字どうしの総当たりになる。代表点がある町字は coalesce と CASE が先に t.geometry を採り、
+    -- 小字でない町字は numbering_id の CASE が先に t.koaza を見る
     FROM town t
     LEFT JOIN town p
         ON p.lg_code = t.lg_code
@@ -87,32 +94,15 @@ koaza_numbered AS (
     FROM town
     WHERE koaza IS NOT NULL AND wake_num_flg = '1'
 ),
--- 地番を探す区域の町字。小字が起番でなければ地番は大字・町で振られているので、大字・町の町字 ID にする。
--- 地番の点の表は、町字そのものと、この区域の町字の両方で引く
-numbering AS (
-    SELECT
-        t.lg_code,
-        t.machiaza_id,
-        CASE
-            WHEN t.koaza IS NOT NULL AND t.wake_num_flg <> '1' AND p.machiaza_id IS NOT NULL THEN p.machiaza_id
-            ELSE t.machiaza_id
-        END AS numbering_id
-    FROM town t
-    LEFT JOIN town p
-        ON p.lg_code = t.lg_code
-        AND p.machiaza_id = left(t.machiaza_id, 4) || '000'
-),
 -- 区域の町字の中で地番が一意か。起番の小字か、起番の小字を持たない大字・町なら一意。
 -- 大字・町と小字の両方が起番の所 (柏市藤心など) は、大字・町の番号が小字の番号と重なりうるので一意としない
 numbering_area AS (
     SELECT
-        n.lg_code,
-        n.machiaza_id,
-        n.numbering_id,
+        a.lg_code,
+        a.machiaza_id AS numbering_id,
         (a.koaza IS NOT NULL AND a.wake_num_flg = '1') OR k.oaza_id IS NULL AS parcel_unique
-    FROM numbering n
-    JOIN town a ON a.lg_code = n.lg_code AND a.machiaza_id = n.numbering_id
-    LEFT JOIN koaza_numbered k ON k.lg_code = n.lg_code AND k.oaza_id = left(n.numbering_id, 4)
+    FROM town a
+    LEFT JOIN koaza_numbered k ON k.lg_code = a.lg_code AND k.oaza_id = left(a.machiaza_id, 4)
 ),
 small_area AS (
     SELECT CAST(key_code AS VARCHAR) AS small_area_code, geometry FROM e_stat.boundary.small_area
@@ -148,7 +138,7 @@ SELECT
     t.rsdt_addr_flg,
     t.rsdt_addr_partial,
     t.wake_num_flg,
-    na.numbering_id,
+    t.numbering_id,
     na.parcel_unique,
     coalesce(t.post_code, z.post_code) AS post_code,
     t.efct_date,
@@ -160,7 +150,7 @@ FROM located t
 LEFT JOIN oaza_has_chome h ON h.lg_code = t.lg_code AND h.oaza_cho = t.oaza_cho
 LEFT JOIN rsdtdsp_count c ON c.lg_code = t.lg_code AND c.machiaza_id = t.machiaza_id
 LEFT JOIN parcel_count pc ON pc.lg_code = t.lg_code AND pc.machiaza_id = t.machiaza_id
-LEFT JOIN numbering_area na ON na.lg_code = t.lg_code AND na.machiaza_id = t.machiaza_id
+LEFT JOIN numbering_area na ON na.lg_code = t.lg_code AND na.numbering_id = t.numbering_id
 LEFT JOIN postal z ON z.lg_code = t.lg_code AND z.machiaza_id = t.machiaza_id
 LEFT JOIN small_area s ON ST_Contains(s.geometry, t.point)
 -- 境界が重なる場所では代表点が 2 つの小地域に入る。町字 1 行に 1 つだけ残す
