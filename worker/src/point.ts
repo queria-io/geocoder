@@ -117,8 +117,9 @@ export const withAddressPoint = async (
 };
 
 /**
- * 地番の区域の町 (住居表示でない) では、位置参照情報が「○番」の点を街区として持つことがある
- * (ひたちなか市小砂町一丁目の 8 番)。地番にも親番にも点が無ければ、同じ番号の街区の点を使う
+ * 地番にも親番にも点が無ければ、同じ番号の街区の点を使う。
+ * 住居表示の町字で ABR に街区が無いもの (川崎市高津区上作延1丁目) は、位置参照情報の街区の点で埋める。
+ * 地番の区域の町でも、位置参照情報が「○番」の点を街区として持つことがある (ひたちなか市小砂町一丁目の 8 番)
  */
 const withBlockPoint = async (
   r: MatchedResult,
@@ -127,7 +128,8 @@ const withBlockPoint = async (
   machiazaId: string,
   parent: string,
 ): Promise<MatchedResult> => {
-  if (r.ids.rsdt_addr_flg !== "0") return r;
+  const flg = r.ids.rsdt_addr_flg;
+  if (flg !== "0" && flg !== "1") return r;
   const hit = (await load(lgCode, machiazaId)).find(
     (x) =>
       x.system === "rsdt" &&
@@ -141,7 +143,7 @@ const withBlockPoint = async (
     ? {
         ...r,
         coordinates: [hit.lng as number, hit.lat as number],
-        coordinate_level: PARCEL_PARENT,
+        coordinate_level: flg === "1" ? "rsdtdsp_blk" : PARCEL_PARENT,
         coordinate_source: hit.source,
       }
     : r;

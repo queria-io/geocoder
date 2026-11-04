@@ -3,7 +3,7 @@
 -- 国交省の街区レベル位置参照情報の点を ABR の町字に付けた表。ABR に座標の無い地番の住所で、
 -- 親番 (「28番地10」の「28」) の点を返すのに使う。住居表示の地域の行 (街区符号) も残す。
 -- 位置参照情報は「学園南三丁目」のように大字・町と丁目を 1 つの名前で持つので、ABR の町字の
--- 名前を同じ形にして突き合わせる。小字のある行は同じ小字の町字に、小字の無い行は大字・町の町字に付ける。
+-- 名前を同じ形にして突き合わせる。小字のある行は同じ小字の町字に、小字の無い行と ABR に無い小字の行は大字・町の町字に付ける。
 -- ABR は「大字頃藤」「字イサノ」のように頭に「大字」「字」を付けることがあり、位置参照情報は付けないので、
 -- 両側とも、大字・町の名前は頭の「大字」「字」を、小字の名前は頭の「字」「小字」を外して照合する。
 -- 外したことで同じ名前の町字が複数当たるときは、外す前の名前まで一致する町字を優先する
@@ -35,6 +35,16 @@ block AS (
     -- 同じ番号が離れた地点に分かれて入るものは、代表の 1 行だけ使う
     WHERE is_representative
 ),
+-- 小字が ABR に無い行 (ABR が大字・町だけを持つ「篠ノ井二ツ柳」に、位置参照情報が小字「大当」を付けている)
+koaza_missing AS (
+    SELECT b.*
+    FROM block b
+    WHERE b.koaza_name IS NOT NULL
+        AND NOT EXISTS (
+            SELECT 1 FROM town t
+            WHERE t.lg_code = b.lg_code AND t.name = b.oaza_chome_name AND t.koaza = b.koaza_name
+        )
+),
 matched AS (
     SELECT
         b.* EXCLUDE (raw_name, raw_koaza),
@@ -47,9 +57,22 @@ matched AS (
     JOIN town t
         ON t.lg_code = b.lg_code
         AND t.name = b.oaza_chome_name
-        -- 小字のある行は同じ小字の町字にだけ付ける。小字が ABR に無い行は捨てる (大字に付けると、
-        -- 地番が小字ごとに振られた地域で別の小字の同じ番号の点を返してしまう)
+        -- 小字のある行は同じ小字の町字に付ける
         AND (t.koaza = b.koaza_name OR (t.koaza IS NULL AND b.koaza_name IS NULL))
+    UNION ALL
+    -- 小字が ABR に無い行は、大字・町の町字に付ける。ただし同じ大字・町の同じ番号が別の小字にもあれば、
+    -- どの小字の点か決まらないので、下の QUALIFY で使わない。大字・町の中で地番が一意かどうかは
+    -- address_point_candidate が town.parcel_unique で見る
+    SELECT
+        b.* EXCLUDE (raw_name, raw_koaza),
+        t.machiaza_id,
+        row_number() OVER (
+            PARTITION BY b.lg_code, b.oaza_chome_name, b.koaza_name, b.block_number, b.is_residential_address
+            ORDER BY (t.raw_name = b.raw_name) DESC, t.machiaza_id
+        ) AS rank
+    FROM koaza_missing b
+    JOIN town t
+        ON t.lg_code = b.lg_code AND t.name = b.oaza_chome_name AND t.koaza IS NULL
 )
 SELECT
     lg_code || machiaza_id AS machiaza_key,
@@ -61,9 +84,16 @@ SELECT
     lat
 FROM matched
 WHERE rank = 1
--- 念のため、同じ町字・番号・種類の行は 1 行に絞る
+-- 同じ町字・番号・種類の行は 1 行に絞る。小字の無い行があればそれを使う。
+-- 小字の無い行が無く、別々の小字の行が残れば、どれか決まらないので使わない。
 -- 住居表示の街区符号と地番の親番は同じ番号でも別の点なので、分けたまま残す
-QUALIFY row_number() OVER (
-    PARTITION BY machiaza_key, block_number, is_residential_address ORDER BY koaza_name NULLS FIRST
-) = 1
+WINDOW w AS (
+    PARTITION BY lg_code, machiaza_id, block_number, is_residential_address ORDER BY koaza_name NULLS FIRST
+    ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+)
+QUALIFY row_number() OVER w = 1
+    AND (
+        bool_or(koaza_name IS NULL) OVER w
+        OR min(koaza_name) OVER w = max(koaza_name) OVER w
+    )
 ORDER BY machiaza_key, block_number
