@@ -12,11 +12,17 @@ function GEOCODE(addresses) {
   );
   // 空のセルは送らず、結果を元の位置に戻す。1 回の呼び出しに 25 件まで
   const filled = list.flatMap((a, i) => (a === "" ? [] : [i]));
+  const chunks = [];
+  for (let i = 0; i < filled.length; i += 25) chunks.push(filled.slice(i, i + 25));
+  // カスタム関数は 30 秒で打ち切られるので、まとめた呼び出しは並べて送る
+  const responses =
+    chunks.length === 0
+      ? []
+      : UrlFetchApp.fetchAll(chunks.map((chunk) => request(chunk.map((j) => list[j]))));
   const results = list.map(() => null);
-  for (let i = 0; i < filled.length; i += 25) {
-    const chunk = filled.slice(i, i + 25);
-    post(chunk.map((j) => list[j])).forEach((r, k) => (results[chunk[k]] = r));
-  }
+  responses.forEach((response, n) =>
+    parse(response).forEach((r, k) => (results[chunks[n][k]] = r)),
+  );
   return results.map((r) =>
     r === null
       ? ["", "", "", "", "", "", ""]
@@ -32,8 +38,9 @@ function GEOCODE(addresses) {
   );
 }
 
-function post(addresses) {
-  const response = UrlFetchApp.fetch("https://geocoder.queria.io/v1/batch", {
+function request(addresses) {
+  return {
+    url: "https://geocoder.queria.io/v1/batch",
     method: "post",
     contentType: "application/json",
     payload: JSON.stringify({
@@ -41,7 +48,10 @@ function post(addresses) {
       include: "ids,codes,small_area",
     }),
     muteHttpExceptions: true,
-  });
+  };
+}
+
+function parse(response) {
   if (response.getResponseCode() !== 200)
     throw new Error("Queria Geocoder: " + response.getResponseCode() + " " + response.getContentText());
   return JSON.parse(response.getContentText()).results;

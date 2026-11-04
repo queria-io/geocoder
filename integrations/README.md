@@ -8,4 +8,4 @@ SQL やスプレッドシートの関数から Queria Geocoder を呼ぶため�
 | Google スプレッドシート | [`google-sheets/`](google-sheets/) | `=GEOCODE(A2:A100)` |
 | Excel | [`excel/`](excel/) | Power Query のクエリ |
 
-1 つの IP アドレスから 1 分に 300 回までに制限している。どの方法も、件数が多いときは `/v1/batch` で 25 件ずつまとめて送る。結果を公開するときは、レスポンスの `source.attribution` の出典も表示する。
+1 つの IP アドレスから 1 分に 300 回までに制限している。Google スプレッドシートと Excel は `/v1/batch` で 25 件ずつまとめて送る。DuckDB は 1 住所ごとに `/v1/geocode` を 1 回呼ぶので、1 回に渡すのは 300 件までにする。結果を公開するときは、レスポンスの `source.attribution` の出典も表示する。

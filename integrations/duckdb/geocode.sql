@@ -18,7 +18,11 @@ FROM (
     -- 渡す住所が 1 つも無いと read_json が落ちるので、そのときは当たらない住所「-」を 1 つ送って、下で外す
     list_transform(
       coalesce(
-        nullif(list_distinct(list_filter(addresses, a -> length(trim(a)) BETWEEN 1 AND 100)), []),
+        -- API は空白・見えない文字だけの住所に 400 を返し、1 つでも 400 が返ると全体が落ちるので、ここで外す
+        nullif(list_distinct(list_filter(addresses, a ->
+          length(regexp_replace(a, '[\s\x{0B}\x{85}\x{A0}\x{AD}\x{1680}\x{2000}-\x{200F}\x{2028}-\x{202F}\x{205F}-\x{206F}\x{3000}\x{FEFF}]', '', 'g')) > 0
+          AND length(trim(a)) <= 100
+        )), []),
         ['-']
       ),
       a -> 'https://geocoder.queria.io/v1/geocode?include=ids,codes,small_area&address=' || url_encode(a)

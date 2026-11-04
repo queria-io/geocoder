@@ -1,7 +1,6 @@
 // Power Query: 「住所」という名前のテーブル (列「住所」) を Queria Geocoder で変換する
 let
     Source = Excel.CurrentWorkbook(){[Name = "住所"]}[Content],
-    Addresses = List.Transform(Source[住所], each if _ = null then "" else Text.Trim(Text.From(_))),
     // 1 回の呼び出しに 25 件まで
     Post = (batch as list) as list =>
         Json.Document(
@@ -18,11 +17,19 @@ let
                 ]
             )
         )[results],
-    // 空の行は送らず、結果を行の番号で元の行に戻す
-    Indexed = Table.AddIndexColumn(Table.FromColumns({Addresses}, {"住所"}), "i", 0),
-    Filled = Table.SelectRows(Indexed, each [住所] <> ""),
+    // 空の行は送らず、結果を行の番号で元の行に戻す。元のテーブルのほかの列はそのまま残す
+    Indexed = Table.AddIndexColumn(Source, "i", 0),
+    Trimmed = Table.SelectRows(
+        Table.FromColumns(
+            {Indexed[i], List.Transform(Indexed[住所], each if _ = null then "" else Text.Trim(Text.From(_)))},
+            {"i", "送る住所"}
+        ),
+        each [送る住所] <> ""
+    ),
+    // 結果を 1 度だけ読む (遅延評価で API を呼び直さない)
     Found = Table.FromColumns(
-        {Filled[i], List.Combine(List.Transform(List.Split(Filled[住所], 25), Post))}, {"j", "結果"}
+        {Trimmed[i], List.Buffer(List.Combine(List.Transform(List.Split(Trimmed[送る住所], 25), Post)))},
+        {"j", "結果"}
     ),
     Joined = Table.RemoveColumns(
         Table.Sort(Table.Join(Indexed, "i", Found, "j", JoinKind.LeftOuter), {"i"}), {"i", "j"}
