@@ -44,34 +44,27 @@ const worse = moved.filter(
   ({ b, h }) => b.error_m !== null && (h.error_m === null || h.error_m - b.error_m >= FAR),
 );
 const better = moved.filter(
-  ({ b, h }) => h.error_m !== null && b.error_m !== null && b.error_m - h.error_m >= FAR,
+  ({ b, h }) => h.error_m !== null && (b.error_m === null || b.error_m - h.error_m >= FAR),
 );
 
 const [s0, s1] = [stats(base), stats(head)];
-// 誤差の中央値と 1km 超の割合は、本番で座標を返した住所だけで比較する。本番で答えなしだった住所に答えるようになった分は、
-// 下の「新たに答えた住所」に分けて載せる (回答率を上げる変更で、新しい答えの外れを悪化と数えない)
-const locatedInBase = moved.filter(({ b }) => b.error_m !== null);
-const [k0, k1] = [stats(locatedInBase.map(({ b }) => b)), stats(locatedInBase.map(({ h }) => h))];
 // 止める条件。数パーセントの揺れは R2 の読みの失敗などでも出るので、わずかな幅は見逃す
 const failures = [
   s1.answered < s0.answered - 0.1 && "回答率が下がった",
   s1.located < s0.located - 0.1 && "座標付与率が下がった",
   s1.fine < s0.fine - 0.2 && "地番・街区レベル以上の割合が下がった",
-  k1.median > k0.median + 2 && "本番で座標を返した住所の誤差の中央値が、2m を超えて悪くなった",
-  k1.over1km > k0.over1km + 0.2 && "本番で座標を返した住所のうち、1km 超の割合が増えた",
+  s1.median > s0.median + 2 && "誤差の中央値が 2m を超えて悪くなった",
+  s1.over1km > s0.over1km + 0.2 && "1km 超が増えた",
   worse.length > better.length && `${FAR}m 以上遠ざかった住所が、近づいた住所より多い`,
 ].filter((f): f is string => f !== false);
 
 // 誤照合: 座標を返したが、正解から 1km を超えて離れているもの。間違った場所を返すと利用者は気づけないので、
-// 本番で 1km 以内だった住所が 1 件でも誤照合になったら失敗にする (「字」を読み飛ばして別の町字に当てるなど)。
-// 本番で答えなしだった住所の答えは、当たり外れを「新たに答えた住所」に載せるだけにする。
+// 本番では誤照合でなかった住所が 1 件でも誤照合になったら失敗にする (「字」を読み飛ばして別の町字に当てるなど)。
 // 件数の増減で判定すると、同じ型の別の住所が直った分だけ新しい誤照合が隠れるので、住所ごとに比較する
 const MISS = 1000;
 const isMiss = (r: Row) => r.error_m !== null && r.error_m > MISS;
 const patternOf = (r: Row) => r.pattern || "-";
-const wasRight = (r: Row) => r.error_m !== null && !isMiss(r);
-const newMisses = moved.filter(({ b, h }) => wasRight(b) && isMiss(h));
-const newAnswers = moved.filter(({ b, h }) => b.error_m === null && h.error_m !== null);
+const newMisses = moved.filter(({ b, h }) => !isMiss(b) && isMiss(h));
 const misses = [...Map.groupBy(moved, ({ b }) => patternOf(b))]
   .sort(([a], [b]) => (a < b ? -1 : 1))
   .map(([pattern, ms]) => ({
@@ -79,14 +72,14 @@ const misses = [...Map.groupBy(moved, ({ b }) => patternOf(b))]
     count: ms.length,
     base: ms.filter(({ b }) => isMiss(b)).length,
     head: ms.filter(({ h }) => isMiss(h)).length,
-    added: ms.filter(({ b, h }) => wasRight(b) && isMiss(h)).length,
+    added: ms.filter(({ b, h }) => !isMiss(b) && isMiss(h)).length,
   }));
 failures.push(
   ...misses
     .filter((m) => m.added > 0)
     .map(
       (m) =>
-        `書き方の型「${m.pattern}」で、本番で ${MISS / 1000}km 以内だった住所が ${m.added} 件誤照合になった`,
+        `書き方の型「${m.pattern}」で、本番では誤照合 (${MISS / 1000}km 超) でなかった住所が ${m.added} 件誤照合になった`,
     ),
 );
 
@@ -108,14 +101,14 @@ console.log(
     "",
     "書き方の型ごとの誤照合 (座標を返したが正解から 1km 超)",
     "",
-    "| 型 | 件数 | 本番 | この PR | 1km 以内から誤照合になった |",
+    "| 型 | 件数 | 本番 | この PR | 新たな誤照合 |",
     "|---|---|---|---|---|",
     ...misses.map((m) => `| ${m.pattern} | ${m.count} | ${m.base} | ${m.head} | ${m.added} |`),
     "",
     ...(newMisses.length === 0
       ? []
       : [
-          "| 1km 以内から誤照合になった住所 | 型 | 本番 | この PR |",
+          "| 新たに誤照合になった住所 | 型 | 本番 | この PR |",
           "|---|---|---|---|",
           ...newMisses
             .slice(0, 50)
@@ -125,22 +118,7 @@ console.log(
             ),
           "",
         ]),
-    ...(newAnswers.length === 0
-      ? []
-      : [
-          `本番で答えなしだった住所のうち、この PR で座標を返した ${newAnswers.length} 件 (うち ${MISS / 1000}km 以内 ${newAnswers.filter(({ h }) => !isMiss(h)).length} 件)`,
-          "",
-          "| 新たに答えた住所 | 型 | この PR |",
-          "|---|---|---|",
-          ...newAnswers
-            .slice(0, 50)
-            .map(
-              ({ b, h }) =>
-                `| ${b.address} | ${patternOf(b)} | ${km(h.error_m)} (${h.answer?.coordinates_level ?? "-"}) |`,
-            ),
-          "",
-        ]),
-    `本番で座標を返した住所のうち、${FAR}m 以上 近づいた ${better.length} 件、遠ざかった ${worse.length} 件 (座標を失ったものを含む)`,
+    `${FAR}m 以上 近づいた ${better.length} 件、遠ざかった ${worse.length} 件 (座標を失ったものを含む)`,
     "",
     ...(worse.length === 0
       ? []
