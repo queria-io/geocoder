@@ -63,6 +63,36 @@ const row = (name: string, lg_code: string): TownNameRow => ({
 });
 
 describe("withoutCity", () => {
+  it("よくある町名は、番号の頭の丁目を持つ市区町村に絞って当て直す", async () => {
+    const asked: string[] = [];
+    await withoutCity(
+      unmatched({ unmatched_address: ["天神5-9-2"] }),
+      "天神5-9-2",
+      names([
+        { ...row("天神", "072010"), chomes: [1, 2] },
+        { ...row("天神", "202011"), chomes: [1, 2, 3, 4, 5] },
+      ]),
+      Object.values(cities),
+      async (a) => {
+        asked.push(a);
+        return [];
+      },
+    );
+    expect(asked).toEqual(["長野県長野市天神5-9-2"]);
+  });
+
+  it("1 文字の町名は、すぐ後ろに番号があるときだけ使う", async () => {
+    const asked: string[] = [];
+    const ask = async (a: string) => {
+      asked.push(a);
+      return [hit("202011", "machiaza")];
+    };
+    const index = names([row("栄", "202011")]);
+    await withoutCity(unmatched(), "栄3-20-29", index, Object.values(cities), ask);
+    await withoutCity(unmatched(), "栄町1-82", index, Object.values(cities), ask);
+    expect(asked).toEqual(["長野県長野市栄3-20-29"]);
+  });
+
   it("候補の市区町村が上限より多ければ、人口の多い順に上限の数だけ当て直す", async () => {
     const many: CityResult[] = Array.from({ length: 20 }, (_, i) => ({
       lgCode: String(100000 + i),

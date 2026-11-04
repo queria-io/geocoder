@@ -18,3 +18,6 @@ fields:
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）"
+  - name: chomes
+    title: 丁目の番号
+    description: "その大字・町にある丁目の番号（「5丁目」なら 5）。丁目の無い大字・町は空"

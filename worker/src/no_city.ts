@@ -5,13 +5,21 @@ import { type CoordinateLevel, Detail, type MatchedResult } from "./model/model"
 import { compareResultStrength, strongestResult } from "./matching/search";
 import type { CityResult } from "./repository/types";
 
-/** 町名の索引の 1 行。name は頭の「大字」を外した大字・町の名前、name_key はその頭 2 文字 */
-export type TownNameRow = { name_key: string; name: string; lg_code: string };
-export const TOWN_NAME_COLUMNS = ["name_key", "name", "lg_code"];
+/**
+ * 町名の索引の 1 行。name は頭の「大字」を外した大字・町の名前、name_key はその頭 2 文字 (1 文字の町名はその 1 文字)。
+ * chomes はその大字・町にある丁目の番号 (索引を作り直す前の表には無い)
+ */
+export type TownNameRow = {
+  name_key: string;
+  name: string;
+  lg_code: string;
+  chomes?: readonly number[] | null;
+};
+export const TOWN_NAME_COLUMNS = ["name_key", "name", "lg_code", "chomes"];
 
 /**
- * 当て直す市区町村の上限。よくある町名 (「栄」「天神」) で候補がこれより多ければ、人口の多い順にこの数だけ
- * 当て直す (全部読むと読む量が増えすぎる)
+ * 当て直す市区町村の上限。丁目で絞っても候補がこれより多ければ、人口の多い順にこの数だけ当て直す
+ * (全部読むと読む量が増えすぎる)
  */
 export const MAX_CANDIDATE_CITIES = 16;
 
@@ -41,12 +49,25 @@ const kanjiNumber = (k: string): number | undefined => {
 export const numeralsOf = (s: string): string =>
   s.replace(/[一二三四五六七八九十]{1,3}(?=条|丁|線|地割)/g, (k) => String(kanjiNumber(k) ?? k));
 
-/** 頭 2 文字の索引の鍵。住所が「北1条」なら、表の「北一条」の鍵「北一」も引く */
+/**
+ * 頭 2 文字の索引の鍵。住所が「北1条」なら、表の「北一条」の鍵「北一」も引く。
+ * 1 文字の町名 (「栄3-20-29」の「栄」) の鍵として、頭の 1 文字も引く
+ */
 const keysOf = (rest: string): string[] => {
   const key = rest.slice(0, 2);
   const kanji = key.replace(/[0-9]/g, (d) => KANJI[Number(d)]);
-  return kanji === key ? [key] : [key, kanji];
+  return [...new Set([key, kanji, rest.slice(0, 1)])];
 };
+
+/** 町名の後ろの番号の頭。「天神5-9-2」「天神5丁目9-2」の 5。番号で始まらなければ undefined */
+const leadingNumber = (tail: string): number | undefined => {
+  const m = /^([0-9]+)(?:丁目|丁|[-－ー‐の]|番|$)/.exec(tail);
+  return m === null ? undefined : Number(m[1]);
+};
+
+/** 1 文字の町名は、すぐ後ろに番号があるときだけ使う (「東石川」を町名「東」と読まない) */
+const nameFits = (name: string, head: string): boolean =>
+  head.startsWith(name) && (name.length >= 2 || /^[0-9]/.test(head.slice(name.length)));
 
 const cityName = (c: CityResult) => c.pref + (c.county ?? "") + c.city + (c.ward ?? "");
 
@@ -162,15 +183,20 @@ export const withoutCity = async (
     if (found !== undefined && compareResultStrength(found, r) < 0) return [found];
   }
   const byCode = new Map(inPref.map((c) => [c.lgCode, c]));
+  const head = numeralsOf(rest);
   const rows = (await Promise.all(keysOf(rest).map(names)))
     .flat()
-    .filter((n) => byCode.has(n.lg_code) && numeralsOf(rest).startsWith(numeralsOf(n.name)));
+    .filter((n) => byCode.has(n.lg_code) && nameFits(numeralsOf(n.name), head));
   // 「前田8条」は「前田」でなく「前田八条」を持つ市区町村だけを候補にする
   const longest = Math.max(...rows.map((n) => n.name.length));
+  const named = rows.filter((n) => n.name.length === longest);
+  // よくある町名 (「天神5-9-2」) は、番号の頭 (5) の丁目を持つ市区町村があれば、そこに絞る
+  const chome =
+    named.length > 1 ? leadingNumber(head.slice(numeralsOf(named[0].name).length)) : undefined;
+  const withChome = named.filter((n) => chome !== undefined && (n.chomes ?? []).includes(chome));
   const candidates = [
     ...new Set(
-      rows
-        .filter((n) => n.name.length === longest)
+      (withChome.length > 0 ? withChome : named)
         .map((n) => byCode.get(n.lg_code))
         .filter((c) => c !== undefined),
     ),
