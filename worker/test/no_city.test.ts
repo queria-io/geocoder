@@ -87,14 +87,14 @@ describe("withoutCity", () => {
     expect(r.match_level).toBe("unknown");
   });
 
-  it("長い町名で当たる市区町村が 1 つなら、それを採る", async () => {
+  it("住所に書かれた長い町名で当たる市区町村が 1 つなら、それを採る", async () => {
     const at = (lgCode: string, oaza: string, chome: string | null) => ({
       ...hit(lgCode, "machiaza"),
       structured_address: { ...emptySA(), oaza_cho: oaza, chome },
     });
     const r = await withoutCity(
       unmatched(),
-      "桧原3-13-17",
+      "桧原3丁目13-17",
       names([row("桧原", "072010"), row("桧原", "202011")]),
       Object.values(cities),
       async (a) => [
@@ -102,6 +102,25 @@ describe("withoutCity", () => {
       ],
     );
     expect(r.ids.lg_code).toBe("072010");
+  });
+
+  it("番地から読んだ丁目や住所に無い小字は、町名の長さに数えない", async () => {
+    const at = (lgCode: string, oaza: string, chome: string | null, koaza: string | null) => ({
+      ...hit(lgCode, "machiaza"),
+      structured_address: { ...emptySA(), oaza_cho: oaza, chome, koaza },
+    });
+    const r = await withoutCity(
+      unmatched(),
+      "大原町5-20",
+      names([row("大原町", "072010"), row("大原町", "202011")]),
+      Object.values(cities),
+      async (a) => [
+        a.startsWith("福島県")
+          ? at("072010", "大原町", "五丁目", null)
+          : at("202011", "大原町", null, "字上"),
+      ],
+    );
+    expect(r.match_level).toBe("unknown");
   });
 
   it("索引で長い町名を持つ市区町村だけを候補にする", async () => {
