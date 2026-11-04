@@ -3,6 +3,7 @@
 // DuckDB もデータベースも使わない。地図用に R2 へ置いた境界の PMTiles から、点の入るタイルを
 // Range で 1 枚だけ読み、点を含む多角形を JS で探す。待機中の費用はかからず、1 回の問い合わせは
 // R2 の読み 1〜2 回と数ミリ秒の計算で済む
+import { missPoint } from "./misses";
 import {
   EtagMismatch,
   PMTiles,
@@ -44,6 +45,8 @@ export interface Env extends ForwardEnv {
   BOUNDARY_TILES_FILE: string;
   /** IP ごとの回数の上限。費用を守るためのもので、ふつうの使い方では当たらない高さにする */
   LIMITER?: RateLimit;
+  /** 照合しきれなかった住所の記録 (src/misses.ts)。無ければ記録しない */
+  MISSES?: AnalyticsEngineDataset;
 }
 
 /** R2 のオブジェクトを PMTiles の Source として読む (queria-web の workers/basemap と同じ) */
@@ -607,6 +610,8 @@ const answer = async (
   area?: string,
 ) => {
   const { results, postalCode } = await geocode(env, address, limit, area);
+  const miss = missPoint(address, results);
+  if (miss !== null) env.MISSES?.writeDataPoint(miss);
   const extras = await Promise.all(
     results.map(async (r): Promise<Extras> => ({
       postal_code: groups.has("codes") ? await postalCode(r) : null,
