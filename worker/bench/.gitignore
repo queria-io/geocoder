@@ -1,2 +1,3 @@
 *.csv
 abr/
+!golden/*.csv

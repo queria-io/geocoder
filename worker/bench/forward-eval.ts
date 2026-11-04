@@ -1,4 +1,4 @@
-// 正引きの物差し。truth-forward.py の実住所を API に流し、当たった段・市区町村の一致・座標の誤差を出す。
+// 正引きのベンチマーク。truth-forward.py の住所を API に送り、照合レベル・市区町村の一致・座標の誤差を出す。
 // 使い方: pnpm tsx bench/forward-eval.ts bench/truth-forward.csv [出力の JSONL]
 //   BASE=http://localhost:8787 で手元の wrangler dev にも流せる (既定は本番)
 //   PREV=前回の出力の JSONL を渡すと、全体の数字を前回と並べる
@@ -15,6 +15,8 @@ type Truth = {
   lat: number;
   lng: number;
   city: string;
+  /** 住所の書き方の型 (truth-forward.py の PATTERNS) */
+  pattern: string;
 };
 type Answer = {
   lat: number | null;
@@ -33,13 +35,14 @@ const LANES = Number(process.env.LANES ?? 1);
 // 住所に「,」「"」や改行が入るので、一括変換のページと同じ読み方で割る
 const truths: Truth[] = parseCsv(readFileSync(process.argv[2], "utf8"))
   .slice(1)
-  .map(([source, id, address, lat, lng, city]) => ({
+  .map(([source, id, address, lat, lng, city, pattern]) => ({
     source,
     id,
     address,
     lat: Number(lat),
     lng: Number(lng),
     city,
+    pattern: pattern ?? "",
   }));
 
 const wait = (status: number | string, ms: number) => {
@@ -66,7 +69,7 @@ const post = async (addresses: string[], tries = 3): Promise<Answer[]> => {
     await wait(res.name, 5_000);
     return post(addresses, tries - 1);
   }
-  // 回数の上限 (429) と、R2 の一時的な失敗や CPU の超過 (5xx) は待って送り直す。何千件も流すので、1 回の失敗で全部を捨てない
+  // 回数の上限 (429) と、R2 の一時的な失敗や CPU の超過 (5xx) は待って送り直す。何千件も送るので、1 回の失敗で全部を捨てない
   if ((res.status === 429 || res.status >= 500) && tries > 0) {
     await wait(res.status, res.status === 429 ? 60_000 : 5_000);
     return post(addresses, res.status === 429 ? tries : tries - 1);
@@ -95,7 +98,7 @@ await Promise.all(Array.from({ length: LANES }, () => lane(cursor)));
 const answers: Answer[] = done.flat();
 
 // 政令市の区は区のコードで返すが、指定避難所は市のコードで持つ (横浜市の区は 14101〜、避難所は 14100)。
-// 区のコードを市のコードに戻してからも比べる
+// 区のコードを市のコードに戻してからも比較する
 const DESIGNATED = [
   "01100",
   "04100",
@@ -159,7 +162,7 @@ const groupBy = <K extends string>(rs: Row[], key: (r: Row) => K) =>
   [...Map.groupBy(rs, key)].sort(([a], [b]) => (a < b ? -1 : 1));
 
 const header =
-  "| 区分 | 件数 | 答えあり | 市区町村が一致 | 誤差の中央値 (m) | 90% | 95% | 100m 超 | 1km 超 |\n|---|---|---|---|---|---|---|---|---|";
+  "| 区分 | 件数 | 回答率 | 市区町村が一致 | 誤差の中央値 (m) | 90% | 95% | 100m 超 | 1km 超 |\n|---|---|---|---|---|---|---|---|---|";
 const table = (groups: [string, Row[]][]) =>
   [header, ...groups.map(([k, rs]) => `| ${summary(k, rs)} |`)].join("\n");
 
@@ -180,7 +183,9 @@ if (prev && existsSync(prev)) {
 }
 console.log(`## 元データごと (${BASE})\n`);
 console.log(table([...groupBy(rows, (r) => r.source), ["全体", rows]]));
-console.log("\n## 当たった段ごと\n");
-console.log(table(groupBy(rows, (r) => r.answer?.match_level ?? "答えなし")));
+console.log("\n## 住所の書き方の型ごと\n");
+console.log(table(groupBy(rows, (r) => r.pattern || "-")));
+console.log("\n## 照合レベルごと\n");
+console.log(table(groupBy(rows, (r) => r.answer?.match_level ?? "照合できない")));
 console.log("\n## 座標の点の段ごと\n");
 console.log(table(groupBy(rows, (r) => r.answer?.coordinates_level ?? "座標なし")));

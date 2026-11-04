@@ -1,18 +1,18 @@
 name: Bench
 
-# 正引きの物差し: 地価公示・指定避難所・介護サービス事業所の住所 3,000 件を本番の API に流し、
-# 当たった段と座標の誤差を表にする。表はジョブの Summary に、1 件ごとの答えは Artifact に残す
+# 正引きのベンチマーク: 地価公示・指定避難所・介護サービス事業所の住所を本番の API に送り、
+# 照合レベルと座標の誤差を表にする。表はジョブの Summary に、1 件ごとの結果は Artifact に残す。
+# 本番の結果が変わるのは Worker のデプロイとデータの Sync のときだけなので、そのときだけ実行する。
+# ここで残した結果が、PR の精度チェック (accuracy.yml) の基準になる
 on:
-  schedule:
-    - cron: "0 21 * * 0" # 毎週月曜 6:00 (日本時間)
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
   workflow_run:
     workflows: [Sync]
     types: [completed]
   workflow_dispatch:
-
-concurrency:
-  group: bench
-  cancel-in-progress: false
 
 jobs:
   forward:
@@ -26,7 +26,6 @@ jobs:
         working-directory: worker
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: worker/package.json
@@ -36,18 +35,31 @@ jobs:
           cache: pnpm
           cache-dependency-path: worker/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - name: 実住所と座標の組を作る
-        run: uv run --with 'duckdb>=1.4,<2' python bench/truth-forward.py 1000 > bench/truth-forward.csv
-      - name: 前回の答えを取る
+      - name: 前回の結果を取得する
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           prev=$(gh run list --workflow bench.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
           if [ -n "$prev" ]; then gh run download "$prev" --dir bench/prev || true; fi
-      - name: Sync のあとは Worker が新しいバージョンを読むまで待つ
+      - name: 本番へのデプロイの完了を待つ
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          for _ in $(seq 1 60); do
+            status=$(gh api "repos/$REPO/commits/$SHA/check-runs" \
+              -f check_name="Workers Builds: queria-geocoder" -X GET --jq '.check_runs[0].status // ""')
+            [ "$status" = completed ] && exit 0
+            sleep 20
+          done
+          echo "::error::Workers Builds が 20 分で終わらなかった"
+          exit 1
+      - name: Sync の後は Worker が新しいバージョンを読むまで待つ
         if: github.event_name == 'workflow_run'
-        run: sleep 360 # Worker は refs と files.json を 5 分覚える
-      - name: 本番に流す
+        run: sleep 360 # Worker は refs と files.json を 5 分キャッシュする
+      - name: 本番に住所を送って評価する
         env:
           # 25 件まとめは 1 回の CPU が上限に当たりやすい。5 件ずつ 4 本並べる
           BATCH: "5"
@@ -55,11 +67,11 @@ jobs:
         run: |
           set -o pipefail
           export PREV=$(find bench/prev -name forward.jsonl 2>/dev/null | head -1)
-          pnpm exec tsx bench/forward-eval.ts bench/truth-forward.csv bench/forward.jsonl | tee -a "$GITHUB_STEP_SUMMARY"
+          pnpm exec tsx bench/forward-eval.ts bench/golden/truth-forward.csv bench/forward.jsonl | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: forward-${{ github.run_id }}
           path: |
-            worker/bench/truth-forward.csv
+            worker/bench/golden/truth-forward.csv
             worker/bench/forward.jsonl
           retention-days: 90
