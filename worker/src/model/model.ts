@@ -73,6 +73,8 @@ export type MatchedResult = {
    * 推定しており、候補を人口の多い順に並べて返す
    */
   candidates?: number;
+  /** 旧市区町村名 (「員弁郡員弁町」) を今の市区町村に読み替えて照合したとき true。上流には無い */
+  former_city?: boolean;
   machiaza: MachiazaData;
 };
 

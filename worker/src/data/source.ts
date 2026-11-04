@@ -14,6 +14,7 @@ export const TABLES = {
   parcel: "main.parcel",
   point: "main.address_point",
   town_name: "town.town_name",
+  former_city: "town.former_city",
 } as const;
 export type TableName = keyof typeof TABLES;
 

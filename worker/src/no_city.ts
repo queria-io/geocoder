@@ -5,14 +5,28 @@ import { type CoordinateLevel, Detail, type MatchedResult } from "./model/model"
 import { compareResultStrength, strongestResult } from "./matching/search";
 import type { CityResult } from "./repository/types";
 
-/** 町名の索引の 1 行。name は頭の「大字」を外した大字・町の名前、name_key はその頭 2 文字 */
-export type TownNameRow = { name_key: string; name: string; lg_code: string };
-export const TOWN_NAME_COLUMNS = ["name_key", "name", "lg_code"];
+/**
+ * 町名の索引の 1 行 (町字ごとに 1 行)。name は頭の「大字」を外した大字・町の名前、name_key はその頭 2 文字
+ * (1 文字の町名はその 1 文字)。chome は丁目の番号、koaza は小字の名前 (頭の「字」を外す)、numbers はその町字にある
+ * 番号 (街区符号・地番の本番) の一覧。chome・koaza・numbers は索引を作り直す前の表には無い
+ */
+export type TownNameRow = {
+  name_key: string;
+  name: string;
+  lg_code: string;
+  chome?: number | null;
+  koaza?: string | null;
+  numbers?: readonly number[] | null;
+};
+export const TOWN_NAME_COLUMNS = ["name_key", "name", "lg_code", "chome", "koaza", "numbers"];
 
-/** 候補の市区町村がこれより多ければ当て直さない (よくある町名で読む量が増えすぎる) */
+/**
+ * 当て直す市区町村の上限。住所に書かれた町名・小字・丁目・番号が同じ深さまで実在する市区町村がこれより多いときは、
+ * 人口の多い順にこの数だけ当て直す (市区町村ごとに町字の表を読むので、全部読むと応答時間が延びる)
+ */
 export const MAX_CANDIDATE_CITIES = 16;
 
-const PREF = /^(東京都|北海道|(京都|大阪)府|.{2,3}県)/;
+export const PREF = /^(東京都|北海道|(京都|大阪)府|.{2,3}県)/;
 
 /** 索引と同じ形にそろえる。全角の英数字・空白を直し、頭の「大字」を外し、「ヶ」を「ケ」にする */
 export const townNameOf = (s: string): string =>
@@ -38,14 +52,60 @@ const kanjiNumber = (k: string): number | undefined => {
 export const numeralsOf = (s: string): string =>
   s.replace(/[一二三四五六七八九十]{1,3}(?=条|丁|線|地割)/g, (k) => String(kanjiNumber(k) ?? k));
 
-/** 頭 2 文字の索引の鍵。住所が「北1条」なら、表の「北一条」の鍵「北一」も引く */
+/**
+ * 頭 2 文字の索引の鍵。住所が「北1条」なら、表の「北一条」の鍵「北一」も引く。
+ * 1 文字の町名 (「栄3-20-29」の「栄」) の鍵として、頭の 1 文字も引く
+ */
 const keysOf = (rest: string): string[] => {
   const key = rest.slice(0, 2);
   const kanji = key.replace(/[0-9]/g, (d) => KANJI[Number(d)]);
-  return kanji === key ? [key] : [key, kanji];
+  return [...new Set([key, kanji, rest.slice(0, 1)])];
 };
 
-const cityName = (c: CityResult) => c.pref + (c.county ?? "") + c.city + (c.ward ?? "");
+/**
+ * 番号の並びの頭の 2 つ。「5-9-2」「5丁目9番2号」なら [5, 9]、「1928番1」なら [1928, 1]。
+ * 頭の番号に「番」「番地」が付いていれば (「3番地5」) 丁目ではないので、banchi を true にする
+ */
+const leadingNumbers = (tail: string): { numbers: number[]; banchi: boolean } => {
+  const m = /^([0-9]+)(丁目|丁|番地?|[-－ー‐の]|$)(?:([0-9]+)(?:番地?|号|[-－ー‐の]|$))?/.exec(
+    tail,
+  );
+  if (m === null) return { numbers: [], banchi: false };
+  return {
+    numbers: [m[1], m[3]].filter((x) => x !== undefined).map(Number),
+    banchi: m[2].startsWith("番"),
+  };
+};
+
+/**
+ * 1 つの市区町村で、住所の町名の後ろに書かれた要素 (小字、丁目、番号) のうち実在するものの数。
+ * 小字はその名前の町字があれば、丁目は番号の頭 (「天神5-9-2」の 5) の丁目があれば数える。番号は、丁目があれば
+ * その丁目の町字に次の番号 (9) が、丁目が無ければ丁目の無い町字に頭の番号 (「新田1928番1」の 1928) があれば数える
+ */
+const depthOf = (rows: readonly TownNameRow[], tail: string): number => {
+  const plain = tail.replace(/^字/, "");
+  const koaza = rows
+    .map((n) => n.koaza ?? "")
+    .filter((k) => k !== "" && plain.startsWith(k))
+    .reduce<string | undefined>(
+      (m, k) => (m === undefined || k.length > m.length ? k : m),
+      undefined,
+    );
+  // 小字まで書いてあれば、丁目と番号はその小字の町字の中で探す
+  const scoped = koaza === undefined ? rows : rows.filter((n) => n.koaza === koaza);
+  const {
+    numbers: [first, second],
+    banchi,
+  } = leadingNumbers(koaza === undefined ? tail : plain.slice(koaza.length));
+  const chomeRows = scoped.filter((n) => !banchi && first !== undefined && n.chome === first);
+  const number = chomeRows.length > 0 ? second : first;
+  const numberRows = chomeRows.length > 0 ? chomeRows : scoped.filter((n) => n.chome == null);
+  const numberHit =
+    number !== undefined && numberRows.some((n) => (n.numbers ?? []).includes(number));
+  return Number(koaza !== undefined) + Number(chomeRows.length > 0) + Number(numberHit);
+};
+
+export const cityName = (c: CityResult) => c.pref + (c.county ?? "") + c.city + (c.ward ?? "");
 
 /**
  * 当たった町字の名前 (大字・町、丁目、小字) のうち、住所の頭にそのまま書かれている部分の長さ。
@@ -159,23 +219,33 @@ export const withoutCity = async (
     if (found !== undefined && compareResultStrength(found, r) < 0) return [found];
   }
   const byCode = new Map(inPref.map((c) => [c.lgCode, c]));
+  const head = numeralsOf(rest);
   const rows = (await Promise.all(keysOf(rest).map(names)))
     .flat()
-    .filter((n) => byCode.has(n.lg_code) && numeralsOf(rest).startsWith(numeralsOf(n.name)));
+    .filter((n) => byCode.has(n.lg_code) && head.startsWith(numeralsOf(n.name)));
   // 「前田8条」は「前田」でなく「前田八条」を持つ市区町村だけを候補にする
   const longest = Math.max(...rows.map((n) => n.name.length));
-  const candidates = [
-    ...new Set(
-      rows
-        .filter((n) => n.name.length === longest)
-        .map((n) => byCode.get(n.lg_code))
-        .filter((c) => c !== undefined),
-    ),
-  ];
-  if (candidates.length === 0 || candidates.length > MAX_CANDIDATE_CITIES) return [r];
-  const tried = (await Promise.all(candidates.map((c) => retry(c, rest, match)))).flat();
+  const named = rows.filter((n) => n.name.length === longest);
+  // 町名の後ろに書かれた小字・丁目・番号が最も深くまで実在する市区町村を候補にし、人口の多い順に並べる
+  const tail = named.length > 0 ? head.slice(numeralsOf(named[0].name).length) : "";
+  const depths = [...Map.groupBy(named, (n) => n.lg_code)].flatMap(([code, rows]) => {
+    const city = byCode.get(code);
+    return city === undefined ? [] : [{ city, depth: depthOf(rows, tail) }];
+  });
+  if (depths.length === 0) return [r];
+  const deepest = Math.max(...depths.map((d) => d.depth));
+  const candidates = depths
+    .filter((d) => d.depth === deepest)
+    .map((d) => d.city)
+    .toSorted((a, b) => (b.population ?? 0) - (a.population ?? 0));
+  const tried = (
+    await Promise.all(candidates.slice(0, MAX_CANDIDATE_CITIES).map((c) => retry(c, rest, match)))
+  ).flat();
   if (tried.length === 0) return [r];
-  return byCity(tried, rest, (code) => byCode.get(code)?.population ?? 0);
+  const found = byCity(tried, rest, (code) => byCode.get(code)?.population ?? 0);
+  // 上限で当て直さなかった市区町村も候補の数に含める (当て直して当たらなかった市区町村は数えない)
+  const count = found.length + Math.max(0, candidates.length - MAX_CANDIDATE_CITIES);
+  return count > 1 ? found.map((x) => ({ ...x, candidates: count })) : found;
 };
 
 // 都道府県名の前に付いた 1〜2 文字 (「ｼ静岡県浜松市…」)。入力の誤りとみて外す

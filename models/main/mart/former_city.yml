@@ -1,0 +1,23 @@
+version: 2
+
+models:
+  - name: former_city
+    description: |
+      合併などで無くなった市区町村の名前から、その範囲を引き継いだ今の市区町村を引く索引。旧市区町村名で書いた住所の照合に使う。
+      『歴史的行政区域データセットβ版』（CODH作成） doi:10.20676/00000447（CC BY 4.0、https://geoshape.ex.nii.ac.jp/city/）を加工して作成。
+    access: public
+    columns:
+      - name: name_key
+        data_type: varchar
+      - name: name
+        data_type: varchar
+      - name: town_prefix
+        data_type: varchar
+      - name: pref_code
+        data_type: varchar
+      - name: lg_code
+        data_type: varchar
+      - name: share
+        data_type: double
+      - name: one_pref
+        data_type: boolean

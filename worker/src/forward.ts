@@ -33,6 +33,7 @@ import { nearestAddress, type Nearby } from "./nearby";
 import { withAzaSkipped } from "./skip_aza";
 import { withOazaChome } from "./oaza_chome";
 import { withRenamedWard } from "./renamed_ward";
+import { FORMER_CITY_COLUMNS, type FormerCityRow, withFormerCity } from "./former_city";
 import {
   orderCandidates,
   TOWN_NAME_COLUMNS,
@@ -125,6 +126,7 @@ type Built = {
   points: (lgCode: string, machiazaId: string) => Promise<PointRow[]>;
   city: (lgCode: string) => CityResult | undefined;
   names: (key: string) => Promise<TownNameRow[]>;
+  formers: (key: string) => Promise<FormerCityRow[]>;
   cities: readonly CityResult[];
 };
 
@@ -163,6 +165,7 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
     city: (lgCode) => cityByCode.get(lgCode),
     cities,
     names: keyLoader<TownNameRow>(bucket, tables.town_name, "name_key", TOWN_NAME_COLUMNS),
+    formers: keyLoader<FormerCityRow>(bucket, tables.former_city, "name_key", FORMER_CITY_COLUMNS),
   };
 };
 
@@ -231,7 +234,13 @@ export const geocode = async (
   // 上流の結果ごとに、市区町村を補った候補の組を作る
   const groups = await Promise.all(
     upstream.map(async (r) => {
-      const n = await withLeadingNoise(r, address, match);
+      const n = await withFormerCity(
+        await withLeadingNoise(r, address, match),
+        address,
+        built.formers,
+        built.city,
+        match,
+      );
       // 市区町村まで決まった地域の外の結果は、この後の段で地域の中に移らない
       if (Detail(n.match_level) >= Detail("city") && !inArea(n.ids.lg_code)) return [];
       // 候補は座標を引いてから並べ直すので、limit ではなく上限まで残す
@@ -245,10 +254,13 @@ export const geocode = async (
             await withOazaChome(await withRenamedWard(c, address, match), address, match),
             match,
           );
-          // 当て直した結果に、市区町村を推定した候補の数を引き継ぐ
-          return c.candidates === undefined || out === c
-            ? out
-            : { ...out, candidates: c.candidates };
+          // 当て直した結果に、市区町村を推定した候補の数と、旧市区町村名を読み替えた印を引き継ぐ
+          if (out === c) return out;
+          return {
+            ...out,
+            ...(c.candidates === undefined ? {} : { candidates: c.candidates }),
+            ...(c.former_city === true ? { former_city: true } : {}),
+          };
         }),
       );
       // 当たらなかったもの (都道府県も決まらない) は返さない

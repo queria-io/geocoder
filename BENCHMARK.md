@@ -6,12 +6,12 @@
 
 | ジオコーダー | 回答率 | 市区町村の正解率 | 地番・街区レベル以上の割合 | 誤差の中央値 | 誤差 100m 以内の割合 | 誤差の 95 パーセンタイル | 誤差 1km 超の割合 |
 |---|---|---|---|---|---|---|---|
-| Queria Geocoder | 98.2% | 98.1% | 78.9% | **39m** | **72.4%** | **855m** | **4.3%** |
+| Queria Geocoder | 99.8% | **99.7%** | 80.4% | **39m** | **73.6%** | **861m** | **4.4%** |
 | [jageocoder](https://github.com/t-sagara/jageocoder) | **100%** | 98.5% | **80.6%** | 46m | 72.1% | 1,100m | 5.3% |
-| [abr-geocoder](https://github.com/digital-go-jp/abr-geocoder)（デジタル庁） | **100%** | **99.6%** | 47.9% | 87m | 53.0% | 1,860m | 10.9% |
+| [abr-geocoder](https://github.com/digital-go-jp/abr-geocoder)（デジタル庁） | **100%** | 99.6% | 47.9% | 87m | 53.0% | 1,860m | 10.9% |
 | [normalize-japanese-addresses](https://github.com/geolonia/normalize-japanese-addresses)（Geolonia） | 98.3% | 98.0% | 57.3% | 115m | 46.2% | 2,263m | 12.6% |
 
-太字は各列で最も良い値。回答した住所に限った市区町村の一致率は、Queria Geocoder 99.9%、jageocoder 98.5%、abr-geocoder 99.6%、normalize-japanese-addresses 99.7% である。
+太字は各列で最も良い値。回答した住所に限った市区町村の一致率は、Queria Geocoder 99.8%、jageocoder 98.5%、abr-geocoder 99.6%、normalize-japanese-addresses 99.7% である。
 
 ### 評価指標
 
@@ -33,7 +33,7 @@
 
 | ジオコーダー | 地価公示の標準地 | 指定避難所 | 介護サービス事業所 |
 |---|---|---|---|
-| Queria Geocoder | 100% / 66.5% / 44m / 401m / 1.8% | 100% / 84.3% / 50m / 1,463m / 7.0% | 94.6% / 85.9% / 26m / 749m / 4.0% |
+| Queria Geocoder | 100% / 66.5% / 44m / 401m / 1.8% | 100% / 84.3% / 50m / 1,463m / 7.0% | 99.5% / 90.3% / 25m / 833m / 4.4% |
 | jageocoder | 100% / 67.2% / 64m / 353m / 1.5% | 100% / 82.8% / 54m / 3,279m / 9.7% | 100% / 91.9% / 26m / 859m / 4.7% |
 | abr-geocoder | 100% / 27.0% / 127m / 1,339m / 7.1% | 100% / 54.9% / 95m / 2,554m / 14.9% | 99.9% / 61.8% / 39m / 1,715m / 10.7% |
 | normalize-japanese-addresses | 100% / 33.9% / 145m / 1,778m / 8.9% | 100% / 66.3% / 129m / 3,892m / 17.4% | 94.8% / 71.6% / 53m / 1,809m / 11.4% |
@@ -60,7 +60,7 @@
    - abr-geocoder 2.3.1（全国データ）
    - normalize-japanese-addresses 3.1.3
    - jageocoder（辞書 jukyo_all_v22.20260417）
-   - Queria Geocoder は本番 API（データ geocoder-20261103-01a1a0c3）
+   - Queria Geocoder は本番 API（データ geocoder-20261104-01a1a439）
 5. 誤差は、すべてのジオコーダーで同じ計算式（球面上の直線距離）で求めた（Queria Geocoder の分は [`forward-eval.ts`](worker/bench/forward-eval.ts)）
 
 正解は建物や土地の位置であるため、町字の代表点を返した住所はその分だけ誤差が大きくなる。この影響はすべてのジオコーダーに同じように及ぶ。

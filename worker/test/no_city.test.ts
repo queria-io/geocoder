@@ -63,6 +63,122 @@ const row = (name: string, lg_code: string): TownNameRow => ({
 });
 
 describe("withoutCity", () => {
+  const asking = (index: TownNameRow[], input: string) => {
+    const asked: string[] = [];
+    return withoutCity(unmatched(), input, names(index), Object.values(cities), async (a) => {
+      asked.push(a);
+      return [];
+    }).then(() => asked);
+  };
+
+  it("住所の番号の頭の丁目を持つ市区町村に絞って当て直す", async () => {
+    const index = [
+      { ...row("天神", "072010"), chome: 1 },
+      { ...row("天神", "072010"), chome: 2 },
+      { ...row("天神", "202011"), chome: 5 },
+    ];
+    expect(await asking(index, "天神5-9-2")).toEqual(["長野県長野市天神5-9-2"]);
+  });
+
+  it("丁目まで同じなら、その丁目に次の番号の街区がある市区町村に絞る", async () => {
+    const index = [
+      { ...row("天神", "072010"), chome: 1, numbers: [1, 7] },
+      { ...row("天神", "202011"), chome: 1, numbers: [1, 5, 8, 12] },
+    ];
+    expect(await asking(index, "天神1-8-35")).toEqual(["長野県長野市天神1-8-35"]);
+  });
+
+  it("丁目の無い町名は、頭の番号の地番がある市区町村に絞る", async () => {
+    const index = [
+      { ...row("新田", "072010"), numbers: [1, 2, 900] },
+      { ...row("新田", "202011"), numbers: [1, 1928, 2000] },
+    ];
+    expect(await asking(index, "新田1928番1")).toEqual(["長野県長野市新田1928番1"]);
+  });
+
+  it("小字まで書いた住所は、その小字を持つ市区町村に絞る", async () => {
+    const index = [
+      { ...row("新田", "072010"), koaza: "小羽広", numbers: [1, 2000] },
+      { ...row("新田", "202011"), koaza: "羽広" },
+      { ...row("新田", "202011"), numbers: [1, 900] },
+    ];
+    expect(await asking(index, "大字新田字羽広1928番1")).toEqual(["長野県長野市新田字羽広1928番1"]);
+  });
+
+  it("小字まで書いた住所の番号は、その小字の町字の中で探す", async () => {
+    const index = [
+      { ...row("新田", "072010"), koaza: "羽広", numbers: [1] },
+      { ...row("新田", "072010"), numbers: [1928] },
+      { ...row("新田", "202011"), koaza: "羽広", numbers: [1928] },
+    ];
+    expect(await asking(index, "新田字羽広1928番1")).toEqual(["長野県長野市新田字羽広1928番1"]);
+  });
+
+  it("「番」「番地」の付いた頭の番号は丁目とみなさない", async () => {
+    const index = [
+      { ...row("天神", "072010"), chome: 3, numbers: [1] },
+      { ...row("天神", "202011"), numbers: [3] },
+    ];
+    expect(await asking(index, "天神3番地5")).toEqual(["長野県長野市天神3番地5"]);
+  });
+
+  it("当て直して当たらなかった市区町村は候補の数に含めない", async () => {
+    const found = await withoutCity(
+      unmatched({ unmatched_address: ["天神1-9-1"] }),
+      "天神1-9-1",
+      names([row("天神", "072010"), row("天神", "202011")]),
+      Object.values(cities),
+      async (a) => (a.startsWith("長野県長野市") ? [hit("202011", "machiaza")] : []),
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0].candidates).toBeUndefined();
+  });
+
+  it("どの市区町村にも番号が無ければ、町名を持つ市区町村をすべて当て直す", async () => {
+    const index = [
+      { ...row("天神", "072010"), chome: 1, numbers: [1, 7] },
+      { ...row("天神", "202011"), chome: 1, numbers: [1, 5] },
+    ];
+    expect(await asking(index, "天神1-9-1")).toHaveLength(2);
+  });
+
+  it("1 文字の町名も、後ろの丁目が実在する市区町村に絞る", async () => {
+    const index = [
+      { ...row("栄", "072010"), chome: 1 },
+      { ...row("栄", "202011"), chome: 3 },
+    ];
+    expect(await asking(index, "栄3-20-29")).toEqual(["長野県長野市栄3-20-29"]);
+  });
+
+  it("候補の市区町村が上限より多ければ、人口の多い順に上限の数だけ当て直す", async () => {
+    const many: CityResult[] = Array.from({ length: 20 }, (_, i) => ({
+      lgCode: String(100000 + i),
+      pref: "愛知県",
+      county: null,
+      city: `市${i}`,
+      ward: null,
+      lon: null,
+      lat: null,
+      population: i * 1000,
+    }));
+    const asked: string[] = [];
+    const found = await withoutCity(
+      unmatched({ unmatched_address: ["天神5-9-2"] }),
+      "天神5-9-2",
+      names(many.map((c) => row("天神", c.lgCode))),
+      many,
+      async (a) => {
+        asked.push(a);
+        const c = many.find((x) => a.startsWith(x.pref + x.city + "天神"));
+        return c === undefined ? [] : [hit(c.lgCode, "machiaza")];
+      },
+    );
+    expect(asked).toHaveLength(16);
+    expect(asked).not.toContain("愛知県市0天神5-9-2");
+    expect(found[0].ids.lg_code).toBe("100019");
+    expect(found[0].candidates).toBe(20);
+  });
+
   it("町名を持つ市区町村が 1 つなら、市区町村名を補って当て直す", async () => {
     const asked: string[] = [];
     const [r] = await withoutCity(
