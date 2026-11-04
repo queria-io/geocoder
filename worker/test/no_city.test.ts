@@ -76,7 +76,7 @@ describe("withoutCity", () => {
     expect(r.ids.lg_code).toBe("072010");
   });
 
-  it("番地まで当たる市区町村が 1 つだけなら、それを採る", async () => {
+  it("同じ町名を持つ市区町村が 2 つあれば、番地まで当たるのが 1 つでも返さない", async () => {
     const r = await withoutCity(
       unmatched(),
       "松川町1",
@@ -84,7 +84,39 @@ describe("withoutCity", () => {
       Object.values(cities),
       async (a) => [a.startsWith("福島県") ? hit("072010", "parcel") : hit("202011", "machiaza")],
     );
+    expect(r.match_level).toBe("unknown");
+  });
+
+  it("長い町名で当たる市区町村が 1 つなら、それを採る", async () => {
+    const at = (lgCode: string, oaza: string, chome: string | null) => ({
+      ...hit(lgCode, "machiaza"),
+      structured_address: { ...emptySA(), oaza_cho: oaza, chome },
+    });
+    const r = await withoutCity(
+      unmatched(),
+      "桧原3-13-17",
+      names([row("桧原", "072010"), row("桧原", "202011")]),
+      Object.values(cities),
+      async (a) => [
+        a.startsWith("福島県") ? at("072010", "桧原", "三丁目") : at("202011", "大字桧原", null),
+      ],
+    );
     expect(r.ids.lg_code).toBe("072010");
+  });
+
+  it("索引で長い町名を持つ市区町村だけを候補にする", async () => {
+    const asked: string[] = [];
+    await withoutCity(
+      unmatched(),
+      "前田8条17丁目9番12号",
+      names([row("前田八条", "072010"), row("前田", "202011")]),
+      Object.values(cities),
+      async (a) => {
+        asked.push(a);
+        return [];
+      },
+    );
+    expect(asked).toEqual(["福島県福島市前田8条17丁目9番12号"]);
   });
 
   it("2 つの市区町村で同じ強さに当たれば返さない", async () => {

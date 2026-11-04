@@ -1,6 +1,6 @@
 // 市区町村名を書かない住所 (「松川町字市坂3-1」「福島県松川町字市坂3-1」)。上流は都道府県止まりか、何も返さない。
 // 町名の索引 (town.town_name) から、その町名を持つ市区町村を引き、市区町村名を補って当て直す。
-// 全国で 1 つの町字に決まるときだけ採る。上流には無い段
+// 全国で 1 つの町字の名前に決まるときだけ採る。上流には無い段
 import { Detail, type MatchedResult } from "./model/model";
 import { compareResultStrength, strongestResult } from "./matching/search";
 import type { CityResult } from "./repository/types";
@@ -47,13 +47,22 @@ const keysOf = (rest: string): string[] => {
 
 const cityName = (c: CityResult) => c.pref + (c.county ?? "") + c.city + (c.ward ?? "");
 
+/** 当たった町字の名前 (大字・町、丁目、小字) の長さ。番地の段は含めない */
+const townDepth = (x: MatchedResult): number =>
+  townNameOf(
+    (x.structured_address.oaza_cho ?? "") +
+      (x.structured_address.chome ?? "") +
+      (x.structured_address.koaza ?? ""),
+  ).length;
+
 /**
- * 町字まで当たったもののうち、最も細かい段まで当たったものを採る。その段まで当たった市区町村が
- * 2 つ以上あれば、どれか決められないので採らない (点数の差では選ばない)
+ * 町字の名前が最も長く当たったものを採る。その名前で当たった市区町村が 2 つ以上あれば、どれか
+ * 決められないので採らない。番地まで当たったかどうかでは選ばない (片方の市区町村に番地の点が
+ * 無いだけのことがある)
  */
 const uniqueStrongest = (found: MatchedResult[]): MatchedResult | undefined => {
-  const top = Math.max(...found.map((x) => Detail(x.match_level)));
-  const best = found.filter((x) => Detail(x.match_level) === top);
+  const top = Math.max(...found.map(townDepth));
+  const best = found.filter((x) => townDepth(x) === top);
   return new Set(best.map((x) => x.ids.lg_code)).size === 1 ? strongestResult(best) : undefined;
 };
 
@@ -88,11 +97,15 @@ export const withoutCity = async (
     if (found !== undefined && compareResultStrength(found, r) < 0) return found;
   }
   const byCode = new Map(inPref.map((c) => [c.lgCode, c]));
+  const rows = (await Promise.all(keysOf(rest).map(names)))
+    .flat()
+    .filter((n) => byCode.has(n.lg_code) && numeralsOf(rest).startsWith(numeralsOf(n.name)));
+  // 「前田8条」は「前田」でなく「前田八条」を持つ市区町村だけを候補にする
+  const longest = Math.max(...rows.map((n) => n.name.length));
   const candidates = [
     ...new Set(
-      (await Promise.all(keysOf(rest).map(names)))
-        .flat()
-        .filter((n) => numeralsOf(rest).startsWith(numeralsOf(n.name)))
+      rows
+        .filter((n) => n.name.length === longest)
         .map((n) => byCode.get(n.lg_code))
         .filter((c) => c !== undefined),
     ),
