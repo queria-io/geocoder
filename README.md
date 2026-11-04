@@ -11,6 +11,24 @@
 curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東京都千代田区紀尾井町1-3"
 ```
 
+## 利用条件
+
+- 無料で提供している
+- 負荷を抑えるため、1 つの IP アドレスから 1 分に 300 回までに制限している。超えると 429 を返す
+- ベータの間は、API のレスポンスの項目や形式（JSON の構造）を予告なく変更することがある。元データの利用条件が変わった場合は、提供の内容を変えることがある
+- 結果を公開するときは、レスポンスの `source.attribution` に入っている出典も表示する
+
+## 統計データとの結合
+
+`include=small_area` を付けると、国勢調査の小地域コード（`estat_small_area_code`）を返す。[Queria](https://queria.io) の公開データセットは同じコードで国勢調査の表を持っているので、SQL で結合できる。
+
+```sql
+-- 東京都千代田区紀尾井町1-3 の estat_small_area_code は 131010100
+SELECT key_code, city_name, area_name, jinko, setai
+FROM e_stat.boundary.small_area
+WHERE key_code = '131010100'
+```
+
 ## このリポジトリ
 
 - 直下: ジオコーダーが読む表を作る Queria のデータセット `geocoder`（このページの以下）
@@ -26,6 +44,7 @@ curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東�
 | 表 | 中身 |
 |---|---|
 | `town` | 町字の名前・別名・代表点と、代表点が入る小地域 |
+| `town_name` | 大字・町の名前から、その名前を持つ市区町村を引く索引。市区町村名を書かない住所の照合に使う |
 | `rsdtdsp_blk` | 住居表示の街区（「○番」）の代表点 |
 | `rsdtdsp_rsdt` | 住居表示の住居（「○号」）の代表点 |
 | `parcel` | 地番の住所と代表点（座標の付く筆は一部だけ） |

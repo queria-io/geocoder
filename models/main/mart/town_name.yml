@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: town_name
+    description: |
+      大字・町の名前から、その名前を持つ市区町村を引く索引。市区町村名を書かない住所の照合に使う。
+      「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
+    access: public
+    columns:
+      - name: name_key
+        data_type: varchar
+      - name: name
+        data_type: varchar
+      - name: lg_code
+        data_type: varchar
