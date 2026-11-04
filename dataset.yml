@@ -6,8 +6,8 @@ title: ジオコーダー用 住所マスタ
 description: |-
   住所の文字列と座標・地域コードを相互に引くための表。
   「アドレス・ベース・レジストリ」（デジタル庁）、「国勢調査 町丁・字等別境界データ」（総務省統計局）、
-  「街区レベル位置参照情報」（国土交通省）、「郵便番号データ」（日本郵便）を加工して作成。
-  元にした Queria のデータセットは address_br・e_stat・nlftp・japan_address_code。
+  「街区レベル位置参照情報」（国土交通省）、「登記所備付地図データ」（法務省）、「郵便番号データ」（日本郵便）を加工して作成。
+  元にした Queria のデータセットは address_br・e_stat・nlftp・moj・japan_address_code。
 keywords:
   - 住所
   - ジオコーディング
@@ -21,6 +21,7 @@ licenses:
   - JP-DIGITAL-ADDRESS-BR
   - JP-GOV-STD-2.0
   - JP-MLIT-NLFTP
+  - JP-MOJ-CHIZU
 
 sources:
   - title: アドレス・ベース・レジストリ（デジタル庁）
@@ -29,6 +30,8 @@ sources:
     path: https://www.e-stat.go.jp/gis
   - title: 街区レベル位置参照情報（国土交通省）
     path: https://nlftp.mlit.go.jp/isj/
+  - title: 登記所備付地図データ（法務省）
+    path: https://www.moj.go.jp/MINJI/minji05_00494.html
   - title: 郵便番号データ（日本郵便）
     path: https://www.post.japanpost.jp/zipcode/download.html
 
@@ -41,6 +44,9 @@ contributors:
     roles: [rightsHolder]
   - title: 国土交通省
     path: https://www.mlit.go.jp/
+    roles: [rightsHolder]
+  - title: 法務省
+    path: https://www.moj.go.jp/
     roles: [rightsHolder]
 
 spatial_coverage: [JP]

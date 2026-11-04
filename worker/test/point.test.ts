@@ -40,6 +40,14 @@ const townOf = (t: Partial<BasicResult>) => async (): Promise<BasicResult> =>
   ({ machiazaId: "0051003", ...t }) as BasicResult;
 
 describe("withAddressPoint", () => {
+  it("ABR に無い地番は、登記所備付地図の筆の点を地番の精度で使う", async () => {
+    const moj = async () => [pt("28", "10", { point_type: "parcel", source: "moj", lng: 140.3 })];
+    const r = await withAddressPoint(result({}), moj, noTown);
+    expect(r.coordinates?.[0]).toBe(140.3);
+    expect(r.coordinate_level).toBe("parcel");
+    expect(r.coordinate_source).toBe("moj");
+  });
+
   it("町字止まりの地番の住所は親番の点にする", async () => {
     const r = await withAddressPoint(result({}), load, noTown);
     expect(r.coordinates).toEqual([140.0891, 36.073632]);

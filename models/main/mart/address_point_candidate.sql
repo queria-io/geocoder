@@ -40,6 +40,10 @@ SELECT * FROM (
     FROM {{ ref('parcel') }}
     WHERE lng IS NOT NULL
     UNION ALL
+    -- 地番 (登記所備付地図)。ABR に点の無い地番だけ
+    SELECT lg_code, machiaza_id, 'parcel', prc_num1, prc_num2, prc_num3, 'parcel', 'moj', lng, lat
+    FROM {{ ref('moj_parcel') }}
+    UNION ALL
     -- 地番の親番 (アドレス・ベース・レジストリ)。枝番の付いた地番 (「5094-1」「5094-2」) だけがあり、
     -- 親番そのもの (「5094」) の地番が無い住所のために、枝番の地番の点の平均を親番の点とする。
     -- 親番の地番に点があれば、point_priority の順でそちらが選ばれる。枝番の点が約 500m 以上

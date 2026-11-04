@@ -1,0 +1,37 @@
+schema: main
+name: moj_parcel
+title: 登記所備付地図の地番の点
+description: |
+  法務省の登記所備付地図の筆の代表点を、ABR の町字と地番の番号に付けたもの。ABR に同じ地番の点が無い筆だけ。
+  公共座標系の図面の筆で、地番が数字とハイフンだけのもの、大字・町、丁目、小字の名前が ABR の町字と完全に一致するものだけを使う。
+  「登記所備付地図データ」（法務省）を加工して作成。町字は「アドレス・ベース・レジストリ」（デジタル庁）。
+keywords:
+  - 住所
+  - 地番
+  - ジオコーディング
+sources:
+  - path: https://www.moj.go.jp/MINJI/minji05_00494.html
+  - path: https://dataset.address-br.digital.go.jp/
+fields:
+  - name: machiaza_key
+    title: 町字キー
+    description: "lg_code と machiaza_id をつないだもの (13桁)。この順に並ぶ"
+  - name: lg_code
+    title: 全国地方公共団体コード
+    description: "6桁（検査数字あり）"
+    annotations: { queria: { semantic: { role: entity, name: city } } }
+  - name: machiaza_id
+    title: 町字ID
+    description: "town と lg_code・machiaza_id で結合する"
+  - name: prc_num1
+    title: 地番1
+  - name: prc_num2
+    title: 地番2
+  - name: prc_num3
+    title: 地番3
+  - name: lng
+    title: 経度
+    description: "筆の内側に取った代表点"
+  - name: lat
+    title: 緯度
+    description: "筆の内側に取った代表点"

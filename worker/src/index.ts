@@ -34,7 +34,7 @@ import {
   versionOf,
 } from "./answer";
 import { dataVersion, geocode, nearby, type ForwardEnv } from "./forward";
-import { ISJ_ATTRIBUTION } from "./point";
+import { ISJ_ATTRIBUTION, MOJ_ATTRIBUTION } from "./point";
 import { ErrAddressTooLong, ErrEmptyAddress } from "./normalize/input";
 import { type Level, resolveAreas, type TilePoint } from "./lookup";
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "./model/model";
@@ -606,13 +606,20 @@ const record = (c: Context<{ Bindings: Env }>, entries: RequestLogEntry[]) => {
   );
 };
 
-/** 位置参照情報の点で座標を埋めた答え */
-const usesIsj = (r: MatchedResult) => r.coordinate_source === "isj";
+/** ABR 以外の点の出典。その点を使った答えがあれば出典に足す */
+const POINT_ATTRIBUTION: Readonly<Record<string, string>> = {
+  isj: ISJ_ATTRIBUTION,
+  moj: MOJ_ATTRIBUTION,
+};
 
-/** isj は位置参照情報の点を使った答えがあるか。あればその出典も足す */
-const attributionFor = (groups: ReadonlySet<Include>, isj: boolean, former = false) => [
+/** sources は答えの座標の出典 (coordinate_source) */
+const attributionFor = (
+  groups: ReadonlySet<Include>,
+  sources: ReadonlySet<string>,
+  former = false,
+) => [
   ABR_ATTRIBUTION,
-  ...(isj ? [ISJ_ATTRIBUTION] : []),
+  ...Object.entries(POINT_ATTRIBUTION).flatMap(([s, a]) => (sources.has(s) ? [a] : [])),
   ...(former ? [FORMER_CITY_ATTRIBUTION] : []),
   ...(groups.has("small_area") ? [SMALL_AREA_ATTRIBUTION] : []),
 ];
@@ -690,7 +697,7 @@ const forwardItems = async (
       version,
       attribution: attributionFor(
         groups,
-        flat.some(([r]) => usesIsj(r)),
+        new Set(flat.flatMap(([r]) => (r.coordinate_source ? [r.coordinate_source] : []))),
         flat.some(([r]) => r.former_city === true),
       ),
     },
