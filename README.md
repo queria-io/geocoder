@@ -8,7 +8,7 @@
 - 設計方針: 改修で守る 5 つの観点（精度・処理速度・メモリ使用量・データモデル・説明可能性）（[DESIGN.md](DESIGN.md)）
 
 ```bash
-curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東京都千代田区紀尾井町1-3"
+curl -s -G https://geocoder.queria.io/v1/forward --data-urlencode "address=東京都千代田区紀尾井町1-3"
 ```
 
 ## 利用条件
@@ -17,14 +17,14 @@ curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東�
 - 負荷を抑えるため、1 つの IP アドレスから 1 分に 300 回までに制限している。超えると 429 を返す
 - ベータの間は、API のレスポンスの項目や形式（JSON の構造）を予告なく変更することがある。元データの利用条件が変わった場合は、提供の内容を変えることがある
 - 結果を公開するときは、レスポンスの `source.attribution` に入っている出典も表示する
-- geocoder.queria.io は、入力された住所と照合の結果を記録し、照合の改善と地域ごとの利用状況の集計に使う。IP アドレスなど、入力した人を特定できる情報は記録しない。記録されたくない場合は、このリポジトリの Worker を自分の環境で動かす（記録先 `REQUEST_LOG` を設定しなければ記録しない）
+- geocoder.queria.io は、入力された住所と照合の結果を記録し、照合の改善と地域ごとの利用状況の集計に使う。IP アドレスなど、入力した人を特定できる情報は記録しない。記録されたくない場合は、このリポジトリの Worker を自分の環境で動かす（記録先のシークレット `REQUEST_LOG_URL`・`REQUEST_LOG_TOKEN` を設定しなければ記録しない）
 
 ## 市区町村名のない住所
 
 「守山3-7-5」のように市区町村名を書かない住所は、町字の名前からその町字を持つ市区町村を探して照合する。同じ名前の町字が複数の市区町村にあるときは、候補を人口の多い順に並べて返し、各結果の `ambiguous` を `true`、`candidates` を候補の数にする。
 
-- `/v1/geocode` は `limit` の数まで候補を返す（既定の `limit=1` では先頭の 1 件）
-- `/v1/batch` は住所ごとに先頭の 1 件を返す。全部の候補が必要な場合は `/v1/geocode` に `limit` を付けて呼ぶ
+- `/v1/forward` は `limit` の数まで候補を返す（既定の `limit=1` では先頭の 1 件）
+- `/v1/forward/batch` は住所ごとに先頭の 1 件を返す。全部の候補が必要な場合は `/v1/forward` に `limit` を付けて呼ぶ
 - `ambiguous` が `true` の結果は、市区町村を推定している。住所の地域がわかっている場合は、`prefecture_code`（都道府県コード 2 桁）か `city_code`（全国地方公共団体コード 5 桁か 6 桁）を付けると、その地域の結果だけを返す
 
 ## 統計データとの結合
@@ -42,7 +42,7 @@ WHERE key_code = '131010100'
 
 - 直下: ジオコーダーが読む表を作る Queria のデータセット `geocoder`（このページの以下）
 - [`worker/`](worker/README.md): geocoder.queria.io を出す Cloudflare Worker（API と API の説明のページ）
-- [`examples/addresses.csv`](examples/addresses.csv): `POST /v1/batch` を試すための住所の CSV（役所などの住所と、郡や都道府県を省いたものなど書き方を変えたもの）
+- [`examples/addresses.csv`](examples/addresses.csv): `POST /v1/forward/batch` を試すための住所の CSV（役所などの住所と、郡や都道府県を省いたものなど書き方を変えたもの）
 
 ライセンスは [MIT](LICENSE)。住所の照合の規則は [abr-geocoder](https://github.com/digital-go-jp/abr-geocoder)（デジタル庁、MIT ライセンス）を元にしている（[`worker/upstream/`](worker/upstream/README.md)）。
 

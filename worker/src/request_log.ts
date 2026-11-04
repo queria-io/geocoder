@@ -1,8 +1,10 @@
 // 照合の記録。入力の住所と照合の結果を、照合の改善と地域ごとの利用状況の集計に使う。
 // 誰が入力したかは残さない (IP アドレスは書かない)。
-// Cloudflare Pipelines のストリームに 1 住所 1 件送り、数分ごとにまとめて R2 に Parquet で書かせる。
+// Cloudflare Pipelines のストリームの HTTP の口に 1 住所 1 件送り、数分ごとにまとめて R2 に Parquet で書かせる。
+// 送り先と鍵はシークレット (REQUEST_LOG_URL・REQUEST_LOG_TOKEN) に置き、リポジトリには書かない。
+// 無ければ何も送らない (自分の環境で動かすときは記録しない)。
 // ストリームの列は送る形と同じでなければ黙って捨てられるので、RequestLogEntry を変えたら
-// ストリームを作り直す (列の一覧は REQUEST_LOG_STREAM_SCHEMA)。バインディングが無ければ何も送らない
+// ストリームを作り直す (列の一覧は REQUEST_LOG_STREAM_SCHEMA)
 import type { MatchedResult } from "./model/model";
 
 /** 番地まで照合できたとみなす段 */
@@ -76,4 +78,23 @@ export const logEntry = (
   };
 };
 
-export type RequestLog = { send: (records: RequestLogEntry[]) => Promise<unknown> };
+/** 記録の送り先。どちらかが無ければ送らない */
+export type RequestLogEnv = { REQUEST_LOG_URL?: string; REQUEST_LOG_TOKEN?: string };
+
+/** ストリームに送る。送り先が無ければ何もしない */
+export const sendLog = async (
+  env: RequestLogEnv,
+  entries: RequestLogEntry[],
+  fetcher: typeof fetch = fetch,
+): Promise<void> => {
+  if (!env.REQUEST_LOG_URL || !env.REQUEST_LOG_TOKEN || entries.length === 0) return;
+  const res = await fetcher(env.REQUEST_LOG_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.REQUEST_LOG_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(entries),
+  });
+  if (!res.ok) throw new Error(`request log: ${res.status}`);
+};

@@ -5,7 +5,7 @@ let
     Post = (batch as list) as list =>
         Json.Document(
             Web.Contents(
-                "https://geocoder.queria.io/v1/batch",
+                "https://geocoder.queria.io/v1/forward/batch",
                 [
                     Headers = [#"Content-Type" = "application/json"],
                     Content = Json.FromValue(

@@ -40,7 +40,7 @@ function GEOCODE(addresses) {
 
 function request(addresses) {
   return {
-    url: "https://geocoder.queria.io/v1/batch",
+    url: "https://geocoder.queria.io/v1/forward/batch",
     method: "post",
     contentType: "application/json",
     payload: JSON.stringify({

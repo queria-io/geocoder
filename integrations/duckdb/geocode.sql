@@ -25,7 +25,7 @@ FROM (
         )), []),
         ['-']
       ),
-      a -> 'https://geocoder.queria.io/v1/geocode?include=ids,codes,small_area&address=' || url_encode(a)
+      a -> 'https://geocoder.queria.io/v1/forward?include=ids,codes,small_area&address=' || url_encode(a)
     ),
     filename = true,
     columns = {results: 'STRUCT(matched_address VARCHAR, lat DOUBLE, lng DOUBLE, match_level VARCHAR, coordinates_level VARCHAR, lg_code VARCHAR, ids STRUCT(machiaza_id VARCHAR), codes STRUCT(postal_code VARCHAR), estat_small_area_code VARCHAR)[]'}

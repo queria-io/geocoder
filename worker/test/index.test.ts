@@ -118,7 +118,7 @@ describe("/v1/reverse", () => {
   );
 
   it("ほかのパスは 404", async () => {
-    const response = await exports.default.fetch("https://geocoder.test/v1/forward");
+    const response = await exports.default.fetch("https://geocoder.test/v1/unknown");
     expect(response.status).toBe(404);
   });
 
@@ -134,9 +134,9 @@ describe("/v1/reverse", () => {
   });
 });
 
-describe("/v1/batch", () => {
+describe("/v1/forward/batch", () => {
   const post = (body: unknown) =>
-    exports.default.fetch("https://geocoder.test/v1/batch", {
+    exports.default.fetch("https://geocoder.test/v1/forward/batch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -148,8 +148,17 @@ describe("/v1/batch", () => {
     expect(((await response.json()) as { error: string }).error).toContain("1〜25 件");
   });
 
-  it("GET は 405", async () => {
-    const response = await exports.default.fetch("https://geocoder.test/v1/batch");
+  it("GET は address を繰り返して渡し、26 件以上は 400", async () => {
+    const q = Array.from({ length: 26 }, () => "address=%E6%9D%B1%E4%BA%AC").join("&");
+    const response = await exports.default.fetch(`https://geocoder.test/v1/forward/batch?${q}`);
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as { error: string }).error).toContain("1〜25 件");
+  });
+
+  it("PUT は 405", async () => {
+    const response = await exports.default.fetch("https://geocoder.test/v1/forward/batch", {
+      method: "PUT",
+    });
     expect(response.status).toBe(405);
   });
 });
@@ -171,10 +180,10 @@ describe("/docs", () => {
 });
 
 describe("/openapi.json", () => {
-  it("逆引きと正引きの仕様を返す", async () => {
+  it("正引き・一括・逆引きの順に仕様を返す", async () => {
     const response = await exports.default.fetch("https://geocoder.test/openapi.json");
     const doc = (await response.json()) as { paths: Record<string, unknown> };
-    expect(Object.keys(doc.paths)).toEqual(["/v1/reverse", "/v1/geocode", "/v1/batch"]);
+    expect(Object.keys(doc.paths)).toEqual(["/v1/forward", "/v1/forward/batch", "/v1/reverse"]);
   });
 
   it("逆引きの lat・lng は数値として書く", async () => {
@@ -194,23 +203,23 @@ describe("/openapi.json", () => {
   });
 });
 
-describe("/v1/geocode", () => {
+describe("/v1/forward", () => {
   it("知らない include や format は 400", async () => {
-    const base = "https://geocoder.test/v1/geocode?address=%E6%9D%B1%E4%BA%AC";
+    const base = "https://geocoder.test/v1/forward?address=%E6%9D%B1%E4%BA%AC";
     expect((await exports.default.fetch(`${base}&include=foo`)).status).toBe(400);
     expect((await exports.default.fetch(`${base}&format=xml`)).status).toBe(400);
   });
 
   it("limit が範囲外なら 400", async () => {
     const response = await exports.default.fetch(
-      "https://geocoder.test/v1/geocode?address=%E6%9D%B1%E4%BA%AC&limit=11",
+      "https://geocoder.test/v1/forward?address=%E6%9D%B1%E4%BA%AC&limit=11",
     );
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "limit は 1〜10 の整数で渡してください" });
   });
 
   it("prefecture_code・city_code の形が違えば 400", async () => {
-    const base = "https://geocoder.test/v1/geocode?address=%E6%9D%B1%E4%BA%AC";
+    const base = "https://geocoder.test/v1/forward?address=%E6%9D%B1%E4%BA%AC";
     for (const q of ["prefecture_code=1", "city_code=2520"]) {
       const response = await exports.default.fetch(`${base}&${q}`);
       expect(response.status).toBe(400);
@@ -221,7 +230,7 @@ describe("/v1/geocode", () => {
   });
 
   it("住所が空なら 400", async () => {
-    const response = await exports.default.fetch("https://geocoder.test/v1/geocode?address=%20");
+    const response = await exports.default.fetch("https://geocoder.test/v1/forward?address=%20");
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "address を 1〜100 文字で渡してください" });
   });
