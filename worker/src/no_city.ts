@@ -8,7 +8,7 @@ import type { CityResult } from "./repository/types";
 /**
  * 町名の索引の 1 行 (町字ごとに 1 行)。name は頭の「大字」を外した大字・町の名前、name_key はその頭 2 文字
  * (1 文字の町名はその 1 文字)。chome は丁目の番号、koaza は小字の名前 (頭の「字」を外す)、numbers はその町字にある
- * 番号 (街区符号・地番の本番) を続く番号ごとに [始め, 終わり] で並べたもの。chome・koaza・numbers は索引を作り直す前の表には無い
+ * 番号 (街区符号・地番の本番) の一覧。chome・koaza・numbers は索引を作り直す前の表には無い
  */
 export type TownNameRow = {
   name_key: string;
@@ -70,12 +70,6 @@ const leadingNumbers = (tail: string): number[] => {
   return m === null ? [] : [m[1], m[2]].filter((x) => x !== undefined).map(Number);
 };
 
-/** [始め, 終わり] の並びに n が入るか */
-const inRuns = (runs: readonly number[], n: number): boolean =>
-  Array.from({ length: Math.floor(runs.length / 2) }, (_, i) => i * 2).some(
-    (i) => runs[i] <= n && n <= runs[i + 1],
-  );
-
 /**
  * 1 つの市区町村で、住所の町名の後ろに書かれた要素 (小字、丁目、番号) のうち実在するものの数。
  * 小字はその名前の町字があれば、丁目は番号の頭 (「天神5-9-2」の 5) の丁目があれば数える。番号は、丁目があれば
@@ -94,13 +88,10 @@ const depthOf = (rows: readonly TownNameRow[], tail: string): number => {
   const chomeRows = rows.filter((n) => first !== undefined && n.chome === first);
   const number = chomeRows.length > 0 ? second : first;
   const numberRows = chomeRows.length > 0 ? chomeRows : rows.filter((n) => n.chome == null);
-  const numberHit = number !== undefined && numberRows.some((n) => inRuns(n.numbers ?? [], number));
+  const numberHit =
+    number !== undefined && numberRows.some((n) => (n.numbers ?? []).includes(number));
   return Number(koaza !== undefined) + Number(chomeRows.length > 0) + Number(numberHit);
 };
-
-/** 1 文字の町名は、すぐ後ろに番号があるときだけ使う (「東石川」を町名「東」と読まない) */
-const nameFits = (name: string, head: string): boolean =>
-  head.startsWith(name) && (name.length >= 2 || /^[0-9]/.test(head.slice(name.length)));
 
 const cityName = (c: CityResult) => c.pref + (c.county ?? "") + c.city + (c.ward ?? "");
 
@@ -219,7 +210,7 @@ export const withoutCity = async (
   const head = numeralsOf(rest);
   const rows = (await Promise.all(keysOf(rest).map(names)))
     .flat()
-    .filter((n) => byCode.has(n.lg_code) && nameFits(numeralsOf(n.name), head));
+    .filter((n) => byCode.has(n.lg_code) && head.startsWith(numeralsOf(n.name)));
   // 「前田8条」は「前田」でなく「前田八条」を持つ市区町村だけを候補にする
   const longest = Math.max(...rows.map((n) => n.name.length));
   const named = rows.filter((n) => n.name.length === longest);

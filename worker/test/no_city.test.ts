@@ -90,8 +90,8 @@ describe("withoutCity", () => {
 
   it("丁目の無い町名は、頭の番号の地番がある市区町村に絞る", async () => {
     const index = [
-      { ...row("新田", "072010"), numbers: [1, 900] },
-      { ...row("新田", "202011"), numbers: [1, 2000] },
+      { ...row("新田", "072010"), numbers: [1, 2, 900] },
+      { ...row("新田", "202011"), numbers: [1, 1928, 2000] },
     ];
     expect(await asking(index, "新田1928番1")).toEqual(["長野県長野市新田1928番1"]);
   });
@@ -113,16 +113,12 @@ describe("withoutCity", () => {
     expect(await asking(index, "天神1-9-1")).toHaveLength(2);
   });
 
-  it("1 文字の町名は、すぐ後ろに番号があるときだけ使う", async () => {
-    const asked: string[] = [];
-    const ask = async (a: string) => {
-      asked.push(a);
-      return [hit("202011", "machiaza")];
-    };
-    const index = names([row("栄", "202011")]);
-    await withoutCity(unmatched(), "栄3-20-29", index, Object.values(cities), ask);
-    await withoutCity(unmatched(), "栄町1-82", index, Object.values(cities), ask);
-    expect(asked).toEqual(["長野県長野市栄3-20-29"]);
+  it("1 文字の町名も、後ろの丁目が実在する市区町村に絞る", async () => {
+    const index = [
+      { ...row("栄", "072010"), chome: 1 },
+      { ...row("栄", "202011"), chome: 3 },
+    ];
+    expect(await asking(index, "栄3-20-29")).toEqual(["長野県長野市栄3-20-29"]);
   });
 
   it("候補の市区町村が上限より多ければ、人口の多い順に上限の数だけ当て直す", async () => {

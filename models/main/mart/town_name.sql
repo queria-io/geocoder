@@ -2,9 +2,9 @@
 
 -- 市区町村名を書かない住所 (「松川町字市坂3-1」「天神5-9-2」) から、その住所を持つ市区町村を引く索引。
 -- 町字ごとに 1 行で、大字・町の名前 (頭の「大字」を外し、「ヶ」を「ケ」にそろえる)、丁目の番号 (「5丁目」の 5)、
--- 小字の名前 (頭の「字」を外す) と、その町字にある番号を持つ。番号は住居表示の街区符号、地番の本番、
--- 位置参照情報の街区・地番の番号で、続く番号をまとめた [始め, 終わり] を順に並べる (「1〜120, 122〜300」は
--- [1, 120, 122, 300])。ジオコーダーは、住所に書かれた町名・小字・丁目・番号がどこまで実在するかで候補の市区町村を決める。
+-- 小字の名前 (頭の「字」を外す) と、その町字にある番号の一覧を持つ。番号は住居表示の街区符号、地番の本番、
+-- 位置参照情報の街区・地番の番号。ジオコーダーは、住所に書かれた小字・丁目・番号のうち実在するものが最も多い
+-- 市区町村を候補にする。
 -- ジオコーダーは住所の頭 2 文字 (name_key) で行グループを絞って読むので、その順に並べる。1 文字の町名 (「栄」) は
 -- name_key もその 1 文字になる
 WITH town AS (
@@ -28,16 +28,9 @@ number AS (
     )
     WHERE n IS NOT NULL
 ),
-run AS (
-    SELECT lg_code, machiaza_id, min(n) AS lo, max(n) AS hi
-    FROM (
-        SELECT *, n - row_number() OVER (PARTITION BY lg_code, machiaza_id ORDER BY n) AS g FROM number
-    )
-    GROUP BY lg_code, machiaza_id, g
-),
 numbers AS (
-    SELECT lg_code, machiaza_id, flatten(list([lo, hi] ORDER BY lo)) AS numbers
-    FROM run
+    SELECT lg_code, machiaza_id, list(n ORDER BY n) AS numbers
+    FROM number
     GROUP BY lg_code, machiaza_id
 )
 SELECT
