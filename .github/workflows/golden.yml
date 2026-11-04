@@ -1,0 +1,35 @@
+name: Golden
+
+# ベンチマークの住所と正解の座標の一覧 (worker/bench/golden/truth-forward.csv) を作り直し、
+# 実行したブランチにコミットする。一覧は固定して使うので、作り方 (truth-forward.py) を変えたときか、
+# 問題を入れ替えるときだけ実行する。main では実行しない (main への変更は PR にする)
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - "worker/bench/truth-forward.py"
+      - ".github/workflows/golden.yml"
+  workflow_dispatch:
+
+jobs:
+  truth:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: 住所と正解の座標の一覧を作る
+        run: uv run --with 'duckdb>=1.4,<2' python bench/truth-forward.py 1000 > bench/golden/truth-forward.csv
+      - name: ブランチにコミットする
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bench/golden/truth-forward.csv
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: regenerate the benchmark address list"
+          git push

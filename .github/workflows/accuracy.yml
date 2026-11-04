@@ -27,7 +27,6 @@ jobs:
         working-directory: worker
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: worker/package.json
@@ -42,19 +41,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Bench が最後に残した住所の一覧と本番の結果。同じ住所の一覧をプレビュー版に送る
+          # Bench が main で最後に残した本番の結果。住所の一覧がこの PR と同じときだけ基準に使う
           run=$(gh run list --workflow bench.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
-          if [ -n "$run" ] && gh run download "$run" --dir bench/base-run; then
-            cp "$(find bench/base-run -name truth-forward.csv | head -1)" bench/truth-forward.csv
+          if [ -n "$run" ] && gh run download "$run" --dir bench/base-run \
+            && cmp -s "$(find bench/base-run -name truth-forward.csv | head -1)" bench/golden/truth-forward.csv; then
             cp "$(find bench/base-run -name forward.jsonl | head -1)" bench/base.jsonl
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::Bench の結果が無いので、本番にも住所を送る"
+            echo "::warning::住所の一覧が同じ Bench の結果が無いので、本番にも住所を送る"
             echo "found=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: 住所と正解の座標の一覧を作る
-        if: steps.base.outputs.found != 'true'
-        run: uv run --with 'duckdb>=1.4,<2' python bench/truth-forward.py 1000 > bench/truth-forward.csv
       - name: プレビュー版のデプロイの完了を待つ
         id: preview
         env:
@@ -89,14 +85,14 @@ jobs:
         env:
           BATCH: "5"
           LANES: "4"
-        run: BASE=https://geocoder.queria.io pnpm exec tsx bench/forward-eval.ts bench/truth-forward.csv bench/base.jsonl > bench/base.md
+        run: BASE=https://geocoder.queria.io pnpm exec tsx bench/forward-eval.ts bench/golden/truth-forward.csv bench/base.jsonl > bench/base.md
       - name: プレビュー版に住所を送って評価する
         env:
           BASE: ${{ steps.preview.outputs.url }}
           # 25 件まとめは 1 回の CPU が上限に当たりやすい。5 件ずつ 4 本並べる
           BATCH: "5"
           LANES: "4"
-        run: pnpm exec tsx bench/forward-eval.ts bench/truth-forward.csv bench/head.jsonl > bench/head.md
+        run: pnpm exec tsx bench/forward-eval.ts bench/golden/truth-forward.csv bench/head.jsonl > bench/head.md
       - name: 本番の精度と比較して判定する
         run: pnpm exec tsx bench/gate.ts bench/base.jsonl bench/head.jsonl | tee -a "$GITHUB_STEP_SUMMARY"; exit "${PIPESTATUS[0]}"
       - if: always()

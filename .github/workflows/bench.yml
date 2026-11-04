@@ -26,7 +26,6 @@ jobs:
         working-directory: worker
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: worker/package.json
@@ -36,8 +35,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: worker/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - name: 住所と正解の座標の一覧を作る
-        run: uv run --with 'duckdb>=1.4,<2' python bench/truth-forward.py 1000 > bench/truth-forward.csv
       - name: 前回の結果を取得する
         env:
           GH_TOKEN: ${{ github.token }}
@@ -70,11 +67,11 @@ jobs:
         run: |
           set -o pipefail
           export PREV=$(find bench/prev -name forward.jsonl 2>/dev/null | head -1)
-          pnpm exec tsx bench/forward-eval.ts bench/truth-forward.csv bench/forward.jsonl | tee -a "$GITHUB_STEP_SUMMARY"
+          pnpm exec tsx bench/forward-eval.ts bench/golden/truth-forward.csv bench/forward.jsonl | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: forward-${{ github.run_id }}
           path: |
-            worker/bench/truth-forward.csv
+            worker/bench/golden/truth-forward.csv
             worker/bench/forward.jsonl
           retention-days: 90
