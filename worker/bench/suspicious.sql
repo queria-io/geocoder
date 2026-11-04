@@ -8,7 +8,8 @@
 WITH logs AS (
   SELECT
     *,
-    replace(replace(address, 'ヶ', 'ケ'), 'ヵ', 'ケ') AS input,
+    -- 数字の後の「ー」は長音ではなくハイフン (1ー2ー3)。結果には「-」で書かれるので、文字として数えない
+    regexp_replace(replace(replace(address, 'ヶ', 'ケ'), 'ヵ', 'ケ'), '([0-9０-９])ー', '\1-', 'g') AS input,
     replace(replace(matched_address || coalesce(unmatched_address, ''), 'ヶ', 'ケ'), 'ヵ', 'ケ') AS result
   FROM read_parquet(getvariable('logs'))
   WHERE matched_address IS NOT NULL

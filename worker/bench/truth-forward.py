@@ -18,7 +18,8 @@ PREF = r"^(東京都|北海道|京都府|大阪府|.{2,3}県)"
 PATTERNS = [
     ("kyoto_street", r"regexp_matches(address, '(上る|上ル|下る|下ル|東入|西入)')"),
     ("chiwari", r"regexp_matches(address, '地割')"),
-    ("kou_otsu", r"regexp_matches(address, '[甲乙丙丁][0-9０-９]|[0-9０-９][甲乙丙丁]|番[甲乙丙丁]')"),
+    # 数字の後の「丁」は「1丁目」の丁目を除く (除かないと、丁目のある住所がほとんどこの型に入る)
+    ("kou_otsu", r"regexp_matches(address, '[甲乙丙丁][0-9０-９]|[0-9０-９][甲乙丙]|[0-9０-９]丁([^目]|$)|番[甲乙丙丁]')"),
     ("no_city", "NOT contains(address, city_name)"),
     ("no_pref", f"NOT regexp_matches(address, '{PREF}')"),
     ("no_county", "coalesce(county_name, '') <> '' AND NOT contains(address, county_name)"),
@@ -64,7 +65,9 @@ COPY (
   ),
   typed AS (
     SELECT r.*, {pattern} AS pattern
-    FROM rows r JOIN cities USING (city_code)
+    -- 今の市区町村の一覧に無いコード (合併や区の再編の前のもの) の住所も落とさない
+    FROM rows r LEFT JOIN cities USING (city_code)
+    WHERE r.city_code IS NOT NULL
   )
   SELECT source, id, address, lat, lng, city_code, pattern
   FROM typed

@@ -1,5 +1,5 @@
 // 正引きのベンチマーク。truth-forward.py の住所を API に送り、照合レベル・市区町村の一致・座標の誤差を出す。
-// 使い方: pnpm tsx bench/forward-eval.ts bench/truth-forward.csv [出力の JSONL]
+// 使い方: pnpm tsx bench/forward-eval.ts bench/golden/truth-forward.csv [出力の JSONL]
 //   BASE=http://localhost:8787 で手元の wrangler dev にも流せる (既定は本番)
 //   PREV=前回の出力の JSONL を渡すと、全体の数字を前回と並べる
 //   BATCH=1 回に送る件数 (既定 25)、LANES=同時に送る本数 (既定 1)

@@ -14,12 +14,18 @@ on:
     types: [completed]
   workflow_dispatch:
 
+# 本番に同時に住所を送らない。待っている実行は新しいものに置き換わるので、最後に残るのは最新の本番の結果
+concurrency:
+  group: bench
+  cancel-in-progress: false
+
 jobs:
   forward:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       actions: read
+      checks: read
       contents: read
     defaults:
       run:

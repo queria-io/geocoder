@@ -59,25 +59,27 @@ const failures = [
 ].filter((f): f is string => f !== false);
 
 // 誤照合: 座標を返したが、正解から 1km を超えて離れているもの。間違った場所を返すと利用者は気づけないので、
-// 書き方の型ごとに 1 件でも増えたら失敗にする (「字」を読み飛ばして別の町字に当てるなど)
+// 本番では誤照合でなかった住所が 1 件でも誤照合になったら失敗にする (「字」を読み飛ばして別の町字に当てるなど)。
+// 件数の増減で判定すると、同じ型の別の住所が直った分だけ新しい誤照合が隠れるので、住所ごとに比較する
 const MISS = 1000;
 const isMiss = (r: Row) => r.error_m !== null && r.error_m > MISS;
-const patterns = [...new Set(base.map((r) => r.pattern ?? "-"))].sort();
-const misses = patterns.map((p) => {
-  const ids = base.flatMap((r, i) => ((r.pattern ?? "-") === p ? [i] : []));
-  return {
-    pattern: p,
-    count: ids.length,
-    base: ids.filter((i) => isMiss(base[i])).length,
-    head: ids.filter((i) => isMiss(head[i])).length,
-  };
-});
+const patternOf = (r: Row) => r.pattern || "-";
+const newMisses = moved.filter(({ b, h }) => !isMiss(b) && isMiss(h));
+const misses = [...Map.groupBy(moved, ({ b }) => patternOf(b))]
+  .sort(([a], [b]) => (a < b ? -1 : 1))
+  .map(([pattern, ms]) => ({
+    pattern,
+    count: ms.length,
+    base: ms.filter(({ b }) => isMiss(b)).length,
+    head: ms.filter(({ h }) => isMiss(h)).length,
+    added: ms.filter(({ b, h }) => !isMiss(b) && isMiss(h)).length,
+  }));
 failures.push(
   ...misses
-    .filter((m) => m.head > m.base)
+    .filter((m) => m.added > 0)
     .map(
       (m) =>
-        `書き方の型「${m.pattern}」で誤照合 (${MISS / 1000}km 超) が ${m.base} 件から ${m.head} 件に増えた`,
+        `書き方の型「${m.pattern}」で、本番では誤照合 (${MISS / 1000}km 超) でなかった住所が ${m.added} 件誤照合になった`,
     ),
 );
 
@@ -99,10 +101,23 @@ console.log(
     "",
     "書き方の型ごとの誤照合 (座標を返したが正解から 1km 超)",
     "",
-    "| 型 | 件数 | 本番 | この PR |",
-    "|---|---|---|---|",
-    ...misses.map((m) => `| ${m.pattern} | ${m.count} | ${m.base} | ${m.head} |`),
+    "| 型 | 件数 | 本番 | この PR | 新たな誤照合 |",
+    "|---|---|---|---|---|",
+    ...misses.map((m) => `| ${m.pattern} | ${m.count} | ${m.base} | ${m.head} | ${m.added} |`),
     "",
+    ...(newMisses.length === 0
+      ? []
+      : [
+          "| 新たに誤照合になった住所 | 型 | 本番 | この PR |",
+          "|---|---|---|---|",
+          ...newMisses
+            .slice(0, 50)
+            .map(
+              ({ b, h }) =>
+                `| ${b.address} | ${patternOf(b)} | ${km(b.error_m)} (${b.answer?.coordinates_level ?? "-"}) | ${km(h.error_m)} (${h.answer?.coordinates_level ?? "-"}) |`,
+            ),
+          "",
+        ]),
     `${FAR}m 以上 近づいた ${better.length} 件、遠ざかった ${worse.length} 件 (座標を失ったものを含む)`,
     "",
     ...(worse.length === 0
