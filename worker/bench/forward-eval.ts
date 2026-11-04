@@ -75,7 +75,9 @@ const post = async (addresses: string[], tries = 3): Promise<Answer[]> => {
   // 今の形は住所ごとに { address, results }。以前の版は住所ごとに 1 件か null
   type Item = { address: string; results: Answer[] } | Answer | null;
   return (JSON.parse(res.body) as { results: Item[] }).results.map((x) =>
-    x !== null && "address" in x && Array.isArray(x.results) ? (x.results[0] ?? null) : (x as Answer),
+    x !== null && "address" in x && Array.isArray(x.results)
+      ? (x.results[0] ?? null)
+      : (x as Answer),
   );
 };
 
