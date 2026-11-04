@@ -55,19 +55,18 @@ located AS (
             WHEN m.geometry IS NOT NULL THEN 'oaza_mean'
             WHEN i.geometry IS NOT NULL THEN 'isj_oaza'
         END AS point_level
+    -- ON に左の表だけを見る条件 (t.geometry IS NULL など) を入れない。入れると DuckDB がハッシュ結合を
+    -- 使えず、町字どうしの総当たりになる。代表点がある町字は coalesce と CASE が先に t.geometry を採る
     FROM town t
     LEFT JOIN town p
         ON p.lg_code = t.lg_code
         AND p.machiaza_id = left(t.machiaza_id, 4) || '000'
-        AND t.geometry IS NULL
     LEFT JOIN oaza_mean m
         ON m.lg_code = t.lg_code
         AND m.oaza_id = left(t.machiaza_id, 4)
-        AND t.geometry IS NULL
     LEFT JOIN isj_oaza i
         ON i.lg_code = t.lg_code
         AND i.name = t.isj_name
-        AND t.geometry IS NULL
 ),
 -- 住居表示の住所の数。番・号の段は、これが 0 の町字では住居表示の表を読まない
 rsdtdsp_count AS (
@@ -102,7 +101,6 @@ numbering AS (
     LEFT JOIN town p
         ON p.lg_code = t.lg_code
         AND p.machiaza_id = left(t.machiaza_id, 4) || '000'
-        AND t.koaza IS NOT NULL
 ),
 -- 区域の町字の中で地番が一意か。起番の小字か、起番の小字を持たない大字・町なら一意。
 -- 大字・町と小字の両方が起番の所 (柏市藤心など) は、大字・町の番号が小字の番号と重なりうるので一意としない
