@@ -74,4 +74,4 @@ Queria Geocoder はこの 3,000 件で見つかった誤照合を修正してき
 
 ## Queria Geocoder の定期計測
 
-比較とは別に、住所を書き方の型（市区町村名なし・地割・建物名付きなど）に分け、出典と型の組ごとに 20 件までを選んだ一覧（[`truth-forward.py`](worker/bench/truth-forward.py) で作成し、[`truth-forward.csv`](worker/bench/golden/truth-forward.csv) に固定）を、本番の Worker のデプロイ後とデータの再構築後に本番 API で計測している（[`.github/workflows/bench.yml`](.github/workflows/bench.yml)）。結果は GitHub Actions の各実行の Summary にある。Worker を変更する PR では、同じ住所をプレビュー環境に入力して直近の本番の結果と比較し、精度が悪化した場合はチェックを失敗させる（[`.github/workflows/accuracy.yml`](.github/workflows/accuracy.yml)）。
+比較とは別に、住所を書き方の型（市区町村名なし・地割・建物名付きなど）に分け、出典と型の組ごとに 20 件までを選んだ一覧（[`truth-forward.py`](worker/bench/truth-forward.py) で作成し、[`truth-forward.csv`](worker/bench/golden/truth-forward.csv) に固定）を、本番の Worker のデプロイ後とデータの再構築後に本番 API で計測している（[`.github/workflows/bench.yml`](.github/workflows/bench.yml)）。結果は GitHub Actions の各実行の Summary にある。Worker またはデータのモデルを変更する PR では、変更したモデルとその下流の表だけを再構築し（それ以外の表は本番のファイルを読む）、PR の Worker を GitHub Actions のランナー上で動かして同じ住所を入力し、直近の本番の結果と比較する。精度が悪化した場合はチェックを失敗させる（[`.github/workflows/accuracy.yml`](.github/workflows/accuracy.yml)）。

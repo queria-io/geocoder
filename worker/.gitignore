@@ -6,3 +6,4 @@ public/
 bench/*.csv
 bench/*.jsonl
 bench/abr/
+.dev.vars

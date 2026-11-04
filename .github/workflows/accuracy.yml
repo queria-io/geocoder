@@ -1,13 +1,19 @@
 name: Accuracy
 
-# マージ前の精度チェック: Worker を変える PR では、Workers Builds がブランチごとに作るプレビュー版に
-# 住所の一覧 (地価公示・指定避難所・介護サービス事業所) を送り、本番の結果より悪くなっていれば失敗にする。
-# 本番の結果は、本番が変わったときに Bench (bench.yml) が残したものを使い、PR ごとには本番に送らない。
-# プレビュー版も本番と同じデータを読むので、差は Worker の変更だけから出る
+# マージ前の精度チェック: PR の Worker とデータで住所の一覧 (地価公示・指定避難所・介護サービス事業所) を
+# 照合し、本番の結果より悪くなっていれば失敗にする。本番の結果は、本番が変わったときに Bench (bench.yml) が
+# 残したものを使い、PR ごとには本番に送らない。
+#
+# データは、PR で変えたモデルとその下流だけを作り直し (dbt の state:modified+)、ほかの表は本番のファイルを読む。
+# 作り直した表はランナーの中に置くだけで、どこにも上げない。Worker はランナーの中で動かす (bench/local/)
 on:
   pull_request:
     paths:
       - "worker/**"
+      - "models/**"
+      - "macros/**"
+      - "dbt_project.yml"
+      - "scripts/local-version.py"
       - ".github/workflows/accuracy.yml"
 
 concurrency:
@@ -17,16 +23,29 @@ concurrency:
 jobs:
   gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       actions: read
-      checks: read
       contents: read
+    env:
+      # data.queria.io の回数の上限を、ランナーの IP ではなくこのトークンで数える
+      QUERIA_TOKEN: ${{ secrets.QUERIA_TOKEN }}
+      QUERIA_USER_AGENT: queria-build/accuracy
     defaults:
       run:
         working-directory: worker
     steps:
+      - name: ディスクを空ける
+        # parcel を作り直すと DuckDB の一時ファイルが 11GB を超える (sync.yml と同じ)
+        working-directory: .
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
       - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: worker/package.json
@@ -53,49 +72,38 @@ jobs:
             echo "::warning::住所の一覧が同じ Bench の結果が無いので、本番にも住所を送る"
             echo "found=false" >> "$GITHUB_OUTPUT"
           fi
-      - name: プレビュー版のデプロイの完了を待つ
-        id: preview
+      - name: PR で変えたモデルとその下流を作り直す
+        working-directory: .
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # Workers Builds の check run の summary に、その版だけを指す Preview URL が載る
-          for _ in $(seq 1 60); do
-            run=$(gh api "repos/$REPO/commits/$SHA/check-runs" \
-              -f check_name="Workers Builds: queria-geocoder" -X GET \
-              --jq '.check_runs[0] // {} | {status, conclusion, summary: .output.summary}')
-            if [ "$(jq -r .status <<< "$run")" = completed ]; then
-              if [ "$(jq -r .conclusion <<< "$run")" != success ]; then
-                echo "::error::Workers Builds: $(jq -r .conclusion <<< "$run")"
-                exit 1
-              fi
-              url=$(jq -r .summary <<< "$run" | grep -o 'Preview URL: https://[^ )]*' | head -1 | cut -d' ' -f3 || true)
-              if [ -z "$url" ]; then
-                echo "::error::Preview URL が check run に見つからない"
-                exit 1
-              fi
-              echo "url=$url" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            sleep 20
-          done
-          echo "::error::Workers Builds の check run が 20 分で終わらなかった (ブランチのビルドが有効か確かめる)"
-          exit 1
-      - name: プレビュー版 (と、必要なら本番) に住所を送って評価する
+          # Sync と同じく、fdl は最新版を使う
+          uv lock --upgrade-package fdl-cli
+          uv sync
+          # 本番のバージョンを作業場に取り出す。作り直さない表は本番のファイルを指したまま残る
+          uv run fdl checkout https://data.queria.io/datasets/queria/geocoder/ .fdl/work.sqlite
+          export FDL_WORKING="$PWD/.fdl/work.sqlite" FDL_DATA_PATH="$PWD/.fdl/work.sqlite.data/"
+          # 比較の基準は PR の分岐元のモデル (本番のデータは main から Sync が作る)
+          git worktree add -q ../base "$BASE_SHA"
+          git -C ../base submodule update -q --init
+          (cd ../base && uv run --project "$GITHUB_WORKSPACE" dbt deps -q && uv run --project "$GITHUB_WORKSPACE" dbt parse -q)
+          uv run dbt deps -q
+          uv run dbt run -s state:modified+ --state ../base/target
+          uv run python scripts/local-version.py .fdl/work.sqlite "$FDL_DATA_PATH"
+      - name: PR の Worker とデータで住所を照合して評価する
         env:
-          PREVIEW: ${{ steps.preview.outputs.url }}
           FOUND: ${{ steps.base.outputs.found }}
-          # 25 件まとめは 1 回の CPU が上限に当たりやすい。5 件ずつ 4 本並べる
-          BATCH: "5"
-          LANES: "4"
         run: |
+          printf 'QUERIA_TOKEN=%s\n' "$QUERIA_TOKEN" > bench/local/.dev.vars
+          pnpm exec tsx bench/local/serve.ts ../.fdl/work.sqlite.data 8788 &
+          pnpm exec wrangler dev -c bench/local/wrangler.jsonc --port 8787 > bench/wrangler.log 2>&1 &
+          for _ in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:8787/openapi.json && break; sleep 2; done
           pids=()
           if [ "$FOUND" != true ]; then
-            BASE=https://geocoder.queria.io pnpm exec tsx bench/forward-eval.ts bench/golden/truth-forward.csv bench/base.jsonl > bench/base.md &
+            BASE=https://geocoder.queria.io BATCH=5 LANES=4 pnpm exec tsx bench/forward-eval.ts bench/golden/truth-forward.csv bench/base.jsonl > bench/base.md &
             pids+=($!)
           fi
-          BASE="$PREVIEW" pnpm exec tsx bench/forward-eval.ts bench/golden/truth-forward.csv bench/head.jsonl > bench/head.md &
+          BASE=http://127.0.0.1:8787 LANES=4 pnpm exec tsx bench/forward-eval.ts bench/golden/truth-forward.csv bench/head.jsonl > bench/head.md &
           pids+=($!)
           for pid in "${pids[@]}"; do wait "$pid"; done
       - name: 本番の精度と比較して判定する
@@ -104,5 +112,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: accuracy-${{ github.event.pull_request.number }}-${{ github.run_id }}
-          path: worker/bench/*.jsonl
+          path: |
+            worker/bench/*.jsonl
+            worker/bench/wrangler.log
           retention-days: 30
