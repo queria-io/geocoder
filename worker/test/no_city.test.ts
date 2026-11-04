@@ -81,6 +81,24 @@ describe("withoutCity", () => {
     expect(asked).toEqual(["長野県長野市天神5-9-2"]);
   });
 
+  it("小字まで書いた住所は、その小字を持つ市区町村に絞って当て直す", async () => {
+    const asked: string[] = [];
+    await withoutCity(
+      unmatched({ unmatched_address: ["新田字羽広1928番1"] }),
+      "大字新田字羽広1928番1",
+      names([
+        { ...row("新田", "072010"), koazas: ["小羽広"] },
+        { ...row("新田", "202011"), koazas: ["羽広", "前田"] },
+      ]),
+      Object.values(cities),
+      async (a) => {
+        asked.push(a);
+        return [];
+      },
+    );
+    expect(asked).toEqual(["長野県長野市新田字羽広1928番1"]);
+  });
+
   it("1 文字の町名は、すぐ後ろに番号があるときだけ使う", async () => {
     const asked: string[] = [];
     const ask = async (a: string) => {
