@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "../src/model/model";
 import {
   numeralsOf,
+  orderCandidates,
   townNameOf,
   withLeadingNoise,
   withoutCity,
@@ -275,5 +276,26 @@ describe("町名の数字", () => {
       },
     );
     expect(asked).toEqual(["福島県福島市北1条西2丁目"]);
+  });
+});
+
+describe("orderCandidates", () => {
+  it("座標を取った点の細かい順に並べ、同じなら元の順を保つ", () => {
+    const at = (
+      lg: string,
+      level: MatchedResult["match_level"],
+      point: MatchedResult["coordinate_level"],
+    ) => ({
+      ...hit(lg, level),
+      coordinate_level: point,
+    });
+    const got = orderCandidates([
+      at("1", "parcel", "machiaza"),
+      at("2", "machiaza_detail", "machiaza_detail"),
+      at("3", "parcel", "parcel_parent"),
+      at("4", "rsdtdsp_rsdt", "rsdtdsp_rsdt"),
+      at("5", "parcel", "parcel_parent"),
+    ]);
+    expect(got.map((x) => x.ids.lg_code)).toEqual(["4", "3", "5", "2", "1"]);
   });
 });

@@ -94,6 +94,15 @@ const POINT_RANK: Record<CoordinateLevel, number> = {
 const pointRank = (x: MatchedResult) => POINT_RANK[x.coordinate_level ?? x.match_level];
 
 /**
+ * 市区町村を推定した候補を、座標を取った点の細かい順、照合レベルの細かい順に並べ直す。同じなら元の順
+ * (人口の多い順) を保つ。点は候補ごとに座標を引いた後でないと決まらないので、byCity とは別に呼ぶ
+ */
+export const orderCandidates = (xs: readonly MatchedResult[]): MatchedResult[] =>
+  xs.toSorted(
+    (a, b) => pointRank(b) - pointRank(a) || Detail(b.match_level) - Detail(a.match_level),
+  );
+
+/**
  * 住所に書かれた町字の名前で最も長く当たった市区町村ごとに一番強いものを採り、座標を取った点の
  * 細かい順、照合レベルの細かい順、人口の多い順に並べる。2 つ以上なら市区町村を推定したことになるので、
  * 候補の数を付ける。番地まで当たらない市区町村も候補から外さない (片方の市区町村に番地の点が

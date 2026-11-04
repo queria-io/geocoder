@@ -53,7 +53,7 @@
 
 公平に比較するため、次の条件で計測した。正解データの作成と Queria Geocoder の計測に使ったスクリプトは [`worker/bench/`](worker/bench/) にある。ほかの 3 種の計測に使ったスクリプトは、まだこのリポジトリに含めていない。
 
-1. 正解には、ジオコーダーの出力に由来しない公的な座標を用いた。国土交通省の地価公示の標準地、国土地理院の指定避難所、厚生労働省の介護サービス事業所が、住所とともに公表している緯度・経度である（[`truth-forward.py`](worker/bench/truth-forward.py) で抽出し、[`truth-forward.csv`](worker/bench/golden/truth-forward.csv) に固定している。計測のたびに同じ 3,000 件を使う）。ただし Queria Geocoder の出典の優先順位（`point_priority`）は地価公示の標準地で計測して決めているため、地価公示の列は Queria Geocoder に有利な結果になりうる
+1. 正解には、ジオコーダーの出力に由来しない公的な座標を用いた。国土交通省の地価公示の標準地、国土地理院の指定避難所、厚生労働省の介護サービス事業所が、住所とともに公表している緯度・経度である（[`truth-forward.py`](worker/bench/truth-forward.py) で抽出し、[`truth-forward.csv`](worker/bench/golden/truth-forward.csv) に固定している。住所は書き方の型（市区町村名なし・地割・建物名付きなど）に分け、出典と型の組ごとに 20 件までを選んでいる）。ただし Queria Geocoder の出典の優先順位（`point_priority`）は地価公示の標準地で計測して決めているため、地価公示の列は Queria Geocoder に有利な結果になりうる
 2. 住所は公表されている文字列をそのまま入力した。郡や都道府県の省略、全角・半角の混在、建物名を含むものも除いていない
 3. 3 種のデータから乱数のシードを固定して 1,000 件ずつ無作為に抽出した。地価公示は最新年の標準地に限る。抽出元は計測時点の data.queria.io の最新データであり、元データが更新される（地価公示の新年度の公表、避難所・事業所の一覧の修正など）と抽出される住所も変わる
 4. 4 種とも、計測した時点の最新バージョンで計測した
@@ -74,4 +74,4 @@ Queria Geocoder はこの 3,000 件で見つかった誤照合を修正してき
 
 ## Queria Geocoder の定期計測
 
-同じ方法で抽出した 3,000 件を、毎週とデータの再構築後に本番 API で計測している（[`.github/workflows/bench.yml`](.github/workflows/bench.yml)）。結果は GitHub Actions の各実行の Summary にある。Worker を変更する PR では、プレビュー環境と本番に同じ住所を入力し、精度が悪化した場合はチェックを失敗させる（[`.github/workflows/accuracy.yml`](.github/workflows/accuracy.yml)）。
+[`truth-forward.csv`](worker/bench/golden/truth-forward.csv) の住所を、本番の Worker のデプロイ後とデータの再構築後に本番 API で計測している（[`.github/workflows/bench.yml`](.github/workflows/bench.yml)）。結果は GitHub Actions の各実行の Summary にある。Worker を変更する PR では、同じ住所をプレビュー環境に入力して直近の本番の結果と比較し、精度が悪化した場合はチェックを失敗させる（[`.github/workflows/accuracy.yml`](.github/workflows/accuracy.yml)）。

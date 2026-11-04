@@ -15,6 +15,8 @@ type Truth = {
   lat: number;
   lng: number;
   city: string;
+  /** 住所の書き方の型 (truth-forward.py の PATTERNS) */
+  pattern: string;
 };
 type Answer = {
   lat: number | null;
@@ -33,13 +35,14 @@ const LANES = Number(process.env.LANES ?? 1);
 // 住所に「,」「"」や改行が入るので、一括変換のページと同じ読み方で割る
 const truths: Truth[] = parseCsv(readFileSync(process.argv[2], "utf8"))
   .slice(1)
-  .map(([source, id, address, lat, lng, city]) => ({
+  .map(([source, id, address, lat, lng, city, pattern]) => ({
     source,
     id,
     address,
     lat: Number(lat),
     lng: Number(lng),
     city,
+    pattern: pattern ?? "",
   }));
 
 const wait = (status: number | string, ms: number) => {
@@ -180,7 +183,9 @@ if (prev && existsSync(prev)) {
 }
 console.log(`## 元データごと (${BASE})\n`);
 console.log(table([...groupBy(rows, (r) => r.source), ["全体", rows]]));
+console.log("\n## 住所の書き方の型ごと\n");
+console.log(table(groupBy(rows, (r) => r.pattern || "-")));
 console.log("\n## 照合レベルごと\n");
-console.log(table(groupBy(rows, (r) => r.answer?.match_level ?? "答えなし")));
+console.log(table(groupBy(rows, (r) => r.answer?.match_level ?? "照合できない")));
 console.log("\n## 座標の点の段ごと\n");
 console.log(table(groupBy(rows, (r) => r.answer?.coordinates_level ?? "座標なし")));
