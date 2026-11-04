@@ -9,7 +9,10 @@ import type { CityResult } from "./repository/types";
 export type TownNameRow = { name_key: string; name: string; lg_code: string };
 export const TOWN_NAME_COLUMNS = ["name_key", "name", "lg_code"];
 
-/** 候補の市区町村がこれより多ければ当て直さない (よくある町名で読む量が増えすぎる) */
+/**
+ * 当て直す市区町村の上限。よくある町名 (「栄」「天神」) で候補がこれより多ければ、人口の多い順にこの数だけ
+ * 当て直す (全部読むと読む量が増えすぎる)
+ */
 export const MAX_CANDIDATE_CITIES = 16;
 
 const PREF = /^(東京都|北海道|(京都|大阪)府|.{2,3}県)/;
@@ -172,8 +175,15 @@ export const withoutCity = async (
         .filter((c) => c !== undefined),
     ),
   ];
-  if (candidates.length === 0 || candidates.length > MAX_CANDIDATE_CITIES) return [r];
-  const tried = (await Promise.all(candidates.map((c) => retry(c, rest, match)))).flat();
+  if (candidates.length === 0) return [r];
+  const tried = (
+    await Promise.all(
+      candidates
+        .toSorted((a, b) => (b.population ?? 0) - (a.population ?? 0))
+        .slice(0, MAX_CANDIDATE_CITIES)
+        .map((c) => retry(c, rest, match)),
+    )
+  ).flat();
   if (tried.length === 0) return [r];
   return byCity(tried, rest, (code) => byCode.get(code)?.population ?? 0);
 };

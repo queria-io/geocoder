@@ -63,6 +63,34 @@ const row = (name: string, lg_code: string): TownNameRow => ({
 });
 
 describe("withoutCity", () => {
+  it("候補の市区町村が上限より多ければ、人口の多い順に上限の数だけ当て直す", async () => {
+    const many: CityResult[] = Array.from({ length: 20 }, (_, i) => ({
+      lgCode: String(100000 + i),
+      pref: "愛知県",
+      county: null,
+      city: `市${i}`,
+      ward: null,
+      lon: null,
+      lat: null,
+      population: i * 1000,
+    }));
+    const asked: string[] = [];
+    const found = await withoutCity(
+      unmatched({ unmatched_address: ["天神5-9-2"] }),
+      "天神5-9-2",
+      names(many.map((c) => row("天神", c.lgCode))),
+      many,
+      async (a) => {
+        asked.push(a);
+        const c = many.find((x) => a.startsWith(x.pref + x.city + "天神"));
+        return c === undefined ? [] : [hit(c.lgCode, "machiaza")];
+      },
+    );
+    expect(asked).toHaveLength(16);
+    expect(asked).not.toContain("愛知県市0天神5-9-2");
+    expect(found[0].ids.lg_code).toBe("100019");
+  });
+
   it("町名を持つ市区町村が 1 つなら、市区町村名を補って当て直す", async () => {
     const asked: string[] = [];
     const [r] = await withoutCity(
