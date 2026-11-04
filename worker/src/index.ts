@@ -635,7 +635,7 @@ app.doc31("/openapi.json", {
     title: "Queria Geocoder",
     version: API_VERSION,
     description: [
-      "日本の住所と座標・地域コードを相互に引く無料の API。有料化の予定はない。1 つの IP アドレスから 1 分に 300 回まで。稼働率と結果の正しさは保証せず、ベータの間は答えの形を変えることがある。結果を公開するときは source.attribution の出典も表示する",
+      "日本の住所と座標・地域コードを相互に引く無料の API。有料化の予定はない。1 つの IP アドレスから 1 分に 300 回まで。稼働率と結果の正しさは保証せず、ベータの間は API の仕様（レスポンスの項目など）を予告なく変更することがある。結果を公開するときは source.attribution の出典も表示する",
       "概要は [queria.io/geocoder](https://queria.io/geocoder) を参照",
     ].join("\n\n"),
   },
