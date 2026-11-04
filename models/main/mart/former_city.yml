@@ -19,3 +19,5 @@ models:
         data_type: varchar
       - name: share
         data_type: double
+      - name: one_pref
+        data_type: boolean

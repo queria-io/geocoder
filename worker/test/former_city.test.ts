@@ -43,13 +43,14 @@ const row = (name: string, town_prefix: string, lg_code: string, share = 1): For
   pref_code: "24",
   lg_code,
   share,
+  one_pref: true,
 });
 const ROWS = [
   row("員弁郡員弁町", "員弁町", "242144"),
   row("員弁町", "員弁町", "242144"),
   row("桑名郡七和村", "七和村", "242055", 0.99),
-  row("大安町", "大安町", "242144"),
-  { ...row("大安町", "大安町", "112038"), pref_code: "11" },
+  { ...row("大安町", "大安町", "242144"), one_pref: false },
+  { ...row("大安町", "大安町", "112038"), pref_code: "11", one_pref: false },
 ];
 const formers = async (key: string) => ROWS.filter((r) => r.name_key === key);
 

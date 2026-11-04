@@ -29,3 +29,6 @@ fields:
   - name: share
     title: 範囲の割合
     description: "旧市区町村の面積のうち、今の市区町村に入る割合（0〜1）"
+  - name: one_pref
+    title: 1 つの都道府県だけの名前
+    description: "同じ名前の旧市区町村が 1 つの都道府県にしか無ければ true。都道府県名の無い住所では true の名前だけを使う"

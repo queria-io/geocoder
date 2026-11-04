@@ -51,19 +51,26 @@ current_names AS (
             ward_name
         ]) AS u(name)
     WHERE name IS NOT NULL AND name <> ''
+),
+grouped AS (
+    SELECT
+        left(name, 2) AS name_key,
+        name,
+        town_prefix,
+        prefecture_code AS pref_code,
+        lg_code,
+        max(share) AS share
+    FROM forms
+    WHERE length(name) >= 2
+        AND NOT EXISTS (
+            SELECT 1 FROM current_names c
+            WHERE c.pref_code = forms.prefecture_code AND c.name = forms.name
+        )
+    GROUP BY ALL
 )
 SELECT
-    left(name, 2) AS name_key,
-    name,
-    town_prefix,
-    prefecture_code AS pref_code,
-    lg_code,
-    max(share) AS share
-FROM forms
-WHERE length(name) >= 2
-    AND NOT EXISTS (
-        SELECT 1 FROM current_names c
-        WHERE c.pref_code = forms.prefecture_code AND c.name = forms.name
-    )
-GROUP BY ALL
+    *,
+    -- 都道府県名の無い住所でこの名前を使ってよいか。同じ名前が 2 つ以上の都道府県にあれば、どれか決められない
+    count(DISTINCT pref_code) OVER (PARTITION BY name) = 1 AS one_pref
+FROM grouped
 ORDER BY name_key, name, lg_code
