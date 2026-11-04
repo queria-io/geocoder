@@ -260,9 +260,13 @@ const app = new OpenAPIHono<{ Bindings: Env }>({
                 ? "limit は 1〜10 の整数で渡してください"
                 : result.error.issues.some((i) => i.path.includes("format"))
                   ? "format は json・geojson・csv のどれかで渡してください"
-                  : result.error.issues.some((i) => i.path.includes("addresses"))
-                    ? `addresses に住所の文字列を 1〜${BATCH_MAX} 件の配列で渡してください`
-                    : "lat と lng を数値で渡してください",
+                  : result.error.issues.some(
+                        (i) => i.path.includes("prefecture_code") || i.path.includes("city_code"),
+                      )
+                    ? "prefecture_code は 2 桁、city_code は 5 桁か 6 桁の数字で渡してください"
+                    : result.error.issues.some((i) => i.path.includes("addresses"))
+                      ? `addresses に住所の文字列を 1〜${BATCH_MAX} 件の配列で渡してください`
+                      : "lat と lng を数値で渡してください",
           },
           "no-store",
         ),
@@ -417,6 +421,14 @@ const GeocodeResult = z
       .string()
       .nullable()
       .openapi({ description: "全国地方公共団体コード (6 桁、検査数字つき)" }),
+    ambiguous: z.boolean().openapi({
+      description:
+        "市区町村名の無い住所で、同じ町名を持つ市区町村が複数あり、市区町村を推定したか。true のときは prefecture_code・city_code で絞ってください",
+    }),
+    candidates: z.number().int().openapi({
+      description:
+        "同じ町名で当たった市区町村の数 (ふつうは 1)。候補は人口の多い順に並ぶ。limit を増やすと全部を受け取れる",
+    }),
     score: optional(
       z.number().openapi({ description: "候補の並べ替えに使う値。1 はぴったりの一致" }),
       "match",
@@ -456,6 +468,8 @@ const GeocodeFeatureCollection = z
           coordinates_level: CoordinatesLevel.nullable(),
           ids: Ids,
           structured_address: StructuredAddress,
+          ambiguous: z.boolean(),
+          candidates: z.number().int(),
           codes: optional(ForwardCodes, "codes"),
           estat_small_area_code: smallArea.optional(),
         }),
@@ -468,6 +482,36 @@ const GeocodeFeatureCollection = z
   });
 
 const API_VERSION = "0.2.0-beta";
+
+const prefectureCodeParam = z
+  .string()
+  .regex(/^\d{2}$/)
+  .optional()
+  .openapi({
+    param: {
+      name: "prefecture_code",
+      in: "query",
+      description: "都道府県コード (2 桁)。渡すと、その都道府県の結果だけを返す",
+    },
+    example: "25",
+  });
+const cityCodeParam = z
+  .string()
+  .regex(/^\d{5,6}$/)
+  .optional()
+  .openapi({
+    param: {
+      name: "city_code",
+      in: "query",
+      description:
+        "全国地方公共団体コード (5 桁か 6 桁)。渡すと、その市区町村の結果だけを返す。prefecture_code より優先する",
+    },
+    example: "25207",
+  });
+
+/** 結果を絞る地域。市区町村コードの頭 5 桁か都道府県コード */
+const areaOf = (prefecture_code?: string, city_code?: string) =>
+  city_code?.slice(0, 5) ?? prefecture_code;
 
 const geocodeRoute = createRoute({
   method: "get",
@@ -495,6 +539,8 @@ const geocodeRoute = createRoute({
           type: "integer",
           example: 1,
         } as never),
+      prefecture_code: prefectureCodeParam,
+      city_code: cityCodeParam,
       include: includeParam(INCLUDES),
       format: z
         .enum(["json", "geojson", "csv"])
@@ -553,8 +599,14 @@ const smallAreaOf = async (env: Env, r: MatchedResult) =>
         .estat_small_area_code;
 
 /** 1 つの住所を当てて、頼まれた項目のための値も引く */
-const answer = async (env: Env, address: string, limit: number, groups: ReadonlySet<Include>) => {
-  const { results, postalCode } = await geocode(env, address, limit);
+const answer = async (
+  env: Env,
+  address: string,
+  limit: number,
+  groups: ReadonlySet<Include>,
+  area?: string,
+) => {
+  const { results, postalCode } = await geocode(env, address, limit, area);
   const extras = await Promise.all(
     results.map(async (r): Promise<Extras> => ({
       postal_code: groups.has("codes") ? await postalCode(r) : null,
@@ -575,7 +627,7 @@ const attributionFor = (groups: ReadonlySet<Include>, isj: boolean) => [
 ];
 
 app.openapi(geocodeRoute, async (c) => {
-  const { address, limit = 1, include, format } = c.req.valid("query");
+  const { address, limit = 1, include, format, prefecture_code, city_code } = c.req.valid("query");
   const groups = parseInclude(include);
   if (groups === null)
     return json(
@@ -584,7 +636,8 @@ app.openapi(geocodeRoute, async (c) => {
       { error: `include に使えるのは ${INCLUDES.join(",")} です` },
       "no-store",
     ) as never;
-  const result = await tryCatchAsync(() => answer(c.env, address, limit, groups));
+  const area = areaOf(prefecture_code, city_code);
+  const result = await tryCatchAsync(() => answer(c.env, address, limit, groups, area));
   if (!result.ok) {
     if (result.error instanceof ErrEmptyAddress || result.error instanceof ErrAddressTooLong)
       return json(c, 400, { error: "address を 1〜100 文字で渡してください" }, "no-store") as never;
@@ -657,6 +710,16 @@ const batchRoute = createRoute({
             .object({
               addresses: z.array(z.string()).min(1).max(BATCH_MAX),
               include: z.string().optional().openapi({ description: "/v1/geocode と同じ" }),
+              prefecture_code: z
+                .string()
+                .regex(/^\d{2}$/)
+                .optional()
+                .openapi({ description: "/v1/geocode と同じ。全部の住所に効く" }),
+              city_code: z
+                .string()
+                .regex(/^\d{5,6}$/)
+                .optional()
+                .openapi({ description: "/v1/geocode と同じ。全部の住所に効く" }),
             })
             .openapi("BatchRequest"),
         },
@@ -677,7 +740,8 @@ const batchRoute = createRoute({
             .openapi("BatchResponse"),
         },
       },
-      description: "住所ごとに一番強い 1 件",
+      description:
+        "住所ごとに一番強い 1 件。市区町村を推定した住所は ambiguous が true で、人口の最も多い候補。全部の候補は /v1/geocode の limit で受け取る",
     },
     400: { content: { "application/json": { schema: ErrorBody } }, description: "指定がおかしい" },
     429: {
@@ -689,7 +753,8 @@ const batchRoute = createRoute({
 });
 
 app.openapi(batchRoute, async (c) => {
-  const { addresses, include } = c.req.valid("json");
+  const { addresses, include, prefecture_code, city_code } = c.req.valid("json");
+  const area = areaOf(prefecture_code, city_code);
   const groups = parseInclude(include);
   if (groups === null)
     return json(
@@ -699,7 +764,7 @@ app.openapi(batchRoute, async (c) => {
       "no-store",
     ) as never;
   const one = async (address: string) => {
-    const r = await tryCatchAsync(() => answer(c.env, address, 1, groups));
+    const r = await tryCatchAsync(() => answer(c.env, address, 1, groups, area));
     if (r.ok) return r.value[0] ?? null;
     if (r.error instanceof ErrEmptyAddress || r.error instanceof ErrAddressTooLong) return null;
     throw r.error;

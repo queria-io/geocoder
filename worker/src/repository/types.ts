@@ -49,6 +49,8 @@ export type CityResult = {
   ward: Str;
   lon: number | null;
   lat: number | null;
+  /** 国勢調査の人口。市区町村名の無い住所で候補を並べる順に使う。上流には無い */
+  population?: number | null;
 };
 
 export type PrefectureResult = { lgCode: string; prefName: string };

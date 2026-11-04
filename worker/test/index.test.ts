@@ -209,6 +209,17 @@ describe("/v1/geocode", () => {
     expect(await response.json()).toEqual({ error: "limit は 1〜10 の整数で渡してください" });
   });
 
+  it("prefecture_code・city_code の形が違えば 400", async () => {
+    const base = "https://geocoder.test/v1/geocode?address=%E6%9D%B1%E4%BA%AC";
+    for (const q of ["prefecture_code=1", "city_code=2520"]) {
+      const response = await exports.default.fetch(`${base}&${q}`);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        error: "prefecture_code は 2 桁、city_code は 5 桁か 6 桁の数字で渡してください",
+      });
+    }
+  });
+
   it("住所が空なら 400", async () => {
     const response = await exports.default.fetch("https://geocoder.test/v1/geocode?address=%20");
     expect(response.status).toBe(400);

@@ -38,6 +38,7 @@ const cities: Record<string, CityResult> = {
     ward: null,
     lon: null,
     lat: null,
+    population: 282693,
   },
   "202011": {
     lgCode: "202011",
@@ -47,6 +48,7 @@ const cities: Record<string, CityResult> = {
     ward: null,
     lon: null,
     lat: null,
+    population: 372760,
   },
 };
 const names =
@@ -62,7 +64,7 @@ const row = (name: string, lg_code: string): TownNameRow => ({
 describe("withoutCity", () => {
   it("町名を持つ市区町村が 1 つなら、市区町村名を補って当て直す", async () => {
     const asked: string[] = [];
-    const r = await withoutCity(
+    const [r] = await withoutCity(
       unmatched(),
       "松川町字市坂３－１",
       names([row("松川町", "072010")]),
@@ -76,15 +78,18 @@ describe("withoutCity", () => {
     expect(r.ids.lg_code).toBe("072010");
   });
 
-  it("同じ町名を持つ市区町村が 2 つあれば、番地まで当たるのが 1 つでも返さない", async () => {
-    const r = await withoutCity(
+  it("同じ町名を持つ市区町村が 2 つあれば、番地まで当たるのが 1 つでも両方を人口の多い順に返す", async () => {
+    const got = await withoutCity(
       unmatched(),
       "松川町1",
       names([row("松川町", "072010"), row("松川町", "202011")]),
       Object.values(cities),
       async (a) => [a.startsWith("福島県") ? hit("072010", "parcel") : hit("202011", "machiaza")],
     );
-    expect(r.match_level).toBe("unknown");
+    expect(got.map((x) => [x.ids.lg_code, x.candidates])).toEqual([
+      ["202011", 2],
+      ["072010", 2],
+    ]);
   });
 
   it("住所に書かれた長い町名で当たる市区町村が 1 つなら、それを採る", async () => {
@@ -92,7 +97,7 @@ describe("withoutCity", () => {
       ...hit(lgCode, "machiaza"),
       structured_address: { ...emptySA(), oaza_cho: oaza, chome },
     });
-    const r = await withoutCity(
+    const [r] = await withoutCity(
       unmatched(),
       "桧原3丁目13-17",
       names([row("桧原", "072010"), row("桧原", "202011")]),
@@ -109,7 +114,7 @@ describe("withoutCity", () => {
       ...hit(lgCode, "machiaza"),
       structured_address: { ...emptySA(), oaza_cho: oaza, chome, koaza },
     });
-    const r = await withoutCity(
+    const [r] = await withoutCity(
       unmatched(),
       "大原町5-20",
       names([row("大原町", "072010"), row("大原町", "202011")]),
@@ -120,7 +125,7 @@ describe("withoutCity", () => {
           : at("202011", "大原町", null, "字上"),
       ],
     );
-    expect(r.match_level).toBe("unknown");
+    expect(r.candidates).toBe(2);
   });
 
   it("索引で長い町名を持つ市区町村だけを候補にする", async () => {
@@ -138,20 +143,9 @@ describe("withoutCity", () => {
     expect(asked).toEqual(["福島県福島市前田8条17丁目9番12号"]);
   });
 
-  it("2 つの市区町村で同じ強さに当たれば返さない", async () => {
-    const r = await withoutCity(
-      unmatched(),
-      "松川町1",
-      names([row("松川町", "072010"), row("松川町", "202011")]),
-      Object.values(cities),
-      async (a) => [a.startsWith("福島県") ? hit("072010", "parcel") : hit("202011", "parcel")],
-    );
-    expect(r.match_level).toBe("unknown");
-  });
-
   it("都道府県まで当たっていれば、その都道府県の市区町村だけを候補にする", async () => {
     const asked: string[] = [];
-    const r = await withoutCity(
+    const [r] = await withoutCity(
       unmatched({ match_level: "pref", ids: { ...emptyIDs(), lg_code: "070009" } }),
       "福島県松川町1",
       names([row("松川町", "072010"), row("松川町", "202011")]),
@@ -176,11 +170,11 @@ describe("withoutCity", () => {
         throw new Error("当て直さない");
       },
     );
-    expect(got).toBe(r);
+    expect(got).toEqual([r]);
   });
 
   it("町名と同じ頭 2 文字でも、住所の頭に名前が無い行は候補にしない", async () => {
-    const r = await withoutCity(
+    const [r] = await withoutCity(
       unmatched(),
       "松川1",
       names([row("松川町", "072010")]),
@@ -211,7 +205,7 @@ describe("withoutCity の区と余計な文字", () => {
   };
   it("市名を省いた政令市の区は、その区を持つ市が 1 つなら補う", async () => {
     const asked: string[] = [];
-    const r = await withoutCity(
+    const [r] = await withoutCity(
       unmatched({ match_level: "pref", ids: { ...emptyIDs(), lg_code: "010006" } }),
       "北海道西区西野６条",
       names([]),

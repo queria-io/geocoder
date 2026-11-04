@@ -3,12 +3,13 @@ name: city
 title: 市区町村
 description: |
   全国の市区町村（政令市の区を含む）の名前と代表点。住所の頭から市区町村を切り出すのに使う。名前の中の全角の英数字・記号は半角にそろえる。
-  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
+  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。人口は「令和2年国勢調査」（総務省統計局）による。
 keywords:
   - 住所
   - ジオコーディング
 sources:
   - path: https://dataset.address-br.digital.go.jp/
+  - path: https://www.e-stat.go.jp/
 fields:
   - name: lg_code
     title: 全国地方公共団体コード
@@ -30,3 +31,6 @@ fields:
   - name: lat
     title: 緯度
     description: "代表点の緯度"
+  - name: population
+    title: 人口
+    description: "令和2年国勢調査の総人口。政令市（区を持つ市）と、調査の後にできた区は空"

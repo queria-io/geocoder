@@ -179,6 +179,8 @@ export const geocode = async (
   env: ForwardEnv,
   address: string,
   limit: number,
+  /** 都道府県コード (2 桁) か市区町村コード (5 桁)。渡されたら、その中の結果だけを返す */
+  area?: string,
 ): Promise<{
   results: MatchedResult[];
   postalCode: (r: MatchedResult) => Promise<string | null>;
@@ -188,34 +190,30 @@ export const geocode = async (
   const built = await matcherFor(env);
   const match = (a: string) =>
     Match(built.matcher, { address: preNormalize(a), category: "all", pref: "", limit });
-  const results = await Promise.all(
+  const inArea = (code: string | null) => area === undefined || (code ?? "").startsWith(area);
+  const cities = built.cities.filter((c) => inArea(c.lgCode));
+  const noCity = await Promise.all(
     (await match(address)).map(async (r) =>
-      withAzaSkipped(
-        await withOazaChome(
-          await withRenamedWard(
-            await withoutCity(
-              await withLeadingNoise(r, address, match),
-              address,
-              built.names,
-              built.cities,
-              match,
-            ),
-            address,
-            match,
-          ),
-          address,
+      withoutCity(await withLeadingNoise(r, address, match), address, built.names, cities, match),
+    ),
+  );
+  const results = await Promise.all(
+    noCity
+      .flat()
+      .map(async (r) =>
+        withAzaSkipped(
+          await withOazaChome(await withRenamedWard(r, address, match), address, match),
           match,
         ),
-        match,
       ),
-    ),
   );
   // 住所は残さない。読んだ量と時間だけを書く
   console.log(JSON.stringify({ geocode: true, cold, ...stats }));
   // 当たらなかったもの (都道府県も決まらない) は返さない
   const found = await Promise.all(
     results
-      .filter((r) => r.match_level !== "unknown")
+      .filter((r) => r.match_level !== "unknown" && inArea(r.ids.lg_code))
+      .slice(0, limit)
       .map(async (r) =>
         withParentPoint(
           await withAddressPoint(r, built.points, built.town),

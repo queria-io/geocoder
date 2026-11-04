@@ -18,6 +18,14 @@ curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東�
 - ベータの間は、API のレスポンスの項目や形式（JSON の構造）を予告なく変更することがある。元データの利用条件が変わった場合は、提供の内容を変えることがある
 - 結果を公開するときは、レスポンスの `source.attribution` に入っている出典も表示する
 
+## 市区町村名のない住所
+
+「守山3-7-5」のように市区町村名を書かない住所は、町字の名前からその町字を持つ市区町村を探して照合する。同じ名前の町字が複数の市区町村にあるときは、候補を人口の多い順に並べて返し、各結果の `ambiguous` を `true`、`candidates` を候補の数にする。
+
+- `/v1/geocode` は `limit` の数まで候補を返す（既定の `limit=1` では先頭の 1 件）
+- `/v1/batch` は住所ごとに先頭の 1 件を返す。全部の候補が必要な場合は `/v1/geocode` に `limit` を付けて呼ぶ
+- `ambiguous` が `true` の結果は、市区町村を推定している。住所の地域がわかっている場合は、`prefecture_code`（都道府県コード 2 桁）か `city_code`（全国地方公共団体コード 5 桁か 6 桁）を付けると、その地域の結果だけを返す
+
 ## 統計データとの結合
 
 `include=small_area` を付けると、国勢調査の小地域コード（`estat_small_area_code`）を返す。[Queria](https://queria.io) の公開データセットは同じコードで国勢調査の表を持っているので、SQL で結合できる。

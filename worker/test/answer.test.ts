@@ -65,7 +65,15 @@ describe("forwardAnswer", () => {
       "match_level",
       "coordinates_level",
       "lg_code",
+      "ambiguous",
+      "candidates",
     ]);
+    expect([r.ambiguous, r.candidates]).toEqual([false, 1]);
+  });
+
+  it("市区町村を推定した結果には印と候補の数を付ける", () => {
+    const r = forwardAnswer(result({ candidates: 3 }), new Set(), none);
+    expect([r.ambiguous, r.candidates]).toEqual([true, 3]);
   });
 
   it("codes は 6 桁のコードから都道府県と市区町村のコードを出す", () => {

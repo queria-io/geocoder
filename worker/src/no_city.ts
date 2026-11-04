@@ -1,6 +1,6 @@
 // 市区町村名を書かない住所 (「松川町字市坂3-1」「福島県松川町字市坂3-1」)。上流は都道府県止まりか、何も返さない。
 // 町名の索引 (town.town_name) から、その町名を持つ市区町村を引き、市区町村名を補って当て直す。
-// 全国で 1 つの町字の名前に決まるときだけ採る。上流には無い段
+// 同じ町名の市区町村が複数あれば、候補を全部、人口の多い順に返す。上流には無い段
 import { Detail, type MatchedResult } from "./model/model";
 import { compareResultStrength, strongestResult } from "./matching/search";
 import type { CityResult } from "./repository/types";
@@ -10,7 +10,7 @@ export type TownNameRow = { name_key: string; name: string; lg_code: string };
 export const TOWN_NAME_COLUMNS = ["name_key", "name", "lg_code"];
 
 /** 候補の市区町村がこれより多ければ当て直さない (よくある町名で読む量が増えすぎる) */
-export const MAX_CANDIDATE_CITIES = 8;
+export const MAX_CANDIDATE_CITIES = 16;
 
 const PREF = /^(東京都|北海道|(京都|大阪)府|.{2,3}県)/;
 
@@ -63,16 +63,36 @@ const townDepth =
       .reduce((m, name) => Math.max(m, name.length), 0);
   };
 
-/**
- * 住所に書かれた町字の名前で最も長く当たったものを採る。その名前で当たった市区町村が 2 つ以上
- * あれば、どれか決められないので採らない。番地まで当たったかどうかでは選ばない (片方の市区町村に
- * 番地の点が無いだけのことがある)
- */
-const uniqueStrongest = (found: MatchedResult[], rest: string): MatchedResult | undefined => {
+/** 住所に書かれた町字の名前で最も長く当たったものだけを残す */
+const longestTown = (found: MatchedResult[], rest: string): MatchedResult[] => {
   const depth = townDepth(rest);
   const top = Math.max(...found.map(depth));
-  const best = found.filter((x) => depth(x) === top);
+  return found.filter((x) => depth(x) === top);
+};
+
+/** 1 つの市区町村に決まるときだけ、その中で一番強いものを採る */
+const uniqueStrongest = (found: MatchedResult[], rest: string): MatchedResult | undefined => {
+  const best = longestTown(found, rest);
   return new Set(best.map((x) => x.ids.lg_code)).size === 1 ? strongestResult(best) : undefined;
+};
+
+/**
+ * 住所に書かれた町字の名前で最も長く当たった市区町村ごとに一番強いものを採り、人口の多い順に並べる。
+ * 2 つ以上なら市区町村を推定したことになるので、候補の数を付ける。番地まで当たったかどうかでは
+ * 選ばない (片方の市区町村に番地の点が無いだけのことがある)
+ */
+const byCity = (
+  found: MatchedResult[],
+  rest: string,
+  population: (lgCode: string) => number,
+): MatchedResult[] => {
+  const best = longestTown(found, rest);
+  const codes = [...new Set(best.map((x) => x.ids.lg_code ?? ""))];
+  const each = codes
+    .map((code) => strongestResult(best.filter((x) => x.ids.lg_code === code)))
+    .filter((x) => x !== undefined)
+    .toSorted((a, b) => population(b.ids.lg_code ?? "") - population(a.ids.lg_code ?? ""));
+  return each.length > 1 ? each.map((x) => ({ ...x, candidates: each.length })) : each;
 };
 
 /** 市区町村を補った住所で当て直し、その市区町村の町字まで当たったものだけを残す */
@@ -91,12 +111,12 @@ export const withoutCity = async (
   names: (key: string) => Promise<TownNameRow[]>,
   cities: readonly CityResult[],
   match: (address: string) => Promise<MatchedResult[]>,
-): Promise<MatchedResult> => {
-  if (Detail(r.match_level) >= Detail("city")) return r;
+): Promise<MatchedResult[]> => {
+  if (Detail(r.match_level) >= Detail("city")) return [r];
   const prefCode = r.match_level === "pref" ? r.ids.lg_code?.slice(0, 2) : undefined;
   const all = townNameOf(input);
   const rest = townNameOf(prefCode === undefined ? all : all.replace(PREF, ""));
-  if (rest.length < 2 || (prefCode !== undefined && rest === all)) return r;
+  if (rest.length < 2 || (prefCode !== undefined && rest === all)) return [r];
   const inPref = cities.filter((c) => prefCode === undefined || c.lgCode.startsWith(prefCode));
   // 政令市の市名を省いて区から書いた住所 (「北海道西区西野6条」)。その区名を持つ市が都道府県に 1 つだけなら補う
   const wards = inPref.filter((c) => c.ward !== null && c.ward !== "" && rest.startsWith(c.ward));
@@ -104,7 +124,7 @@ export const withoutCity = async (
     const [w] = wards;
     const tail = rest.slice((w.ward ?? "").length);
     const found = uniqueStrongest(await retry(w, tail, match), tail);
-    if (found !== undefined && compareResultStrength(found, r) < 0) return found;
+    if (found !== undefined && compareResultStrength(found, r) < 0) return [found];
   }
   const byCode = new Map(inPref.map((c) => [c.lgCode, c]));
   const rows = (await Promise.all(keysOf(rest).map(names)))
@@ -120,9 +140,10 @@ export const withoutCity = async (
         .filter((c) => c !== undefined),
     ),
   ];
-  if (candidates.length === 0 || candidates.length > MAX_CANDIDATE_CITIES) return r;
-  const tried = await Promise.all(candidates.map((c) => retry(c, rest, match)));
-  return uniqueStrongest(tried.flat(), rest) ?? r;
+  if (candidates.length === 0 || candidates.length > MAX_CANDIDATE_CITIES) return [r];
+  const tried = (await Promise.all(candidates.map((c) => retry(c, rest, match)))).flat();
+  if (tried.length === 0) return [r];
+  return byCity(tried, rest, (code) => byCode.get(code)?.population ?? 0);
 };
 
 // 都道府県名の前に付いた 1〜2 文字 (「ｼ静岡県浜松市…」)。入力の誤りとみて外す
