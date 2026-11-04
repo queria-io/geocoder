@@ -5,7 +5,6 @@ SQL やスプレッドシートの関数から Queria Geocoder を呼ぶため�
 | ツール | 置き場 | 使い方 |
 |---|---|---|
 | DuckDB | [`duckdb/`](duckdb/) | `SELECT * FROM geocode(['住所', ...])` |
-| BigQuery | [`bigquery/`](bigquery/) | `SELECT dataset.geocode(address) FROM 表` |
 | Google スプレッドシート | [`google-sheets/`](google-sheets/) | `=GEOCODE(A2:A100)` |
 | Excel | [`excel/`](excel/) | Power Query のクエリ、または WEBSERVICE 関数 |
 
