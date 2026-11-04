@@ -17,20 +17,22 @@ CREATE OR REPLACE MACRO geocode_urls(a) AS list_transform(
 CREATE OR REPLACE MACRO geocode(addresses) AS TABLE
 SELECT
   item.address,
-  item.results[1].matched_address,
-  item.results[1].lat,
-  item.results[1].lng,
-  item.results[1].match_level,
-  item.results[1].coordinates_level,
-  item.results[1].lg_code,
+  item.results[1].matched_address AS matched_address,
+  item.results[1].lat AS lat,
+  item.results[1].lng AS lng,
+  item.results[1].match_level AS match_level,
+  item.results[1].coordinates_level AS coordinates_level,
+  item.results[1].lg_code AS lg_code,
   item.results[1].ids.machiaza_id AS machiaza_id,
   item.results[1].codes.postal_code AS postal_code,
-  item.results[1].estat_small_area_code AS small_area_code
+  item.results[1].estat_small_area_code AS small_area_code,
+  item.results[1].ambiguous AS ambiguous,
+  item.results[1].candidates AS candidates
 FROM (
   SELECT unnest(results) AS item
   FROM read_json(
     geocode_urls(coalesce(nullif(list_distinct(list_filter(addresses, a -> a IS NOT NULL)), []), ['-'])),
-    columns = {results: 'STRUCT(address VARCHAR, results STRUCT(matched_address VARCHAR, lat DOUBLE, lng DOUBLE, match_level VARCHAR, coordinates_level VARCHAR, lg_code VARCHAR, ids STRUCT(machiaza_id VARCHAR), codes STRUCT(postal_code VARCHAR), estat_small_area_code VARCHAR)[])[]'}
+    columns = {results: 'STRUCT(address VARCHAR, results STRUCT(matched_address VARCHAR, lat DOUBLE, lng DOUBLE, match_level VARCHAR, coordinates_level VARCHAR, lg_code VARCHAR, ids STRUCT(machiaza_id VARCHAR), codes STRUCT(postal_code VARCHAR), estat_small_area_code VARCHAR, ambiguous BOOLEAN, candidates INTEGER)[])[]'}
   )
 )
 WHERE item.address <> '-';

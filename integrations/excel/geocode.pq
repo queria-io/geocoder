@@ -28,8 +28,8 @@ let
     ),
     Expanded = Table.ExpandRecordColumn(
         Joined, "結果",
-        {"lat", "lng", "match_level", "lg_code", "ids", "codes", "estat_small_area_code"},
-        {"緯度", "経度", "照合レベル", "全国地方公共団体コード", "ids", "codes", "小地域コード"}
+        {"lat", "lng", "match_level", "lg_code", "ids", "codes", "estat_small_area_code", "ambiguous"},
+        {"緯度", "経度", "照合レベル", "全国地方公共団体コード", "ids", "codes", "小地域コード", "市区町村を推定"}
     ),
     WithIds = Table.ExpandRecordColumn(Expanded, "ids", {"machiaza_id"}, {"町字ID"}),
     WithCodes = Table.ExpandRecordColumn(WithIds, "codes", {"postal_code"}, {"郵便番号"})

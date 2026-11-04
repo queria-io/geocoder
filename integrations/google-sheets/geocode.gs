@@ -1,6 +1,6 @@
 /**
  * 住所を Queria Geocoder で緯度・経度と地域コードにする。
- * 例: =GEOCODE(A2:A100) で、行ごとに 緯度・経度・照合レベル・市区町村コード・町字 ID・郵便番号・小地域コード を返す
+ * 例: =GEOCODE(A2:A100) で、行ごとに 緯度・経度・照合レベル・市区町村コード・町字 ID・郵便番号・小地域コード・市区町村を推定したか を返す
  *
  * @param {string|string[][]} addresses 住所のセルか範囲
  * @return 結果の表
@@ -17,7 +17,7 @@ function GEOCODE(addresses) {
   const responses = chunks.length === 0 ? [] : UrlFetchApp.fetchAll(chunks.map(request));
   return responses.flatMap(parse).map(({ results: [r] }) =>
     r === undefined
-      ? ["", "", "", "", "", "", ""]
+      ? ["", "", "", "", "", "", "", ""]
       : [
           r.lat,
           r.lng,
@@ -26,6 +26,7 @@ function GEOCODE(addresses) {
           r.ids?.machiaza_id ?? "",
           r.codes?.postal_code ?? "",
           r.estat_small_area_code ?? "",
+          r.ambiguous,
         ],
   );
 }
