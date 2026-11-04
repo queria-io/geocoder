@@ -68,6 +68,11 @@ export type MatchedResult = {
   coordinate_level?: CoordinateLevel;
   /** 座標を取った点の出典 (address_point の source)。上流には無い。address_point の点で埋めたときだけ入れる */
   coordinate_source?: string | null;
+  /**
+   * 市区町村名の無い住所で、同じ町名で当たった市区町村の数。上流には無い。2 以上なら市区町村を
+   * 推定しており、候補を人口の多い順に並べて返す
+   */
+  candidates?: number;
   machiaza: MachiazaData;
 };
 

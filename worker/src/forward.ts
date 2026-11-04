@@ -14,7 +14,7 @@ import {
 } from "./data/parquet";
 import { Match } from "./matching/match_core";
 import { NewMatcher, type Impl } from "./matching/matcher";
-import type { MatchedResult } from "./model/model";
+import { Detail, type MatchedResult } from "./model/model";
 import { lazyRepository } from "./repository/lazy";
 import {
   TOWN_COLUMNS,
@@ -33,7 +33,13 @@ import { nearestAddress, type Nearby } from "./nearby";
 import { withAzaSkipped } from "./skip_aza";
 import { withOazaChome } from "./oaza_chome";
 import { withRenamedWard } from "./renamed_ward";
-import { TOWN_NAME_COLUMNS, type TownNameRow, withLeadingNoise, withoutCity } from "./no_city";
+import {
+  orderCandidates,
+  TOWN_NAME_COLUMNS,
+  type TownNameRow,
+  withLeadingNoise,
+  withoutCity,
+} from "./no_city";
 import { POINT_COLUMNS, type PointRow, withAddressPoint } from "./point";
 import { withParentPoint } from "./parent_point";
 
@@ -175,10 +181,40 @@ const matcherFor = async (env: ForwardEnv): Promise<Built> => {
   return cached.matcher;
 };
 
+/** limit の上限 (src/index.ts の limit と同じ) */
+const MAX_LIMIT = 10;
+
+/**
+ * 結果を絞る地域に入るか。area は都道府県コード (2 桁) か市区町村コード (5 桁)。
+ * 政令市のコードは区のコードの頭にならない (横浜市 14100、中区 14104) ので、政令市なら区も含める
+ */
+export const areaFilter = (
+  cities: readonly CityResult[],
+  area: string | undefined,
+): ((code: string | null) => boolean) => {
+  if (area === undefined) return () => true;
+  if (area.length === 2) return (code) => (code ?? "").startsWith(area);
+  const parents = cities.filter((c) => c.lgCode.startsWith(area) && !c.ward);
+  const codes = new Set(
+    cities
+      .filter(
+        (c) =>
+          c.lgCode.startsWith(area) ||
+          parents.some(
+            (p) => p.pref === c.pref && (p.county ?? "") === (c.county ?? "") && p.city === c.city,
+          ),
+      )
+      .map((c) => c.lgCode.slice(0, 5)),
+  );
+  return (code) => codes.has((code ?? "").slice(0, 5));
+};
+
 export const geocode = async (
   env: ForwardEnv,
   address: string,
   limit: number,
+  /** 都道府県コード (2 桁) か市区町村コード (5 桁)。渡されたら、その中の結果だけを返す */
+  area?: string,
 ): Promise<{
   results: MatchedResult[];
   postalCode: (r: MatchedResult) => Promise<string | null>;
@@ -186,44 +222,54 @@ export const geocode = async (
   stats = emptyStats();
   const cold = cached === null;
   const built = await matcherFor(env);
-  const match = (a: string) =>
-    Match(built.matcher, { address: preNormalize(a), category: "all", pref: "", limit });
-  const results = await Promise.all(
-    (await match(address)).map(async (r) =>
-      withAzaSkipped(
-        await withOazaChome(
-          await withRenamedWard(
-            await withoutCity(
-              await withLeadingNoise(r, address, match),
-              address,
-              built.names,
-              built.cities,
-              match,
-            ),
-            address,
+  const match = (a: string, n = limit) =>
+    Match(built.matcher, { address: preNormalize(a), category: "all", pref: "", limit: n });
+  const inArea = areaFilter(built.cities, area);
+  const cities = built.cities.filter((c) => inArea(c.lgCode));
+  // 地域で絞るときは、地域の外の候補で limit が埋まらないよう、上流からは上限まで受け取る
+  const upstream = await match(address, area === undefined ? limit : MAX_LIMIT);
+  // 上流の結果ごとに、市区町村を補った候補の組を作る
+  const groups = await Promise.all(
+    upstream.map(async (r) => {
+      const n = await withLeadingNoise(r, address, match);
+      // 市区町村まで決まった地域の外の結果は、この後の段で地域の中に移らない
+      if (Detail(n.match_level) >= Detail("city") && !inArea(n.ids.lg_code)) return [];
+      // 候補は座標を引いてから並べ直すので、limit ではなく上限まで残す
+      const candidates = (await withoutCity(n, address, built.names, cities, match)).slice(
+        0,
+        MAX_LIMIT,
+      );
+      const retried = await Promise.all(
+        candidates.map(async (c) => {
+          const out = await withAzaSkipped(
+            await withOazaChome(await withRenamedWard(c, address, match), address, match),
             match,
-          ),
-          address,
-          match,
-        ),
-        match,
-      ),
-    ),
+          );
+          // 当て直した結果に、市区町村を推定した候補の数を引き継ぐ
+          return c.candidates === undefined || out === c
+            ? out
+            : { ...out, candidates: c.candidates };
+        }),
+      );
+      // 当たらなかったもの (都道府県も決まらない) は返さない
+      return retried.filter((x) => x.match_level !== "unknown" && inArea(x.ids.lg_code));
+    }),
   );
-  // 住所は残さない。読んだ量と時間だけを書く
+  // ログには住所を書かない。読んだ量と時間だけ (住所と結果は src/request_log.ts で別に記録する)
   console.log(JSON.stringify({ geocode: true, cold, ...stats }));
-  // 当たらなかったもの (都道府県も決まらない) は返さない
-  const found = await Promise.all(
-    results
-      .filter((r) => r.match_level !== "unknown")
-      .map(async (r) =>
-        withParentPoint(
-          await withAddressPoint(r, built.points, built.town),
-          built.town,
-          built.city,
-        ),
-      ),
-  );
+  const withPoint = (r: MatchedResult) =>
+    withAddressPoint(r, built.points, built.town).then((x) =>
+      withParentPoint(x, built.town, built.city),
+    );
+  // 市区町村を推定した組は、座標を引いてから点の細かい順に並べる。ほかの結果は頭の limit 件だけ座標を引く
+  const ordered: MatchedResult[] = [];
+  for (const g of groups) {
+    if (ordered.length >= limit) break;
+    if (g.length > 1 && g.some((x) => (x.candidates ?? 1) > 1))
+      ordered.push(...orderCandidates(await Promise.all(g.map(withPoint))));
+    else ordered.push(...(await Promise.all(g.slice(0, limit - ordered.length).map(withPoint))));
+  }
+  const found = ordered.slice(0, limit);
   const postalCode = async (r: MatchedResult) =>
     r.ids.lg_code && r.ids.machiaza_id
       ? ((await built.town(r.ids.lg_code, r.ids.machiaza_id))?.postCode ?? null)

@@ -3,6 +3,7 @@
 // DuckDB もデータベースも使わない。地図用に R2 へ置いた境界の PMTiles から、点の入るタイルを
 // Range で 1 枚だけ読み、点を含む多角形を JS で探す。待機中の費用はかからず、1 回の問い合わせは
 // R2 の読み 1〜2 回と数ミリ秒の計算で済む
+import { logEntry, type RequestLogEntry, type RequestLogEnv, sendLog } from "./request_log";
 import {
   EtagMismatch,
   PMTiles,
@@ -38,7 +39,7 @@ import { type Level, resolveAreas, type TilePoint } from "./lookup";
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "./model/model";
 import { tryCatchAsync } from "./result";
 
-export interface Env extends ForwardEnv {
+export interface Env extends ForwardEnv, RequestLogEnv {
   BUCKET: R2Bucket;
   /** R2 の boundaries/ に置いた境界タイルのファイル名 (queria-web の src/lib/gis/boundary-tiles.ts と同じ) */
   BOUNDARY_TILES_FILE: string;
@@ -254,15 +255,26 @@ const app = new OpenAPIHono<{ Bindings: Env }>({
           c,
           400,
           {
-            error: result.error.issues.some((i) => i.path.includes("address"))
-              ? "address を 1〜100 文字で渡してください"
-              : result.error.issues.some((i) => i.path.includes("limit"))
-                ? "limit は 1〜10 の整数で渡してください"
-                : result.error.issues.some((i) => i.path.includes("format"))
-                  ? "format は json・geojson・csv のどれかで渡してください"
-                  : result.error.issues.some((i) => i.path.includes("addresses"))
-                    ? `addresses に住所の文字列を 1〜${BATCH_MAX} 件の配列で渡してください`
-                    : "lat と lng を数値で渡してください",
+            error:
+              c.req.path.endsWith("/batch") &&
+              result.error.issues.some(
+                (i) => i.path.includes("address") || i.path.includes("addresses"),
+              )
+                ? `住所を 1〜${BATCH_MAX} 件渡してください (POST は addresses の配列、GET は address の繰り返し)`
+                : result.error.issues.some((i) => i.path.includes("address"))
+                  ? "address を 1〜100 文字で渡してください"
+                  : result.error.issues.some((i) => i.path.includes("limit"))
+                    ? "limit は 1〜10 の整数で渡してください"
+                    : result.error.issues.some((i) => i.path.includes("format"))
+                      ? "format は json・geojson・csv のどれかで渡してください"
+                      : result.error.issues.some(
+                            (i) =>
+                              i.path.includes("prefecture_code") || i.path.includes("city_code"),
+                          )
+                        ? "prefecture_code は 2 桁、city_code は 5 桁か 6 桁の数字で渡してください"
+                        : result.error.issues.some((i) => i.path.includes("addresses"))
+                          ? `addresses に住所の文字列を 1〜${BATCH_MAX} 件の配列で渡してください`
+                          : "lat と lng を数値で渡してください",
           },
           "no-store",
         ),
@@ -281,43 +293,6 @@ app.use("/v1/*", async (c, next) => {
       "no-store",
     );
   return next();
-});
-
-app.openapi(reverseRoute, async (c) => {
-  const { lat, lng, include } = c.req.valid("query");
-  const groups = parseNames(include, REVERSE_INCLUDES);
-  if (groups === null)
-    return json(c, 400, { error: "include に使えるのは address・codes です" }, "no-store") as never;
-  // 鍵は丸めた座標と境界タイルのファイル名から作る。元の URL のままだと書き方の違う同じ座標や
-  // 余計なクエリで項目が割れ、タイルを向け替えても古い答えが 1 日残る
-  const url = new URL(c.req.url);
-  const cacheUrl = new URL(url.origin + url.pathname);
-  cacheUrl.searchParams.set("lat", String(lat));
-  cacheUrl.searchParams.set("lng", String(lng));
-  cacheUrl.searchParams.set("tiles", c.env.BOUNDARY_TILES_FILE);
-  cacheUrl.searchParams.set("include", [...groups].sort().join(","));
-  if (groups.has("address")) {
-    const version = await tryCatchAsync(() => dataVersion(c.env));
-    if (!version.ok) {
-      console.error("geocoder: reverse", version.error);
-      return c.json({ error: "住所の表を読めませんでした" }, 502, { "Cache-Control": "no-store" });
-    }
-    cacheUrl.searchParams.set("data", version.value);
-  }
-  const cacheKey = new Request(cacheUrl, { method: "GET" });
-  const cached = await caches.default.match(cacheKey);
-  // 置いてあるのは下で 200 として返したものそのまま
-  if (cached) return cached as never;
-  const result = await tryCatchAsync(() => reverse(lat, lng, groups, c.env));
-  if (!result.ok) {
-    console.error("geocoder: reverse", result.error);
-    return c.json({ error: "境界タイルか住所の表を読めませんでした" }, 502, {
-      "Cache-Control": "no-store",
-    });
-  }
-  const response = c.json(result.value, 200, { "Cache-Control": "public, max-age=86400" });
-  c.executionCtx.waitUntil(caches.default.put(cacheKey, response.clone()));
-  return response;
 });
 
 const nullableStrings = (keys: readonly string[]) =>
@@ -417,6 +392,14 @@ const GeocodeResult = z
       .string()
       .nullable()
       .openapi({ description: "全国地方公共団体コード (6 桁、検査数字つき)" }),
+    ambiguous: z.boolean().openapi({
+      description:
+        "市区町村名の無い住所で、同じ町名を持つ市区町村が複数あり、市区町村を推定したか。true のときは prefecture_code・city_code で絞ってください",
+    }),
+    candidates: z.number().int().openapi({
+      description:
+        "同じ町名で当たった市区町村の数 (ふつうは 1)。候補は人口の多い順に並ぶ。limit を増やすと全部を受け取れる",
+    }),
     score: optional(
       z.number().openapi({ description: "候補の並べ替えに使う値。1 はぴったりの一致" }),
       "match",
@@ -428,9 +411,17 @@ const GeocodeResult = z
   })
   .openapi("GeocodeResult");
 
-const GeocodeResponse = z
-  .object({ results: z.array(GeocodeResult).openapi({ description: "強い順" }), source: Source })
-  .openapi("GeocodeResponse");
+/** 1 つの住所の答え。単発も一括もこの形 */
+const ForwardItem = z
+  .object({
+    address: z.string().openapi({ description: "渡した住所" }),
+    results: z.array(GeocodeResult).openapi({
+      description: "強い順。照合できない住所、空や長すぎる住所 (一括のとき) は空の配列",
+    }),
+  })
+  .openapi("ForwardItem");
+
+const GeocodeResponse = ForwardItem.extend({ source: Source }).openapi("GeocodeResponse");
 
 const GeocodeFeatureCollection = z
   .object({
@@ -456,6 +447,8 @@ const GeocodeFeatureCollection = z
           coordinates_level: CoordinatesLevel.nullable(),
           ids: Ids,
           structured_address: StructuredAddress,
+          ambiguous: z.boolean(),
+          candidates: z.number().int(),
           codes: optional(ForwardCodes, "codes"),
           estat_small_area_code: smallArea.optional(),
         }),
@@ -469,9 +462,51 @@ const GeocodeFeatureCollection = z
 
 const API_VERSION = "0.2.0-beta";
 
-const geocodeRoute = createRoute({
+const prefectureCodeParam = z
+  .string()
+  .regex(/^\d{2}$/)
+  .optional()
+  .openapi({
+    param: {
+      name: "prefecture_code",
+      in: "query",
+      description: "都道府県コード (2 桁)。渡すと、その都道府県の結果だけを返す",
+    },
+    example: "25",
+  });
+const cityCodeParam = z
+  .string()
+  .regex(/^\d{5,6}$/)
+  .optional()
+  .openapi({
+    param: {
+      name: "city_code",
+      in: "query",
+      description:
+        "全国地方公共団体コード (5 桁か 6 桁)。渡すと、その市区町村の結果だけを返す。prefecture_code より優先する",
+    },
+    example: "25207",
+  });
+
+/** 結果を絞る地域。市区町村コードの頭 5 桁か都道府県コード */
+const areaOf = (prefecture_code?: string, city_code?: string) =>
+  city_code?.slice(0, 5) ?? prefecture_code;
+
+const limitParam = z
+  .string()
+  .regex(/^\d+$/)
+  .transform(Number)
+  .pipe(z.number().int().min(1).max(10))
+  .optional()
+  .openapi({
+    param: { name: "limit", in: "query", description: "返す候補の数の上限 (1〜10、既定 1)" },
+    type: "integer",
+    example: 1,
+  } as never);
+
+const forwardRoute = createRoute({
   method: "get",
-  path: "/v1/geocode",
+  path: "/v1/forward",
   summary: "住所から座標とコードを返す",
   request: {
     query: z.object({
@@ -484,17 +519,9 @@ const geocodeRoute = createRoute({
           param: { name: "address", in: "query", description: "住所。URL エンコードして渡す" },
           example: "東京都千代田区紀尾井町1-3",
         }),
-      limit: z
-        .string()
-        .regex(/^\d+$/)
-        .transform(Number)
-        .pipe(z.number().int().min(1).max(10))
-        .optional()
-        .openapi({
-          param: { name: "limit", in: "query", description: "返す候補の数の上限 (1〜10、既定 1)" },
-          type: "integer",
-          example: 1,
-        } as never),
+      limit: limitParam,
+      prefecture_code: prefectureCodeParam,
+      city_code: cityCodeParam,
       include: includeParam(INCLUDES),
       format: z
         .enum(["json", "geojson", "csv"])
@@ -553,8 +580,14 @@ const smallAreaOf = async (env: Env, r: MatchedResult) =>
         .estat_small_area_code;
 
 /** 1 つの住所を当てて、頼まれた項目のための値も引く */
-const answer = async (env: Env, address: string, limit: number, groups: ReadonlySet<Include>) => {
-  const { results, postalCode } = await geocode(env, address, limit);
+const answer = async (
+  env: Env,
+  address: string,
+  limit: number,
+  groups: ReadonlySet<Include>,
+  area?: string,
+) => {
+  const { results, postalCode } = await geocode(env, address, limit, area);
   const extras = await Promise.all(
     results.map(async (r): Promise<Extras> => ({
       postal_code: groups.has("codes") ? await postalCode(r) : null,
@@ -562,6 +595,14 @@ const answer = async (env: Env, address: string, limit: number, groups: Readonly
     })),
   );
   return results.map((r, i) => [r, extras[i]] as const);
+};
+
+/** 照合の記録を応答の後に送る。記録先が無ければ何もしない。送れなくても応答には響かせない */
+const record = (c: Context<{ Bindings: Env }>, entries: RequestLogEntry[]) => {
+  if (!c.env.REQUEST_LOG_URL) return;
+  c.executionCtx.waitUntil(
+    sendLog(c.env, entries).catch((e: unknown) => console.error("geocoder: log", e)),
+  );
 };
 
 /** 位置参照情報の点で座標を埋めた答え */
@@ -574,40 +615,111 @@ const attributionFor = (groups: ReadonlySet<Include>, isj: boolean) => [
   ...(groups.has("small_area") ? [SMALL_AREA_ATTRIBUTION] : []),
 ];
 
-app.openapi(geocodeRoute, async (c) => {
-  const { address, limit = 1, include, format } = c.req.valid("query");
-  const groups = parseInclude(include);
-  if (groups === null)
-    return json(
-      c,
-      400,
-      { error: `include に使えるのは ${INCLUDES.join(",")} です` },
-      "no-store",
-    ) as never;
-  const result = await tryCatchAsync(() => answer(c.env, address, limit, groups));
-  if (!result.ok) {
-    if (result.error instanceof ErrEmptyAddress || result.error instanceof ErrAddressTooLong)
-      return json(c, 400, { error: "address を 1〜100 文字で渡してください" }, "no-store") as never;
-    console.error("geocoder: geocode", result.error);
+/** 単発と一括で共通の引数 */
+type ForwardOptions = {
+  limit?: number;
+  include?: string;
+  prefecture_code?: string;
+  city_code?: string;
+};
+
+type Answered = Awaited<ReturnType<typeof answer>>;
+
+/**
+ * 1 つの住所を照合する。単発も一括もこれを通す。空や長すぎる住所は null。
+ * 表を読めないときは投げる
+ */
+const forwardOne = async (
+  env: Env,
+  address: string,
+  limit: number,
+  groups: ReadonlySet<Include>,
+  area: string | undefined,
+): Promise<Answered | null> => {
+  const r = await tryCatchAsync(() => answer(env, address, limit, groups, area));
+  if (r.ok) return r.value;
+  if (r.error instanceof ErrEmptyAddress || r.error instanceof ErrAddressTooLong) return null;
+  throw r.error;
+};
+
+/** 照合した住所たちを応答の形にし、記録も送る。単発は 1 件、一括は住所の数だけ */
+const forwardItems = async (
+  c: Context<{ Bindings: Env }>,
+  endpoint: string,
+  addresses: readonly string[],
+  options: ForwardOptions,
+) => {
+  const groups = parseInclude(options.include);
+  if (groups === null) return { error: `include に使えるのは ${INCLUDES.join(",")} です` } as const;
+  const area = areaOf(options.prefecture_code, options.city_code);
+  const limit = options.limit ?? 1;
+  // 1 件ずつ照合する。同じ市区町村の住所が続けば、読んだ表を使い回せる
+  const answered = await tryCatchAsync(async () => {
+    const out: (Answered | null)[] = [];
+    for (const a of addresses) out.push(await forwardOne(c.env, a, limit, groups, area));
+    return { pairs: out, version: await dataVersion(c.env) };
+  });
+  if (!answered.ok) return { failed: answered.error } as const;
+  const { pairs, version } = answered.value;
+  record(
+    c,
+    addresses.flatMap((a, i) =>
+      pairs[i] === null
+        ? []
+        : [
+            logEntry(
+              endpoint,
+              a,
+              (pairs[i] ?? []).map(([r]) => r),
+            ),
+          ],
+    ),
+  );
+  const flat = pairs.flatMap((p) => p ?? []);
+  return {
+    groups,
+    limit,
+    pairs,
+    items: addresses.map((address, i) => ({
+      address,
+      results: (pairs[i] ?? []).map(([r, x]) => forwardAnswer(r, groups, x)),
+    })),
+    source: {
+      version,
+      attribution: attributionFor(
+        groups,
+        flat.some(([r]) => usesIsj(r)),
+      ),
+    },
+  } as const;
+};
+
+app.openapi(forwardRoute, async (c) => {
+  const { address, format, ...options } = c.req.valid("query");
+  const out = await forwardItems(c, "forward", [address], options);
+  if ("error" in out) return json(c, 400, { error: out.error }, "no-store") as never;
+  if ("failed" in out) {
+    console.error("geocoder: forward", out.failed);
     return json(c, 502, { error: "住所の表を読めませんでした" }, "no-store") as never;
   }
-  const version = await dataVersion(c.env);
-  const attribution = attributionFor(
-    groups,
-    result.value.some(([r]) => usesIsj(r)),
-  );
+  const [answered] = out.pairs;
+  if (answered === null)
+    return json(c, 400, { error: "address を 1〜100 文字で渡してください" }, "no-store") as never;
+  const { groups, limit, items, source } = out;
+  const [{ results }] = items;
+  const { version, attribution } = source;
   const headers = { "Cache-Control": "public, max-age=86400" };
   if (format === "geojson") {
     const body = {
       type: "FeatureCollection",
       query: { address, limit },
       result_info: {
-        count: result.value.length,
+        count: answered.length,
         limit,
         api_version: API_VERSION,
         db_version: version,
       },
-      features: result.value.map(([r, x]) => forwardFeature(r, groups, x)),
+      features: answered.map(([r, x]) => forwardFeature(r, groups, x)),
       attribution,
     };
     return c.body(JSON.stringify(body), 200, {
@@ -615,7 +727,6 @@ app.openapi(geocodeRoute, async (c) => {
       "Content-Type": "application/geo+json",
     }) as never;
   }
-  const results = result.value.map(([r, x]) => forwardAnswer(r, groups, x));
   if (format === "csv") {
     // 行が無くても列名は出す。列は頼まれた組で決まる
     const columns = csvColumns(forwardAnswer(EMPTY_RESULT, groups, NO_EXTRAS));
@@ -626,7 +737,7 @@ app.openapi(geocodeRoute, async (c) => {
       "X-Attribution": attribution.map(encodeURIComponent).join(","),
     }) as never;
   }
-  return c.json({ results, source: { version, attribution } }, 200, headers) as never;
+  return c.json({ address, results, source }, 200, headers) as never;
 });
 
 app.doc31("/openapi.json", {
@@ -644,9 +755,33 @@ app.doc31("/openapi.json", {
 // 1 件ごとに市区町村の町字を読むので、市区町村がばらばらだと 100 件で CPU の上限 (30 秒) を超えた。町字の表の行グループを小さくするまでは 25 件にする
 const BATCH_MAX = 25;
 
+const BATCH_RESPONSES = {
+  200: {
+    content: {
+      "application/json": {
+        schema: z
+          .object({
+            results: z.array(ForwardItem).openapi({
+              description: "渡した住所と同じ順・同じ数。中身は /v1/forward と同じ",
+            }),
+            source: Source,
+          })
+          .openapi("BatchResponse"),
+      },
+    },
+    description: "住所ごとに、/v1/forward と同じ results を返す。limit も同じく効く",
+  },
+  400: { content: { "application/json": { schema: ErrorBody } }, description: "指定がおかしい" },
+  429: {
+    content: { "application/json": { schema: ErrorBody } },
+    description: "呼び出しが多すぎる",
+  },
+  502: { content: { "application/json": { schema: ErrorBody } }, description: "表を読めない" },
+};
+
 const batchRoute = createRoute({
   method: "post",
-  path: "/v1/batch",
+  path: "/v1/forward/batch",
   summary: "住所をまとめて当てる",
   description: `1 回に ${BATCH_MAX} 件まで。回数の上限は 1 回の呼び出しで 1 回と数える`,
   request: {
@@ -656,78 +791,84 @@ const batchRoute = createRoute({
           schema: z
             .object({
               addresses: z.array(z.string()).min(1).max(BATCH_MAX),
-              include: z.string().optional().openapi({ description: "/v1/geocode と同じ" }),
+              limit: z
+                .number()
+                .int()
+                .min(1)
+                .max(10)
+                .optional()
+                .openapi({ description: "/v1/forward と同じ。住所ごとに効く" }),
+              include: z.string().optional().openapi({ description: "/v1/forward と同じ" }),
+              prefecture_code: z
+                .string()
+                .regex(/^\d{2}$/)
+                .optional()
+                .openapi({ description: "/v1/forward と同じ。全部の住所に効く" }),
+              city_code: z
+                .string()
+                .regex(/^\d{5,6}$/)
+                .optional()
+                .openapi({ description: "/v1/forward と同じ。全部の住所に効く" }),
             })
             .openapi("BatchRequest"),
         },
       },
     },
   },
-  responses: {
-    200: {
-      content: {
-        "application/json": {
-          schema: z
-            .object({
-              results: z.array(GeocodeResult.nullable()).openapi({
-                description: "addresses と同じ順。当たらない住所・空や長すぎる住所は null",
-              }),
-              source: Source,
-            })
-            .openapi("BatchResponse"),
-        },
-      },
-      description: "住所ごとに一番強い 1 件",
-    },
-    400: { content: { "application/json": { schema: ErrorBody } }, description: "指定がおかしい" },
-    429: {
-      content: { "application/json": { schema: ErrorBody } },
-      description: "呼び出しが多すぎる",
-    },
-    502: { content: { "application/json": { schema: ErrorBody } }, description: "表を読めない" },
-  },
+  responses: BATCH_RESPONSES,
 });
 
-app.openapi(batchRoute, async (c) => {
-  const { addresses, include } = c.req.valid("json");
-  const groups = parseInclude(include);
-  if (groups === null)
-    return json(
-      c,
-      400,
-      { error: `include に使えるのは ${INCLUDES.join(",")} です` },
-      "no-store",
-    ) as never;
-  const one = async (address: string) => {
-    const r = await tryCatchAsync(() => answer(c.env, address, 1, groups));
-    if (r.ok) return r.value[0] ?? null;
-    if (r.error instanceof ErrEmptyAddress || r.error instanceof ErrAddressTooLong) return null;
-    throw r.error;
-  };
-  // 1 件ずつ当てる。同じ市区町村の住所が続けば、読んだ表を使い回せる
-  const result = await tryCatchAsync(async () => {
-    const out = [];
-    for (const a of addresses) out.push(await one(a));
-    return out;
-  });
-  if (!result.ok) {
-    console.error("geocoder: batch", result.error);
+/** GET の一括。住所を address で繰り返して渡す (DuckDB の read_json や表計算から呼べる) */
+const batchGetRoute = createRoute({
+  method: "get",
+  path: "/v1/forward/batch",
+  summary: "住所をまとめて照合する (GET)",
+  description: `住所を address=…&address=… と繰り返して ${BATCH_MAX} 件まで渡す。レスポンスは POST と同じ`,
+  request: {
+    query: z.object({
+      address: z
+        .preprocess(
+          (v) => (Array.isArray(v) ? v : v === undefined ? [] : [v]),
+          z.array(z.string()).min(1).max(BATCH_MAX),
+        )
+        .openapi({
+          param: { name: "address", in: "query", style: "form", explode: true },
+          type: "array",
+          items: { type: "string" },
+        } as never),
+      limit: limitParam,
+      include: includeParam(INCLUDES),
+      prefecture_code: prefectureCodeParam,
+      city_code: cityCodeParam,
+    }),
+  },
+  responses: BATCH_RESPONSES,
+});
+
+/** 住所をまとめて照合する。GET と POST で同じ。1 件ごとの処理は /v1/forward と同じ forwardItems */
+const batch = async (
+  c: Context<{ Bindings: Env }>,
+  addresses: string[],
+  options: ForwardOptions,
+) => {
+  const out = await forwardItems(c, "forward/batch", addresses, options);
+  if ("error" in out) return json(c, 400, { error: out.error }, "no-store") as never;
+  if ("failed" in out) {
+    console.error("geocoder: batch", out.failed);
     return json(c, 502, { error: "住所の表を読めませんでした" }, "no-store") as never;
   }
-  return c.json(
-    {
-      results: result.value.map((a) => (a ? forwardAnswer(a[0], groups, a[1]) : null)),
-      source: {
-        version: await dataVersion(c.env),
-        attribution: attributionFor(
-          groups,
-          result.value.some((a) => a !== null && usesIsj(a[0])),
-        ),
-      },
-    },
-    200,
-    { "Cache-Control": "no-store" },
-  ) as never;
+  return c.json({ results: out.items, source: out.source }, 200, {
+    "Cache-Control": "no-store",
+  }) as never;
+};
+
+app.openapi(batchRoute, async (c) => {
+  const { addresses, ...options } = c.req.valid("json");
+  return (await batch(c, addresses, options)) as never;
+});
+app.openapi(batchGetRoute, async (c) => {
+  const { address, ...options } = c.req.valid("query");
+  return (await batch(c, address, options)) as never;
 });
 
 // 仕様書 (/openapi.json) を人が読める形で出す。項目の説明は手で書かず、仕様書から作る
@@ -744,13 +885,50 @@ const DOCS_HTML = `<!doctype html>
 </body>
 </html>`;
 
+app.openapi(reverseRoute, async (c) => {
+  const { lat, lng, include } = c.req.valid("query");
+  const groups = parseNames(include, REVERSE_INCLUDES);
+  if (groups === null)
+    return json(c, 400, { error: "include に使えるのは address・codes です" }, "no-store") as never;
+  // 鍵は丸めた座標と境界タイルのファイル名から作る。元の URL のままだと書き方の違う同じ座標や
+  // 余計なクエリで項目が割れ、タイルを向け替えても古い答えが 1 日残る
+  const url = new URL(c.req.url);
+  const cacheUrl = new URL(url.origin + url.pathname);
+  cacheUrl.searchParams.set("lat", String(lat));
+  cacheUrl.searchParams.set("lng", String(lng));
+  cacheUrl.searchParams.set("tiles", c.env.BOUNDARY_TILES_FILE);
+  cacheUrl.searchParams.set("include", [...groups].sort().join(","));
+  if (groups.has("address")) {
+    const version = await tryCatchAsync(() => dataVersion(c.env));
+    if (!version.ok) {
+      console.error("geocoder: reverse", version.error);
+      return c.json({ error: "住所の表を読めませんでした" }, 502, { "Cache-Control": "no-store" });
+    }
+    cacheUrl.searchParams.set("data", version.value);
+  }
+  const cacheKey = new Request(cacheUrl, { method: "GET" });
+  const cached = await caches.default.match(cacheKey);
+  // 置いてあるのは下で 200 として返したものそのまま
+  if (cached) return cached as never;
+  const result = await tryCatchAsync(() => reverse(lat, lng, groups, c.env));
+  if (!result.ok) {
+    console.error("geocoder: reverse", result.error);
+    return c.json({ error: "境界タイルか住所の表を読めませんでした" }, 502, {
+      "Cache-Control": "no-store",
+    });
+  }
+  const response = c.json(result.value, 200, { "Cache-Control": "public, max-age=86400" });
+  c.executionCtx.waitUntil(caches.default.put(cacheKey, response.clone()));
+  return response;
+});
+
 // ここは API と仕様書だけ。/ は仕様書を見せる
 app.get("/", (c) => c.redirect("/docs", 302));
 app.get("/docs", (c) => c.html(DOCS_HTML, 200, { "Cache-Control": "public, max-age=3600" }));
 
 app.all("/v1/reverse", (c) => c.body("Method Not Allowed", 405, { Allow: "GET" }));
-app.all("/v1/geocode", (c) => c.body("Method Not Allowed", 405, { Allow: "GET" }));
-app.all("/v1/batch", (c) => c.body("Method Not Allowed", 405, { Allow: "POST" }));
+app.all("/v1/forward", (c) => c.body("Method Not Allowed", 405, { Allow: "GET" }));
+app.all("/v1/forward/batch", (c) => c.body("Method Not Allowed", 405, { Allow: "GET, POST" }));
 app.notFound((c) => json(c, 404, { error: "not found" }, "no-store"));
 
 export default app satisfies ExportedHandler<Env>;

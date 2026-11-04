@@ -15,7 +15,7 @@ JS で探す。町丁目が当たれば、そのコードの頭 5 桁が市区�
 頼んだ組の項目は、値が無くても null で入れる。
 
 ```
-GET /v1/geocode?address=東京都千代田区紀尾井町1-3
+GET /v1/forward?address=東京都千代田区紀尾井町1-3
 ```
 
 ```json
@@ -45,7 +45,7 @@ GET /v1/geocode?address=東京都千代田区紀尾井町1-3
 ブラウザや多くの HTTP ライブラリは自分で直すが、curl は直さない。
 
 ```bash
-curl -s -G https://geocoder.queria.io/v1/geocode --data-urlencode "address=東京都千代田区紀尾井町1-3" --data-urlencode "include=codes,small_area"
+curl -s -G https://geocoder.queria.io/v1/forward --data-urlencode "address=東京都千代田区紀尾井町1-3" --data-urlencode "include=codes,small_area"
 ```
 
 ```

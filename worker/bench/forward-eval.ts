@@ -26,7 +26,7 @@ type Answer = {
 type Row = Truth & { answer: Answer; error_m: number | null };
 
 const BASE = process.env.BASE ?? "https://geocoder.queria.io";
-// 既定は /v1/batch の上限 (src/index.ts の BATCH_MAX)。小さく割って並べると、1 回の CPU が上限に当たりにくく速い
+// 既定は /v1/forward/batch の上限 (src/index.ts の BATCH_MAX)。小さく割って並べると、1 回の CPU が上限に当たりにくく速い
 const BATCH = Number(process.env.BATCH ?? 25);
 const LANES = Number(process.env.LANES ?? 1);
 
@@ -49,12 +49,16 @@ const wait = (status: number | string, ms: number) => {
 
 const post = async (addresses: string[], tries = 3): Promise<Answer[]> => {
   // 答えが返らないまま止まる問い合わせもあるので、本文を読み終えるまでを 60 秒で切って送り直す
-  const res = await fetch(`${BASE}/v1/batch`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ addresses }),
-    signal: AbortSignal.timeout(60_000),
-  })
+  // 名前を変える前の版 (/v1/batch) とも比較できるよう、404 なら以前の名前で送り直す
+  const send = (path: string) =>
+    fetch(`${BASE}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ addresses }),
+      signal: AbortSignal.timeout(60_000),
+    });
+  const res = await send("/v1/forward/batch")
+    .then((r) => (r.status === 404 ? send("/v1/batch") : r))
     .then(async (r) => ({ status: r.status, ok: r.ok, body: await r.text() }))
     .catch((e: Error) => e);
   if (res instanceof Error) {
@@ -68,7 +72,13 @@ const post = async (addresses: string[], tries = 3): Promise<Answer[]> => {
     return post(addresses, res.status === 429 ? tries : tries - 1);
   }
   if (!res.ok) throw new Error(`${res.status} ${res.body}`);
-  return (JSON.parse(res.body) as { results: Answer[] }).results;
+  // 今の形は住所ごとに { address, results }。以前の版は住所ごとに 1 件か null
+  type Item = { address: string; results: Answer[] } | Answer | null;
+  return (JSON.parse(res.body) as { results: Item[] }).results.map((x) =>
+    x !== null && "address" in x && Array.isArray(x.results)
+      ? (x.results[0] ?? null)
+      : (x as Answer),
+  );
 };
 
 // LANES 本の列で、まとまりを順に取って送る。答えは元の順に戻す

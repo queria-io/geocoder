@@ -59,6 +59,12 @@ const codes = (r: MatchedResult, x: Extras) => {
   };
 };
 
+/** 市区町村名の無い住所で、同じ町名の市区町村が複数あったか (市区町村を推定したか) とその数 */
+const candidatesOf = (r: MatchedResult) => ({
+  ambiguous: (r.candidates ?? 1) > 1,
+  candidates: r.candidates ?? 1,
+});
+
 /** 正引きの 1 件。頼まれた組だけ足す。組の中の項目は値が無くても null で入れる */
 export const forwardAnswer = (r: MatchedResult, include: ReadonlySet<Include>, x: Extras) => ({
   matched_address: r.matched_address,
@@ -68,6 +74,7 @@ export const forwardAnswer = (r: MatchedResult, include: ReadonlySet<Include>, x
   match_level: r.match_level,
   coordinates_level: coordinatesLevel(r),
   lg_code: r.ids.lg_code,
+  ...candidatesOf(r),
   ...(include.has("match") ? { score: r.score } : {}),
   ...(include.has("structured_address") ? { structured_address: r.structured_address } : {}),
   ...(include.has("ids") ? { ids: r.ids } : {}),
@@ -87,6 +94,7 @@ export const forwardFeature = (r: MatchedResult, include: ReadonlySet<Include>, 
     coordinates_level: coordinatesLevel(r),
     ids: r.ids,
     structured_address: r.structured_address,
+    ...candidatesOf(r),
     ...(include.has("codes") ? { codes: codes(r, x) } : {}),
     ...(include.has("small_area") ? { estat_small_area_code: x.estat_small_area_code } : {}),
   },

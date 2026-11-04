@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "../src/model/model";
 import {
   numeralsOf,
+  orderCandidates,
   townNameOf,
   withLeadingNoise,
   withoutCity,
@@ -38,6 +39,7 @@ const cities: Record<string, CityResult> = {
     ward: null,
     lon: null,
     lat: null,
+    population: 282693,
   },
   "202011": {
     lgCode: "202011",
@@ -47,6 +49,7 @@ const cities: Record<string, CityResult> = {
     ward: null,
     lon: null,
     lat: null,
+    population: 372760,
   },
 };
 const names =
@@ -62,7 +65,7 @@ const row = (name: string, lg_code: string): TownNameRow => ({
 describe("withoutCity", () => {
   it("町名を持つ市区町村が 1 つなら、市区町村名を補って当て直す", async () => {
     const asked: string[] = [];
-    const r = await withoutCity(
+    const [r] = await withoutCity(
       unmatched(),
       "松川町字市坂３－１",
       names([row("松川町", "072010")]),
@@ -76,31 +79,100 @@ describe("withoutCity", () => {
     expect(r.ids.lg_code).toBe("072010");
   });
 
-  it("番地まで当たる市区町村が 1 つだけなら、それを採る", async () => {
-    const r = await withoutCity(
+  it("同じ町名を持つ市区町村が 2 つあれば、番地まで当たるのが 1 つでも両方を返し、細かい段まで当たった順に並べる", async () => {
+    const got = await withoutCity(
       unmatched(),
       "松川町1",
       names([row("松川町", "072010"), row("松川町", "202011")]),
       Object.values(cities),
       async (a) => [a.startsWith("福島県") ? hit("072010", "parcel") : hit("202011", "machiaza")],
     );
-    expect(r.ids.lg_code).toBe("072010");
+    expect(got.map((x) => [x.ids.lg_code, x.candidates])).toEqual([
+      ["072010", 2],
+      ["202011", 2],
+    ]);
   });
 
-  it("2 つの市区町村で同じ強さに当たれば返さない", async () => {
-    const r = await withoutCity(
+  it("番号まで照合できても点が町字の代表点なら、親番の点を持つ候補より後ろに並べる", async () => {
+    const got = await withoutCity(
+      unmatched(),
+      "松川町1",
+      names([row("松川町", "072010"), row("松川町", "202011")]),
+      Object.values(cities),
+      async (a) => [
+        a.startsWith("福島県")
+          ? { ...hit("072010", "parcel"), coordinate_level: "parcel_parent" as const }
+          : { ...hit("202011", "parcel"), coordinate_level: "machiaza" as const },
+      ],
+    );
+    expect(got.map((x) => x.ids.lg_code)).toEqual(["072010", "202011"]);
+  });
+
+  it("同じ段まで当たった候補は人口の多い順に並べる", async () => {
+    const got = await withoutCity(
       unmatched(),
       "松川町1",
       names([row("松川町", "072010"), row("松川町", "202011")]),
       Object.values(cities),
       async (a) => [a.startsWith("福島県") ? hit("072010", "parcel") : hit("202011", "parcel")],
     );
-    expect(r.match_level).toBe("unknown");
+    expect(got.map((x) => x.ids.lg_code)).toEqual(["202011", "072010"]);
+  });
+
+  it("住所に書かれた長い町名で当たる市区町村が 1 つなら、それを採る", async () => {
+    const at = (lgCode: string, oaza: string, chome: string | null) => ({
+      ...hit(lgCode, "machiaza"),
+      structured_address: { ...emptySA(), oaza_cho: oaza, chome },
+    });
+    const [r] = await withoutCity(
+      unmatched(),
+      "桧原3丁目13-17",
+      names([row("桧原", "072010"), row("桧原", "202011")]),
+      Object.values(cities),
+      async (a) => [
+        a.startsWith("福島県") ? at("072010", "桧原", "三丁目") : at("202011", "大字桧原", null),
+      ],
+    );
+    expect(r.ids.lg_code).toBe("072010");
+  });
+
+  it("番地から読んだ丁目や住所に無い小字は、町名の長さに数えない", async () => {
+    const at = (lgCode: string, oaza: string, chome: string | null, koaza: string | null) => ({
+      ...hit(lgCode, "machiaza"),
+      structured_address: { ...emptySA(), oaza_cho: oaza, chome, koaza },
+    });
+    const [r] = await withoutCity(
+      unmatched(),
+      "大原町5-20",
+      names([row("大原町", "072010"), row("大原町", "202011")]),
+      Object.values(cities),
+      async (a) => [
+        a.startsWith("福島県")
+          ? at("072010", "大原町", "五丁目", null)
+          : at("202011", "大原町", null, "字上"),
+      ],
+    );
+    expect(r.candidates).toBe(2);
+  });
+
+  it("索引で長い町名を持つ市区町村だけを候補にする", async () => {
+    const asked: string[] = [];
+    await withoutCity(
+      unmatched(),
+      "前田8条17丁目9番12号",
+      names([row("前田八条", "072010"), row("前田", "202011")]),
+      Object.values(cities),
+      async (a) => {
+        asked.push(a);
+        return [];
+      },
+    );
+    expect(asked).toEqual(["福島県福島市前田8条17丁目9番12号"]);
   });
 
   it("都道府県まで当たっていれば、その都道府県の市区町村だけを候補にする", async () => {
     const asked: string[] = [];
-    const r = await withoutCity(
+    const [r] = await withoutCity(
       unmatched({ match_level: "pref", ids: { ...emptyIDs(), lg_code: "070009" } }),
       "福島県松川町1",
       names([row("松川町", "072010"), row("松川町", "202011")]),
@@ -125,11 +197,11 @@ describe("withoutCity", () => {
         throw new Error("当て直さない");
       },
     );
-    expect(got).toBe(r);
+    expect(got).toEqual([r]);
   });
 
   it("町名と同じ頭 2 文字でも、住所の頭に名前が無い行は候補にしない", async () => {
-    const r = await withoutCity(
+    const [r] = await withoutCity(
       unmatched(),
       "松川1",
       names([row("松川町", "072010")]),
@@ -160,7 +232,7 @@ describe("withoutCity の区と余計な文字", () => {
   };
   it("市名を省いた政令市の区は、その区を持つ市が 1 つなら補う", async () => {
     const asked: string[] = [];
-    const r = await withoutCity(
+    const [r] = await withoutCity(
       unmatched({ match_level: "pref", ids: { ...emptyIDs(), lg_code: "010006" } }),
       "北海道西区西野６条",
       names([]),
@@ -204,5 +276,26 @@ describe("町名の数字", () => {
       },
     );
     expect(asked).toEqual(["福島県福島市北1条西2丁目"]);
+  });
+});
+
+describe("orderCandidates", () => {
+  it("座標を取った点の細かい順に並べ、同じなら元の順を保つ", () => {
+    const at = (
+      lg: string,
+      level: MatchedResult["match_level"],
+      point: MatchedResult["coordinate_level"],
+    ) => ({
+      ...hit(lg, level),
+      coordinate_level: point,
+    });
+    const got = orderCandidates([
+      at("1", "parcel", "machiaza"),
+      at("2", "machiaza_detail", "machiaza_detail"),
+      at("3", "parcel", "parcel_parent"),
+      at("4", "rsdtdsp_rsdt", "rsdtdsp_rsdt"),
+      at("5", "parcel", "parcel_parent"),
+    ]);
+    expect(got.map((x) => x.ids.lg_code)).toEqual(["4", "3", "5", "2", "1"]);
   });
 });

@@ -63,6 +63,7 @@ export type CityTableRow = {
   ward_name: string | null;
   lng?: number | null;
   lat?: number | null;
+  population?: number | bigint | null;
 };
 
 export type PrefTableRow = { lg_code: string; pref_code: string; pref_name: string };
@@ -107,6 +108,7 @@ export const toCity = (c: CityTableRow): CityRow => ({
   ward: c.ward_name,
   lon: c.lng ?? null,
   lat: c.lat ?? null,
+  population: c.population == null ? null : Number(c.population),
   normalizedAddress: TextForDB((c.county_name ?? "") + c.city_name + (c.ward_name ?? ""))[0],
 });
 
