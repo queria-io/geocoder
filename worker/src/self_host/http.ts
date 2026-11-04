@@ -29,6 +29,11 @@ export const httpBucket = (base: string, token?: string): R2Bucket =>
   ({
     get: async (key: string, options?: { range?: Range }) => {
       const res = await read(base, key, options?.range, token);
+      // Range を無視した 200 はファイル全体なので、頼んだ範囲として返さない (Parquet の読み違いになる)
+      if (res && options?.range && res.status !== 206) {
+        await res.body?.cancel();
+        throw new Error(`${res.status} without Range: ${base}${key}`);
+      }
       return res && asObject(res);
     },
     head: async (key: string) => {

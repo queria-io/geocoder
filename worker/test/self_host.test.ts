@@ -76,6 +76,28 @@ describe("mirror", () => {
     expect(await text("geocoder/data/town/c.parquet")).toBe("parquet town/c.parquet");
   });
 
+  it("新しいバージョンを写すときは fdl.json も書き直す", async () => {
+    await mirror(origin(repo("v1", version("v1", ["town/a.parquet"]))), env.DATA, "geocoder/");
+    const v2 = {
+      ...repo("v2", version("v2", ["town/b.parquet"])),
+      "geocoder/fdl.json": JSON.stringify({ data_dir: "data/", note: "v2" }),
+    };
+    await mirror(origin(v2), env.DATA, "geocoder/");
+    expect(await text("geocoder/fdl.json")).toBe(v2["geocoder/fdl.json"]);
+  });
+
+  it("Worker が読めないバージョン (削除ファイルつき) では refs/heads/main を進めない", async () => {
+    await mirror(origin(repo("v1", version("v1", ["town/a.parquet"]))), env.DATA, "geocoder/");
+    const v2 = {
+      ...repo("v2", version("v2", [])),
+      "geocoder/versions/v2/files.json": JSON.stringify({
+        tables: { "town.town": { files: [{ path: "town/b.parquet", deletes: [{}] }] } },
+      }),
+    };
+    await expect(mirror(origin(v2), env.DATA, "geocoder/")).rejects.toThrow("deletes");
+    expect(await text("geocoder/refs/heads/main")).toBe("v1\n");
+  });
+
   it("ほかの置き場のファイル (境界タイル) も、無ければ写す", async () => {
     const tiles = origin({ "boundaries/b.pmtiles": "tiles" });
     await mirror(origin(repo("v1", version("v1", []))), env.DATA, "geocoder/", [
@@ -118,5 +140,14 @@ describe("httpBucket", () => {
     expect(seen[1].url).toBe("https://data.example/geocoder/x");
     expect(seen[1].headers.get("Range")).toBe("bytes=0-1");
     expect(seen[1].headers.get("Authorization")).toBe("Bearer qk_test");
+  });
+
+  it("Range を付けた読みに 200 (ファイル全体) が返ったら止める", async () => {
+    vi.stubGlobal("fetch", async () => new Response("abcdefghij", { status: 200 }));
+    const b = httpBucket("https://data.example/");
+    await expect(b.get("geocoder/x", { range: { offset: 0, length: 2 } })).rejects.toThrow(
+      "without Range",
+    );
+    expect(await (await b.get("geocoder/x"))?.text()).toBe("abcdefghij");
   });
 });

@@ -47,7 +47,7 @@ npx wrangler login
 pnpm self-host
 ```
 
-`https://geocoder.<アカウントのサブドメイン>.workers.dev` で API が動く。データ (住所の表と境界タイル) は Queria が公開している `https://data.queria.io/geocoder/` と `https://assets.queria.io/boundaries/` から HTTP の Range で読むので、データのコピーもバケットも要らない。データは Queria の毎月の更新にそのまま追従する。リクエストの内容は Queria に送られず、Queria が受け取るのはデータのファイルの読み出しだけである。
+`https://geocoder.<アカウントのサブドメイン>.workers.dev` で API が動く。データ (住所の表と境界タイル) は Queria が公開している `https://data.queria.io/geocoder/` と `https://assets.queria.io/boundaries/` から HTTP の Range で読むので、データのコピーもバケットも要らない。住所の表は Queria の毎月の更新にそのまま追従する。境界タイルは設定の `BOUNDARY_TILES_FILE` が指すファイルに固定されるので、新しい境界を使うときはこの値を書き換えてデプロイし直す。入力の住所や座標は Queria に送られない。ただし Queria はファイルのどの範囲が読まれたかを受け取り、そこから問い合わせた市区町村 (正引き) やおおよその位置 (逆引きのタイル) が分かる。これも避けるときは、下の自分の R2 に取り込む形にする。
 
 設定は [`worker/wrangler.self-host.jsonc`](worker/wrangler.self-host.jsonc) にある。
 
