@@ -221,7 +221,7 @@ dependencies = [
 requires-dist = [
     { name = "dbt-core", specifier = ">=1.11.2" },
     { name = "dbt-duckdb", specifier = ">=1.10.0" },
-    { name = "fdl-cli", specifier = ">=0.16.0" },
+    { name = "fdl-cli", specifier = ">=0.17.0" },
 ]
 
 [[package]]
@@ -395,16 +395,16 @@ wheels = [
 
 [[package]]
 name = "fdl-cli"
-version = "0.16.0"
+version = "0.18.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "duckdb" },
     { name = "pyyaml" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b9/6a/fb67f4d9aaf4ab7e6976675fc52465445d8961fcddb47229f10e2ab4ebb1/fdl_cli-0.16.0.tar.gz", hash = "sha256:2c7b6b6f08b9c02e1e002672de7f68c846e8cd16d1e46a7736ffc09765fefdc8", size = 268240, upload-time = "2026-11-01T23:22:20.476Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/31/0f/2d49e3f1575b51000ddfe8658bc26f7e00904fec196aa797f130afe2bc63/fdl_cli-0.18.2.tar.gz", hash = "sha256:28c392be6cbce473f3a4d855c892b88408442c335dc015de1dc083d72fc10994", size = 292862, upload-time = "2026-11-03T22:39:10.715Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c7/71/9a03466be80fe01fa65a5570f9a1eaaff04b63b57ba08397e009cb61256c/fdl_cli-0.16.0-py3-none-any.whl", hash = "sha256:52ec1d302782a4025e68616f04ce0f5716886d5d144107468daab43f348993ee", size = 32950, upload-time = "2026-11-01T23:22:18.816Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/54/85bc35bedc688bd090959a30549d6c22384455b921e2a9d9f358f6cf72f1/fdl_cli-0.18.2-py3-none-any.whl", hash = "sha256:df14a1d3b4e1cbc8c787103b419da8fdd3a5440541cb4f0d78f16c91787fe38d", size = 40935, upload-time = "2026-11-03T22:39:09.109Z" },
 ]
 
 [[package]]

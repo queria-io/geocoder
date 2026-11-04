@@ -1,10 +1,12 @@
-// マージ前の精度の関門。同じ住所を本番 (基準) と PR のプレビューに流した 2 つの JSONL を比べ、
+// マージ前の精度チェック。同じ住所を本番 (基準) と PR のプレビューに送った 2 つの JSONL を比較し、
 // 悪くなっていれば 1 で終わる。表と、遠ざかった住所の一覧を Markdown で出す
 // 使い方: pnpm tsx bench/gate.ts 基準.jsonl PR.jsonl
 import { readFileSync } from "node:fs";
 
 type Row = {
   source: string;
+  /** 住所の書き方の型 (truth-forward.py の PATTERNS) */
+  pattern?: string;
   address: string;
   answer: { match_level: string; coordinates_level: string | null } | null;
   error_m: number | null;
@@ -48,13 +50,38 @@ const better = moved.filter(
 const [s0, s1] = [stats(base), stats(head)];
 // 止める条件。数パーセントの揺れは R2 の読みの失敗などでも出るので、わずかな幅は見逃す
 const failures = [
-  s1.answered < s0.answered - 0.1 && "答えありが減った",
-  s1.located < s0.located - 0.1 && "座標ありが減った",
-  s1.fine < s0.fine - 0.2 && "番地より細かい点が減った",
+  s1.answered < s0.answered - 0.1 && "回答率が下がった",
+  s1.located < s0.located - 0.1 && "座標付与率が下がった",
+  s1.fine < s0.fine - 0.2 && "地番・街区レベル以上の割合が下がった",
   s1.median > s0.median + 2 && "誤差の中央値が 2m を超えて悪くなった",
   s1.over1km > s0.over1km + 0.2 && "1km 超が増えた",
   worse.length > better.length && `${FAR}m 以上遠ざかった住所が、近づいた住所より多い`,
 ].filter((f): f is string => f !== false);
+
+// 誤照合: 座標を返したが、正解から 1km を超えて離れているもの。間違った場所を返すと利用者は気づけないので、
+// 本番では誤照合でなかった住所が 1 件でも誤照合になったら失敗にする (「字」を読み飛ばして別の町字に当てるなど)。
+// 件数の増減で判定すると、同じ型の別の住所が直った分だけ新しい誤照合が隠れるので、住所ごとに比較する
+const MISS = 1000;
+const isMiss = (r: Row) => r.error_m !== null && r.error_m > MISS;
+const patternOf = (r: Row) => r.pattern || "-";
+const newMisses = moved.filter(({ b, h }) => !isMiss(b) && isMiss(h));
+const misses = [...Map.groupBy(moved, ({ b }) => patternOf(b))]
+  .sort(([a], [b]) => (a < b ? -1 : 1))
+  .map(([pattern, ms]) => ({
+    pattern,
+    count: ms.length,
+    base: ms.filter(({ b }) => isMiss(b)).length,
+    head: ms.filter(({ h }) => isMiss(h)).length,
+    added: ms.filter(({ b, h }) => !isMiss(b) && isMiss(h)).length,
+  }));
+failures.push(
+  ...misses
+    .filter((m) => m.added > 0)
+    .map(
+      (m) =>
+        `書き方の型「${m.pattern}」で、本番では誤照合 (${MISS / 1000}km 超) でなかった住所が ${m.added} 件誤照合になった`,
+    ),
+);
 
 const pct = (x: number) => `${x.toFixed(1)}%`;
 const line = (label: string, s: Stats) =>
@@ -63,15 +90,34 @@ const km = (x: number | null) => (x === null ? "なし" : `${Math.round(x)}m`);
 
 console.log(
   [
-    `## 精度の関門: ${failures.length === 0 ? "通過" : "不合格"}`,
+    `## 精度チェック: ${failures.length === 0 ? "合格" : "不合格"}`,
     "",
     ...failures.map((f) => `- ${f}`),
     "",
-    "| | 答えあり | 座標あり | 番地より細かい点 | 誤差の中央値 (m) | 1km 超 |",
+    "| | 回答率 | 座標付与率 | 地番・街区レベル以上 | 誤差の中央値 (m) | 1km 超 |",
     "|---|---|---|---|---|---|",
     line("本番", s0),
     line("この PR", s1),
     "",
+    "書き方の型ごとの誤照合 (座標を返したが正解から 1km 超)",
+    "",
+    "| 型 | 件数 | 本番 | この PR | 新たな誤照合 |",
+    "|---|---|---|---|---|",
+    ...misses.map((m) => `| ${m.pattern} | ${m.count} | ${m.base} | ${m.head} | ${m.added} |`),
+    "",
+    ...(newMisses.length === 0
+      ? []
+      : [
+          "| 新たに誤照合になった住所 | 型 | 本番 | この PR |",
+          "|---|---|---|---|",
+          ...newMisses
+            .slice(0, 50)
+            .map(
+              ({ b, h }) =>
+                `| ${b.address} | ${patternOf(b)} | ${km(b.error_m)} (${b.answer?.coordinates_level ?? "-"}) | ${km(h.error_m)} (${h.answer?.coordinates_level ?? "-"}) |`,
+            ),
+          "",
+        ]),
     `${FAR}m 以上 近づいた ${better.length} 件、遠ざかった ${worse.length} 件 (座標を失ったものを含む)`,
     "",
     ...(worse.length === 0
