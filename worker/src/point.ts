@@ -99,6 +99,13 @@ export const withAddressPoint = async (
   const { lg_code: lgCode, machiaza_id: machiazaId } = r.ids;
   const parent = parentNumber(r);
   if (!pointAtMachiaza(r) || !lgCode || !machiazaId || parent === null) return r;
+  // 住居表示の町字の残りの番号は街区符号・住居番号なので、同じ番号の地番より先に街区の点を引く
+  // (住居表示の町字にも ABR の地番の点がある。番号が同じでも別の場所)
+  const rsdt = r.ids.rsdt_addr_flg === "1";
+  if (rsdt) {
+    const block = await withBlockPoint(r, load, lgCode, machiazaId, parent);
+    if (block !== r) return block;
+  }
   const ids = areas(machiazaId, await town(lgCode, machiazaId));
   for (const { num, own } of numbers(r, parent))
     for (const id of ids) {
@@ -113,12 +120,13 @@ export const withAddressPoint = async (
           coordinate_source: hit.source,
         };
     }
-  return withBlockPoint(r, load, lgCode, machiazaId, parent);
+  return rsdt ? r : withBlockPoint(r, load, lgCode, machiazaId, parent);
 };
 
 /**
- * 地番の区域の町 (住居表示でない) では、位置参照情報が「○番」の点を街区として持つことがある
- * (ひたちなか市小砂町一丁目の 8 番)。地番にも親番にも点が無ければ、同じ番号の街区の点を使う
+ * 地番にも親番にも点が無ければ、同じ番号の街区の点を使う。
+ * 住居表示の町字で ABR に街区が無いもの (川崎市高津区上作延1丁目) は、位置参照情報の街区の点で埋める。
+ * 地番の区域の町でも、位置参照情報が「○番」の点を街区として持つことがある (ひたちなか市小砂町一丁目の 8 番)
  */
 const withBlockPoint = async (
   r: MatchedResult,
@@ -127,7 +135,8 @@ const withBlockPoint = async (
   machiazaId: string,
   parent: string,
 ): Promise<MatchedResult> => {
-  if (r.ids.rsdt_addr_flg !== "0") return r;
+  const flg = r.ids.rsdt_addr_flg;
+  if (flg !== "0" && flg !== "1") return r;
   const hit = (await load(lgCode, machiazaId)).find(
     (x) =>
       x.system === "rsdt" &&
@@ -141,7 +150,7 @@ const withBlockPoint = async (
     ? {
         ...r,
         coordinates: [hit.lng as number, hit.lat as number],
-        coordinate_level: PARCEL_PARENT,
+        coordinate_level: flg === "1" ? "rsdtdsp_blk" : PARCEL_PARENT,
         coordinate_source: hit.source,
       }
     : r;

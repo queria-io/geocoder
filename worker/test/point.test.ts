@@ -173,7 +173,7 @@ describe("withAddressPoint", () => {
   });
 });
 
-describe("地番の区域の町の街区の点", () => {
+describe("街区の点", () => {
   const block = {
     "0822010051003": [pt("5", null, { system: "rsdt", point_type: "block", lng: 140.1 })],
   };
@@ -197,9 +197,36 @@ describe("地番の区域の町の街区の点", () => {
     expect(r.coordinate_source).toBe("isj");
   });
 
-  it("住居表示の町では使わない", async () => {
+  it("住居表示の町で ABR に街区が無ければ、位置参照情報の街区の点を街区の精度で使う", async () => {
     const r = await withAddressPoint(
-      result({ unmatched_address: ["5-1"], ids: flag("1") }),
+      result({ unmatched_address: ["5番1号"], ids: flag("1") }),
+      loadBlock,
+      noTown,
+    );
+    expect(r.coordinates?.[0]).toBe(140.1);
+    expect(r.coordinate_level).toBe("rsdtdsp_blk");
+    expect(r.coordinate_source).toBe("isj");
+  });
+
+  it("住居表示の町では、同じ番号の地番の点より街区の点を使う", async () => {
+    const withParcel = {
+      "0822010051003": [
+        pt("5", "1", { point_type: "parcel", source: "abr", lng: 140.2 }),
+        pt("5", null, { system: "rsdt", point_type: "block", lng: 140.1 }),
+      ],
+    };
+    const r = await withAddressPoint(
+      result({ unmatched_address: ["5番1号"], ids: flag("1") }),
+      async (lg, id) => (withParcel as Record<string, PointRow[]>)[lg + id] ?? [],
+      noTown,
+    );
+    expect(r.coordinates?.[0]).toBe(140.1);
+    expect(r.coordinate_level).toBe("rsdtdsp_blk");
+  });
+
+  it("住居表示かどうか分からない町字では使わない", async () => {
+    const r = await withAddressPoint(
+      result({ unmatched_address: ["5-1"], ids: flag(null) }),
       loadBlock,
       noTown,
     );
