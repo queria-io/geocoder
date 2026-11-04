@@ -119,6 +119,15 @@ numbering_area AS (
 small_area AS (
     SELECT CAST(key_code AS VARCHAR) AS small_area_code, geometry FROM e_stat.boundary.small_area
 ),
+-- 代表点が入る小地域。内部結合にして、DuckDB の空間結合 (境界の索引を使う結合) で引く。
+-- 外部結合のまま ST_Contains で結ぶと空間結合にならず、点と境界の総当たりになる。
+-- 境界が重なる場所では代表点が 2 つの小地域に入るので、町字 1 つに 1 つだけ残す
+located_area AS (
+    SELECT t.lg_code, t.machiaza_id, min(s.small_area_code) AS small_area_code
+    FROM located t
+    JOIN small_area s ON ST_Contains(s.geometry, t.point)
+    GROUP BY t.lg_code, t.machiaza_id
+),
 -- ABR の町字マスタは多くの町字で郵便番号が空なので、japan_address_code の町字と郵便番号の対応で補う。
 -- 町域名が一致したもの (name)、町域が細分されていて全部同じ番号のもの (sub)、ABR の番号 (abr) だけを使い、
 -- 町字 1 つに番号が 1 つに決まるものに限る。町域名の前方一致 (prefix) と市区町村全体の番号 (city) は使わない
@@ -164,7 +173,5 @@ LEFT JOIN rsdtdsp_count c ON c.lg_code = t.lg_code AND c.machiaza_id = t.machiaz
 LEFT JOIN parcel_count pc ON pc.lg_code = t.lg_code AND pc.machiaza_id = t.machiaza_id
 LEFT JOIN numbering_area na ON na.lg_code = t.lg_code AND na.machiaza_id = t.machiaza_id
 LEFT JOIN postal z ON z.lg_code = t.lg_code AND z.machiaza_id = t.machiaza_id
-LEFT JOIN small_area s ON ST_Contains(s.geometry, t.point)
--- 境界が重なる場所では代表点が 2 つの小地域に入る。町字 1 行に 1 つだけ残す
-QUALIFY row_number() OVER (PARTITION BY t.lg_code, t.machiaza_id ORDER BY s.small_area_code) = 1
+LEFT JOIN located_area s ON s.lg_code = t.lg_code AND s.machiaza_id = t.machiaza_id
 ORDER BY t.lg_code, t.machiaza_id
