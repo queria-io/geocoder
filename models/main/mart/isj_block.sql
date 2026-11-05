@@ -40,21 +40,11 @@ block AS (
 full_name AS (
     SELECT *, name || coalesce(koaza, '') AS full_name FROM town
 ),
--- 小字が ABR に無い地番の親番の行 (ABR が大字・町だけを持つ「篠ノ井二ツ柳」に、位置参照情報が小字「大当」を
--- 付けている)。住居表示の街区符号の行は含めない (大字・町の中で番号が一意かを address_point_candidate で見ないため)
-koaza_missing AS (
-    SELECT b.*
-    FROM block b
-    WHERE b.koaza_name IS NOT NULL
-        AND NOT b.is_residential_address
-        AND NOT EXISTS (
-            SELECT 1 FROM full_name t
-            WHERE t.lg_code = b.lg_code AND t.full_name = b.oaza_chome_name || b.koaza_name
-        )
-),
-matched AS (
+-- 大字・町丁目と小字をつないだ名前で付ける。位置参照情報の小字を ABR の大字・町の名前の一部として付けるのは、
+-- 位置参照情報の大字・町が ABR に無いときだけ (「中」＋小字「島」を、ABR に「中」があるのに大字・町「中島」に付けない)
+by_full_name AS (
     SELECT
-        b.* EXCLUDE (raw_name, raw_koaza),
+        b.*,
         t.machiaza_id,
         row_number() OVER (
             PARTITION BY b.lg_code, b.oaza_chome_name, b.koaza_name, b.block_number, b.is_residential_address
@@ -64,6 +54,31 @@ matched AS (
     JOIN full_name t
         ON t.lg_code = b.lg_code
         AND t.full_name = b.oaza_chome_name || coalesce(b.koaza_name, '')
+    WHERE b.koaza_name IS NULL
+        OR t.koaza IS NOT NULL
+        OR NOT EXISTS (
+            SELECT 1 FROM town o
+            WHERE o.lg_code = b.lg_code AND o.name = b.oaza_chome_name AND o.koaza IS NULL
+        )
+),
+-- 小字が ABR に無い地番の親番の行 (ABR が大字・町だけを持つ「篠ノ井二ツ柳」に、位置参照情報が小字「大当」を
+-- 付けている)。住居表示の街区符号の行は含めない (大字・町の中で番号が一意かを address_point_candidate で見ないため)
+koaza_missing AS (
+    SELECT b.*
+    FROM block b
+    WHERE b.koaza_name IS NOT NULL
+        AND NOT b.is_residential_address
+        AND NOT EXISTS (
+            SELECT 1 FROM by_full_name f
+            WHERE f.lg_code = b.lg_code
+                AND f.oaza_chome_name = b.oaza_chome_name
+                AND f.koaza_name = b.koaza_name
+                AND f.block_number = b.block_number
+                AND f.is_residential_address = b.is_residential_address
+        )
+),
+matched AS (
+    SELECT * EXCLUDE (raw_name, raw_koaza) FROM by_full_name
     UNION ALL
     -- 小字が ABR に無い行は、大字・町の町字に付ける。ただし同じ大字・町の同じ番号が別の小字にもあれば、
     -- どの小字の点か決まらないので、下の QUALIFY で使わない。大字・町の中で地番が一意かどうかは
