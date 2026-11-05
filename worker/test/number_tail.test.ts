@@ -23,12 +23,15 @@ describe("splitNumberTail", () => {
     expect(splitNumberTail("15号5 外")).toBe("15-5 外");
     expect(splitNumberTail("4愛の家グループホーム岐阜")).toBe("4 愛の家グループホーム岐阜");
     expect(splitNumberTail("5の3")).toBe("5-3");
+    expect(splitNumberTail("5番地の1")).toBe("5-1");
+    expect(splitNumberTail("8ー2ビル")).toBe("8-2 ビル");
   });
 
   it("書き直すところが無ければ null", () => {
     expect(splitNumberTail("12-3")).toBeNull();
     expect(splitNumberTail("ビル")).toBeNull();
     expect(splitNumberTail("")).toBeNull();
+    expect(splitNumberTail("16地割5番地")).toBeNull();
   });
 });
 
