@@ -8,9 +8,9 @@ WITH town AS (
         -- 一部だけ住居表示を実施した町字は、同じ町字 ID に住居表示 ('1') と地番 ('0') の
         -- 2 行がある (約 1,200 組、ほかの列は同じ)。1 行にまとめ、地番の住所もあることを残す
         count(DISTINCT rsdt_addr_flg) OVER (PARTITION BY lg_code, machiaza_id) > 1 AS rsdt_addr_partial,
-        -- 位置参照情報の大字・町丁目と突き合わせる名前 (頭の「大字」を外し、数字は漢数字、「ヶ」は「ケ」)。
+        -- 位置参照情報の大字・町丁目と突き合わせる名前 (頭の「大字」を外し、数字は漢数字)。
         -- 頭の「大字」は ABR と位置参照情報のどちらにも、書く所と書かない所があるので両方で外す
-        {{ name_key("regexp_replace(oaza_cho, '^大字', '') || coalesce(chome, '')") }} AS isj_name
+        {{ kanji_numerals("regexp_replace(oaza_cho, '^大字', '') || coalesce(chome, '')") }} AS isj_name
     FROM address_br.main.mart_town
     -- 状態フラグ 3 は存在しない町字
     WHERE status_flg <> '3'
@@ -39,30 +39,9 @@ oaza_mean AS (
 isj_oaza AS (
     SELECT
         lg_code,
-        {{ name_key("regexp_replace(oaza_chome_name, '^大字', '')") }} AS name,
+        {{ kanji_numerals("regexp_replace(oaza_chome_name, '^大字', '')") }} AS name,
         ST_Point(any_value(lng), any_value(lat)) AS geometry
     FROM nlftp.isj.oaza
-    GROUP BY ALL
-    HAVING count(*) = 1
-),
--- 「1字」「15字」のような番号の小字は、位置参照情報が大字・町の番号 (小字の無い行) として持つ
--- (福井市の「西下野町」の番号 15 が ABR の「西下野町15字」)。代表点の無い番号の小字は、
--- 大字・町の代表点より先にこの点を使う
-isj_numbered_koaza AS (
-    SELECT
-        t.lg_code,
-        t.machiaza_id,
-        ST_Point(any_value(b.lng), any_value(b.lat)) AS geometry
-    FROM town t
-    JOIN nlftp.isj.block b
-        ON b.lg_code = t.lg_code
-        AND {{ name_key("regexp_replace(b.oaza_chome_name, '^大字', '')") }} = t.isj_name
-        AND b.koaza_name IS NULL
-        AND b.is_representative
-        AND NOT b.is_residential_address
-        AND translate(b.block_number, '０１２３４５６７８９', '0123456789') || '字'
-            = translate(t.koaza, '０１２３４５６７８９', '0123456789')
-    WHERE regexp_full_match(t.koaza, '[0-9０-９]+字')
     GROUP BY ALL
     HAVING count(*) = 1
 ),
@@ -87,10 +66,9 @@ oaza_address_mean AS (
 located AS (
     SELECT
         t.*,
-        coalesce(t.geometry, k.geometry, p.geometry, m.geometry, i.geometry, a.geometry, ao.geometry) AS point,
+        coalesce(t.geometry, p.geometry, m.geometry, i.geometry, a.geometry, ao.geometry) AS point,
         CASE
             WHEN t.geometry IS NOT NULL THEN 'town'
-            WHEN k.geometry IS NOT NULL THEN 'isj_numbered_koaza'
             WHEN p.geometry IS NOT NULL THEN 'parent_town'
             WHEN m.geometry IS NOT NULL THEN 'oaza_mean'
             WHEN i.geometry IS NOT NULL THEN 'isj_oaza'
@@ -100,9 +78,6 @@ located AS (
     -- ON に左の表だけを見る条件 (t.geometry IS NULL など) を入れない。入れると DuckDB がハッシュ結合を
     -- 使えず、町字どうしの総当たりになる。代表点がある町字は coalesce と CASE が先に t.geometry を採る
     FROM town t
-    LEFT JOIN isj_numbered_koaza k
-        ON k.lg_code = t.lg_code
-        AND k.machiaza_id = t.machiaza_id
     LEFT JOIN town p
         ON p.lg_code = t.lg_code
         AND p.machiaza_id = left(t.machiaza_id, 4) || '000'

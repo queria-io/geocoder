@@ -6,8 +6,7 @@
 -- 違っても (ABR の「新里町丁」と位置参照情報の「新里町」「丁」、ABR の「西枇杷島町」「養和」と位置参照情報の
 -- 「西枇杷島町養和」) 同じ名前になる。名前は両側とも次の形にそろえる。
 -- - 大字・町の頭の「大字」「字」と、小字の頭の「字」「小字」を外す (ABR は「大字頃藤」「字イサノ」と書くことがある)
--- - 1〜99 の数字を漢数字にし、「ヶ」「ヵ」を「ケ」にする (ABR の「東9条」「3丁」「16地割」「東恋ヶ窪」、
---   位置参照情報の「東九条」「三丁」「十六地割」「東恋ケ窪」)
+-- - 1〜99 の数字を漢数字にする (ABR の「東9条」「3丁」「16地割」、位置参照情報の「東九条」「三丁」「十六地割」)
 -- そろえたことで同じ名前の町字が複数当たるときは、そろえる前の名前まで一致する町字を優先する。
 -- 位置参照情報の小字が ABR に無い地番の親番の行は、大字・町の町字に付ける。
 -- ジオコーダーは町字 1 つ分だけ読むので machiaza_key の順に並べる
@@ -15,20 +14,19 @@ WITH town AS (
     SELECT DISTINCT
         lg_code,
         machiaza_id,
-        -- 大字・町の無い小字だけの町字 (朝倉市の「堤」) は、大字・町の名前を空にして小字の名前で突き合わせる
-        {{ name_key("coalesce(regexp_replace(oaza_cho, '^大?字', ''), '') || coalesce(chome, '')") }} AS name,
-        {{ name_key("regexp_replace(koaza, '^小?字', '')") }} AS koaza,
-        coalesce(oaza_cho, '') || coalesce({{ chome_kanji('chome') }}, '') AS raw_name,
+        {{ kanji_numerals("regexp_replace(oaza_cho, '^大?字', '') || coalesce(chome, '')") }} AS name,
+        {{ kanji_numerals("regexp_replace(koaza, '^小?字', '')") }} AS koaza,
+        oaza_cho || coalesce({{ chome_kanji('chome') }}, '') AS raw_name,
         koaza AS raw_koaza
     FROM address_br.main.mart_town
-    WHERE status_flg <> '3' AND (oaza_cho IS NOT NULL OR koaza IS NOT NULL)
+    WHERE status_flg <> '3' AND oaza_cho IS NOT NULL
 ),
 block AS (
     -- 番号に全角の数字が混じる行がある (「２１」)。ジオコーダーは半角で引くのでそろえる
     SELECT
         lg_code,
-        {{ name_key("regexp_replace(oaza_chome_name, '^大?字', '')") }} AS oaza_chome_name,
-        {{ name_key("regexp_replace(koaza_name, '^小?字', '')") }} AS koaza_name,
+        {{ kanji_numerals("regexp_replace(oaza_chome_name, '^大?字', '')") }} AS oaza_chome_name,
+        {{ kanji_numerals("regexp_replace(koaza_name, '^小?字', '')") }} AS koaza_name,
         oaza_chome_name AS raw_name,
         koaza_name AS raw_koaza,
         translate(block_number, '０１２３４５６７８９', '0123456789') AS block_number,

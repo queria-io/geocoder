@@ -34,7 +34,7 @@ fields:
     description: "枝番の枝番。無い筆は NULL"
   - name: lng
     title: 経度
-    description: "代表点の経度。代表点の無い筆と、点が町字の代表点と別の市区町村の小地域に入る筆は NULL"
+    description: "代表点の経度。代表点の無い筆は NULL"
   - name: lat
     title: 緯度
-    description: "代表点の緯度。代表点の無い筆と、点が町字の代表点と別の市区町村の小地域に入る筆は NULL"
+    description: "代表点の緯度。代表点の無い筆は NULL"
