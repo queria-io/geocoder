@@ -45,6 +45,27 @@ isj_oaza AS (
     GROUP BY ALL
     HAVING count(*) = 1
 ),
+-- 「1字」「15字」のような番号の小字は、位置参照情報が大字・町の番号 (小字の無い行) として持つ
+-- (福井市の「西下野町」の番号 15 が ABR の「西下野町15字」)。代表点の無い番号の小字は、
+-- 大字・町の代表点より先にこの点を使う
+isj_numbered_koaza AS (
+    SELECT
+        t.lg_code,
+        t.machiaza_id,
+        ST_Point(any_value(b.lng), any_value(b.lat)) AS geometry
+    FROM town t
+    JOIN nlftp.isj.block b
+        ON b.lg_code = t.lg_code
+        AND {{ name_key("regexp_replace(b.oaza_chome_name, '^大字', '')") }} = t.isj_name
+        AND b.koaza_name IS NULL
+        AND b.is_representative
+        AND NOT b.is_residential_address
+        AND translate(b.block_number, '０１２３４５６７８９', '0123456789') || '字'
+            = translate(t.koaza, '０１２３４５６７８９', '0123456789')
+    WHERE regexp_full_match(t.koaza, '[0-9０-９]+字')
+    GROUP BY ALL
+    HAVING count(*) = 1
+),
 -- それも無いときは、その町字の地番 (ABR) と街区・地番の親番 (位置参照情報) の点の平均を使う。
 -- 町字に無ければ、同じ大字・町の町字の点の平均を使う (「侍浜町横沼」は小字「第9地割」などにだけ地番の点がある)。
 -- 町字まで照合できた住所が、市区町村の点まで落ちないようにする
@@ -66,9 +87,10 @@ oaza_address_mean AS (
 located AS (
     SELECT
         t.*,
-        coalesce(t.geometry, p.geometry, m.geometry, i.geometry, a.geometry, ao.geometry) AS point,
+        coalesce(t.geometry, k.geometry, p.geometry, m.geometry, i.geometry, a.geometry, ao.geometry) AS point,
         CASE
             WHEN t.geometry IS NOT NULL THEN 'town'
+            WHEN k.geometry IS NOT NULL THEN 'isj_numbered_koaza'
             WHEN p.geometry IS NOT NULL THEN 'parent_town'
             WHEN m.geometry IS NOT NULL THEN 'oaza_mean'
             WHEN i.geometry IS NOT NULL THEN 'isj_oaza'
@@ -78,6 +100,9 @@ located AS (
     -- ON に左の表だけを見る条件 (t.geometry IS NULL など) を入れない。入れると DuckDB がハッシュ結合を
     -- 使えず、町字どうしの総当たりになる。代表点がある町字は coalesce と CASE が先に t.geometry を採る
     FROM town t
+    LEFT JOIN isj_numbered_koaza k
+        ON k.lg_code = t.lg_code
+        AND k.machiaza_id = t.machiaza_id
     LEFT JOIN town p
         ON p.lg_code = t.lg_code
         AND p.machiaza_id = left(t.machiaza_id, 4) || '000'
