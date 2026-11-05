@@ -45,15 +45,35 @@ isj_oaza AS (
     GROUP BY lg_code, regexp_replace(oaza_chome_name, '^大字', '')
     HAVING count(*) = 1
 ),
+-- それも無いときは、その町字の地番 (ABR) と街区・地番の親番 (位置参照情報) の点の平均を使う。
+-- 町字に無ければ、同じ大字・町の町字の点の平均を使う (「侍浜町横沼」は小字「第9地割」などにだけ地番の点がある)。
+-- 町字まで照合できた住所が、市区町村の点まで落ちないようにする
+address_points AS (
+    SELECT lg_code, machiaza_id, lng, lat FROM {{ ref('parcel') }} WHERE lng IS NOT NULL
+    UNION ALL
+    SELECT lg_code, machiaza_id, lng, lat FROM {{ ref('isj_block') }}
+),
+address_mean AS (
+    SELECT lg_code, machiaza_id, ST_Point(avg(lng), avg(lat)) AS geometry
+    FROM address_points
+    GROUP BY lg_code, machiaza_id
+),
+oaza_address_mean AS (
+    SELECT lg_code, left(machiaza_id, 4) AS oaza_id, ST_Point(avg(lng), avg(lat)) AS geometry
+    FROM address_points
+    GROUP BY lg_code, left(machiaza_id, 4)
+),
 located AS (
     SELECT
         t.*,
-        coalesce(t.geometry, p.geometry, m.geometry, i.geometry) AS point,
+        coalesce(t.geometry, p.geometry, m.geometry, i.geometry, a.geometry, ao.geometry) AS point,
         CASE
             WHEN t.geometry IS NOT NULL THEN 'town'
             WHEN p.geometry IS NOT NULL THEN 'parent_town'
             WHEN m.geometry IS NOT NULL THEN 'oaza_mean'
             WHEN i.geometry IS NOT NULL THEN 'isj_oaza'
+            WHEN a.geometry IS NOT NULL THEN 'address_mean'
+            WHEN ao.geometry IS NOT NULL THEN 'oaza_address_mean'
         END AS point_level
     -- ON に左の表だけを見る条件 (t.geometry IS NULL など) を入れない。入れると DuckDB がハッシュ結合を
     -- 使えず、町字どうしの総当たりになる。代表点がある町字は coalesce と CASE が先に t.geometry を採る
@@ -67,6 +87,12 @@ located AS (
     LEFT JOIN isj_oaza i
         ON i.lg_code = t.lg_code
         AND i.name = t.isj_name
+    LEFT JOIN address_mean a
+        ON a.lg_code = t.lg_code
+        AND a.machiaza_id = t.machiaza_id
+    LEFT JOIN oaza_address_mean ao
+        ON ao.lg_code = t.lg_code
+        AND ao.oaza_id = left(t.machiaza_id, 4)
 ),
 -- 住居表示の住所の数。番・号の段は、これが 0 の町字では住居表示の表を読まない
 rsdtdsp_count AS (
