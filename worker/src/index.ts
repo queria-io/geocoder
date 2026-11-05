@@ -127,7 +127,8 @@ const Source = z
   })
   .openapi("Source");
 
-const includeParam = (names: readonly string[]) =>
+/** names は項目の組の名前と中身 */
+const includeParam = (names: Readonly<Record<string, string>>) =>
   z
     .string()
     .optional()
@@ -135,9 +136,12 @@ const includeParam = (names: readonly string[]) =>
       param: {
         name: "include",
         in: "query",
-        description: `足す項目の組をカンマ区切りで (${names.join("・")})`,
+        description: [
+          "結果に含める項目の組をカンマ区切りで指定する。",
+          ...Object.entries(names).map(([k, v]) => `- ${k}: ${v}`),
+        ].join("\n"),
       },
-      example: names[0],
+      example: Object.keys(names)[0],
     });
 
 const ReverseCodes = z
@@ -192,24 +196,30 @@ const ReverseResult = z
 const reverseRoute = createRoute({
   method: "get",
   path: "/v1/reverse",
-  summary: "座標から市区町村・小地域のコードを返す",
+  summary: "座標から市区町村・小地域のコードを取得する",
   request: {
     query: z.object({
       lat: coord("lat", -90, 90, "35.6812"),
       lng: coord("lng", -180, 180, "139.7671"),
-      include: includeParam(REVERSE_INCLUDES),
+      include: includeParam({
+        address: "近くの町字・街区・住居の住所 (address)",
+        codes: "都道府県コード・市区町村コード・地域メッシュ (codes)",
+      }),
     }),
   },
   responses: {
     200: { content: { "application/json": { schema: ReverseResult } }, description: "判定の結果" },
-    400: { content: { "application/json": { schema: ErrorBody } }, description: "座標がおかしい" },
+    400: {
+      content: { "application/json": { schema: ErrorBody } },
+      description: "座標が範囲外か数値でない",
+    },
     429: {
       content: { "application/json": { schema: ErrorBody } },
-      description: "呼び出しが多すぎる",
+      description: "リクエストの回数が上限 (1 分に 300 回) を超えた",
     },
     502: {
       content: { "application/json": { schema: ErrorBody } },
-      description: "境界タイルか住所の表を読めない",
+      description: "境界か住所のデータを読み込めない",
     },
   },
 });
@@ -374,20 +384,20 @@ const smallArea = z
 
 const GeocodeResult = z
   .object({
-    matched_address: z.string().openapi({ description: "当たった住所の表記" }),
+    matched_address: z.string().openapi({ description: "照合できた住所の表記" }),
     unmatched_address: z
       .array(z.string())
       .nullable()
-      .openapi({ description: "当たらずに残った部分 (番号・建物名など)。残りが無ければ null" }),
+      .openapi({ description: "照合できずに残った部分 (番号・建物名など)。残りが無ければ null" }),
     lat: z.number().nullable(),
     lng: z.number().nullable(),
     match_level: MatchLevel.openapi({
       description:
-        "住所がどこまで当たったか。rsdtdsp_rsdt は号、rsdtdsp_blk は街区、parcel は地番、machiaza_detail は小字、machiaza は町字",
+        "住所をどの階層まで照合できたか。rsdtdsp_rsdt は号、rsdtdsp_blk は街区、parcel は地番、machiaza_detail は小字、machiaza は町字",
     }),
     coordinates_level: CoordinatesLevel.nullable().openapi({
       description:
-        "座標を取った点の段。値の意味は match_level と同じ。番号まで当たってもその点に座標が無ければ町字の代表点で埋め、machiaza になる。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、ABR の親番の筆の点、国交省の街区レベル位置参照情報の点、ABR の枝番の筆の点の平均の順に取る (ABR にその地番の点が無いとき)。どれも代表点で、建物の位置ではない",
+        "座標を取った代表点の階層。値の意味は match_level と同じ。番号まで照合できてもその代表点に座標が無ければ町字の代表点で埋め、machiaza になる。parcel は地番の筆の代表点で、ABR にその筆の点が無ければ法務省の登記所備付地図の筆の代表点を使う。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、ABR の親番の筆の点、国交省の街区レベル位置参照情報の点、ABR の枝番の筆の点の平均の順に取る (ABR にその地番の点が無いとき)。どれも代表点で、建物の位置ではない",
     }),
     lg_code: z
       .string()
@@ -399,10 +409,10 @@ const GeocodeResult = z
     }),
     candidates: z.number().int().openapi({
       description:
-        "同じ町名で当たった市区町村の数 (ふつうは 1)。候補は人口の多い順に並ぶ。limit を増やすと全部を受け取れる",
+        "同じ町名で照合できた市区町村の数 (ふつうは 1)。候補は人口の多い順に並ぶ。limit を増やすと全部を受け取れる",
     }),
     score: optional(
-      z.number().openapi({ description: "候補の並べ替えに使う値。1 はぴったりの一致" }),
+      z.number().openapi({ description: "候補の並び順に使う一致の度合い。1 は完全一致" }),
       "match",
     ),
     structured_address: optional(StructuredAddress, "structured_address"),
@@ -417,7 +427,8 @@ const ForwardItem = z
   .object({
     address: z.string().openapi({ description: "渡した住所" }),
     results: z.array(GeocodeResult).openapi({
-      description: "強い順。照合できない住所、空や長すぎる住所 (一括のとき) は空の配列",
+      description:
+        "一致の度合いの高い順。照合できない住所と、空や長すぎる住所 (一括のとき) は空の配列",
     }),
   })
   .openapi("ForwardItem");
@@ -462,6 +473,18 @@ const GeocodeFeatureCollection = z
   });
 
 const API_VERSION = "0.2.0-beta";
+
+// 1 件ごとに市区町村の町字を読むので、市区町村がばらばらだと 100 件で CPU の上限 (30 秒) を超えた。町字の表の行グループを小さくするまでは 25 件にする
+const BATCH_MAX = 25;
+
+/** /v1/forward の include の項目の組と中身 */
+const INCLUDE_DOCS: Record<(typeof INCLUDES)[number], string> = {
+  match: "候補の並び順に使う一致の度合い (score)",
+  structured_address: "都道府県・市区町村・町字・番号に区切った住所 (structured_address)",
+  ids: "アドレス・ベース・レジストリの町字 ID などの ID (ids)",
+  codes: "都道府県コード・市区町村コード・郵便番号・地域メッシュ (codes)",
+  small_area: "座標が入る国勢調査の小地域コード (estat_small_area_code)",
+};
 
 const prefectureCodeParam = z
   .string()
@@ -508,7 +531,7 @@ const limitParam = z
 const forwardRoute = createRoute({
   method: "get",
   path: "/v1/forward",
-  summary: "住所から座標とコードを返す",
+  summary: "住所を座標と地域コードに変換する",
   request: {
     query: z.object({
       address: z
@@ -523,7 +546,7 @@ const forwardRoute = createRoute({
       limit: limitParam,
       prefecture_code: prefectureCodeParam,
       city_code: cityCodeParam,
-      include: includeParam(INCLUDES),
+      include: includeParam(INCLUDE_DOCS),
       format: z
         .enum(["json", "geojson", "csv"])
         .optional()
@@ -548,17 +571,20 @@ const forwardRoute = createRoute({
           }),
         },
       },
-      description: "当てた結果。当たらなければ results (features) が空",
+      description: "照合の結果。照合できなければ results (features) が空",
     },
     400: {
       content: { "application/json": { schema: ErrorBody } },
-      description: "住所が空か長すぎる、指定がおかしい",
+      description: "住所が空か 100 文字を超える、またはパラメータが不正",
     },
     429: {
       content: { "application/json": { schema: ErrorBody } },
-      description: "呼び出しが多すぎる",
+      description: "リクエストの回数が上限 (1 分に 300 回) を超えた",
     },
-    502: { content: { "application/json": { schema: ErrorBody } }, description: "表を読めない" },
+    502: {
+      content: { "application/json": { schema: ErrorBody } },
+      description: "住所のデータを読み込めない",
+    },
   },
 });
 
@@ -756,14 +782,19 @@ app.doc31("/openapi.json", {
     title: "Queria Geocoder",
     version: API_VERSION,
     description: [
-      "日本の住所と座標・地域コードを相互に引く無料の API。1 つの IP アドレスから 1 分に 300 回まで。結果を公開するときは source.attribution の出典も表示する",
-      "概要は [queria.io/geocoder](https://queria.io/geocoder) を参照",
+      "日本の住所と座標・地域コードを相互に変換する無料の API。API キーは不要。",
+      [
+        "- `GET /v1/forward`: 住所 1 件を座標と地域コードに変換する",
+        `- \`POST /v1/forward/batch\`: 住所を ${BATCH_MAX} 件までまとめて変換する。結果は住所ごとに \`/v1/forward\` と同じ形`,
+        "- `GET /v1/forward/batch`: POST と同じ一括変換を、住所をクエリに入れて呼ぶ。DuckDB の `read_json` のように URL しか読めないツール向け",
+        "- `GET /v1/reverse`: 座標から市区町村・国勢調査の小地域のコードを取得する",
+      ].join("\n"),
+      "結果に含める項目は `include` で選ぶ（例: `include=ids,codes,small_area`）。既定は座標と照合の結果だけ。",
+      "1 つの IP アドレスから 1 分に 300 回まで（一括は 1 回の呼び出しで 1 回と数える）。結果を公開するときは `source.attribution` の出典も表示する。",
+      "概要と精度は [queria.io/geocoder](https://queria.io/geocoder)、ソースコードとセルフホストの手順は [GitHub](https://github.com/queria-io/geocoder) を参照。",
     ].join("\n\n"),
   },
 });
-
-// 1 件ごとに市区町村の町字を読むので、市区町村がばらばらだと 100 件で CPU の上限 (30 秒) を超えた。町字の表の行グループを小さくするまでは 25 件にする
-const BATCH_MAX = 25;
 
 const BATCH_RESPONSES = {
   200: {
@@ -781,19 +812,22 @@ const BATCH_RESPONSES = {
     },
     description: "住所ごとに、/v1/forward と同じ results を返す。limit も同じく効く",
   },
-  400: { content: { "application/json": { schema: ErrorBody } }, description: "指定がおかしい" },
+  400: { content: { "application/json": { schema: ErrorBody } }, description: "パラメータが不正" },
   429: {
     content: { "application/json": { schema: ErrorBody } },
-    description: "呼び出しが多すぎる",
+    description: "リクエストの回数が上限 (1 分に 300 回) を超えた",
   },
-  502: { content: { "application/json": { schema: ErrorBody } }, description: "表を読めない" },
+  502: {
+    content: { "application/json": { schema: ErrorBody } },
+    description: "住所のデータを読み込めない",
+  },
 };
 
 const batchRoute = createRoute({
   method: "post",
   path: "/v1/forward/batch",
-  summary: "住所をまとめて当てる",
-  description: `1 回に ${BATCH_MAX} 件まで。回数の上限は 1 回の呼び出しで 1 回と数える`,
+  summary: "住所をまとめて変換する",
+  description: `住所を 1 回に ${BATCH_MAX} 件まで JSON の addresses で渡す。結果は渡した住所と同じ順・同じ数で返す。回数の上限は 1 回の呼び出しで 1 回と数える`,
   request: {
     body: {
       content: {
@@ -832,8 +866,8 @@ const batchRoute = createRoute({
 const batchGetRoute = createRoute({
   method: "get",
   path: "/v1/forward/batch",
-  summary: "住所をまとめて照合する (GET)",
-  description: `住所を address=…&address=… と繰り返して ${BATCH_MAX} 件まで渡す。レスポンスは POST と同じ`,
+  summary: "住所をまとめて変換する (GET)",
+  description: `POST と同じ一括変換を、住所をクエリに入れて呼ぶ。DuckDB の read_json のように URL しか読めないツール向けで、それ以外は POST を使う。住所は address=…&address=… と繰り返して ${BATCH_MAX} 件まで渡す。URL が長くなりすぎないよう、1 回に 10 件ほどにする。レスポンスは POST と同じ`,
   request: {
     query: z.object({
       address: z
@@ -847,7 +881,7 @@ const batchGetRoute = createRoute({
           items: { type: "string" },
         } as never),
       limit: limitParam,
-      include: includeParam(INCLUDES),
+      include: includeParam(INCLUDE_DOCS),
       prefecture_code: prefectureCodeParam,
       city_code: cityCodeParam,
     }),
