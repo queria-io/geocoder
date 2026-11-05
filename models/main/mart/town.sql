@@ -8,9 +8,9 @@ WITH town AS (
         -- 一部だけ住居表示を実施した町字は、同じ町字 ID に住居表示 ('1') と地番 ('0') の
         -- 2 行がある (約 1,200 組、ほかの列は同じ)。1 行にまとめ、地番の住所もあることを残す
         count(DISTINCT rsdt_addr_flg) OVER (PARTITION BY lg_code, machiaza_id) > 1 AS rsdt_addr_partial,
-        -- 位置参照情報の大字・町丁目と突き合わせる名前 (頭の「大字」を外し、丁目は「三丁目」)。
+        -- 位置参照情報の大字・町丁目と突き合わせる名前 (頭の「大字」を外し、数字は漢数字)。
         -- 頭の「大字」は ABR と位置参照情報のどちらにも、書く所と書かない所があるので両方で外す
-        regexp_replace(oaza_cho, '^大字', '') || coalesce({{ chome_kanji('chome') }}, '') AS isj_name
+        {{ kanji_numerals("regexp_replace(oaza_cho, '^大字', '') || coalesce(chome, '')") }} AS isj_name
     FROM address_br.main.mart_town
     -- 状態フラグ 3 は存在しない町字
     WHERE status_flg <> '3'
@@ -39,10 +39,10 @@ oaza_mean AS (
 isj_oaza AS (
     SELECT
         lg_code,
-        regexp_replace(oaza_chome_name, '^大字', '') AS name,
+        {{ kanji_numerals("regexp_replace(oaza_chome_name, '^大字', '')") }} AS name,
         ST_Point(any_value(lng), any_value(lat)) AS geometry
     FROM nlftp.isj.oaza
-    GROUP BY lg_code, regexp_replace(oaza_chome_name, '^大字', '')
+    GROUP BY ALL
     HAVING count(*) = 1
 ),
 -- それも無いときは、その町字の地番 (ABR) と街区・地番の親番 (位置参照情報) の点の平均を使う。
