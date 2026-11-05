@@ -249,13 +249,13 @@ export const geocode = async (
       );
       const retried = await Promise.all(
         candidates.map(async (c) => {
-          const out = await withNumberTail(
-            await withAzaSkipped(
-              await withOazaChome(await withRenamedWard(c, address, match), address, match),
-              match,
-            ),
+          const skipped = await withAzaSkipped(
+            await withOazaChome(await withRenamedWard(c, address, match), address, match),
             match,
           );
+          // 市区町村を推定した候補は、番号まで当て直すと並びが変わり別の市区町村が勝つので、当て直さない
+          const out =
+            (c.candidates ?? 1) > 1 ? skipped : await withNumberTail(skipped, address, match);
           // 当て直した結果に、市区町村を推定した候補の数と、旧市区町村名を読み替えた印を引き継ぐ
           if (out === c) return out;
           return {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "../src/model/model";
-import { splitNumberTail, withNumberTail } from "../src/number_tail";
+import { remainder, splitNumberTail, withNumberTail } from "../src/number_tail";
 
 const result = (over: Partial<MatchedResult>): MatchedResult => ({
   matched_address: "愛知県名古屋市南区中割町四丁目",
@@ -32,11 +32,22 @@ describe("splitNumberTail", () => {
   });
 });
 
+describe("remainder", () => {
+  it("照合できなかった部分が空なら、丁目の後ろの番号から読む", () => {
+    const empty = result({ unmatched_address: null });
+    expect(remainder(empty, "中割町4丁目88プレザンメゾン笠寺")).toBe("88プレザンメゾン笠寺");
+    expect(remainder(empty, "粟野東５丁目４愛の家")).toBe("4愛の家");
+    expect(remainder(empty, "中割町4丁目")).toBe("");
+    expect(remainder(empty, "中割町")).toBe("");
+    expect(remainder(result({}), "")).toBe("88プレザンメゾン笠寺");
+  });
+});
+
 describe("withNumberTail", () => {
   it("同じ町字で番号まで進んだら採る", async () => {
     const asked: string[] = [];
     const parcel = result({ match_level: "parcel", unmatched_address: null, score: 1 });
-    const r = await withNumberTail(result({}), async (a) => (asked.push(a), [parcel]));
+    const r = await withNumberTail(result({}), "", async (a) => (asked.push(a), [parcel]));
     expect(asked).toEqual(["愛知県名古屋市南区中割町四丁目88 プレザンメゾン笠寺"]);
     expect(r.match_level).toBe("parcel");
     expect(r.score).toBe(0.8);
@@ -45,7 +56,7 @@ describe("withNumberTail", () => {
   it("別の町字や町字止まりなら元の答えのまま", async () => {
     const other = result({ match_level: "parcel", ids: { ...emptyIDs(), machiaza_id: "9" } });
     const before = result({});
-    expect(await withNumberTail(before, async () => [other])).toBe(before);
-    expect(await withNumberTail(before, async () => [result({})])).toBe(before);
+    expect(await withNumberTail(before, "", async () => [other])).toBe(before);
+    expect(await withNumberTail(before, "", async () => [result({})])).toBe(before);
   });
 });
