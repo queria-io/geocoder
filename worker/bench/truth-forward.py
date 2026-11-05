@@ -28,7 +28,7 @@ PATTERNS = [
     ("num_koaza", r"""EXISTS (SELECT 1 FROM town t WHERE t.city5 = r.city_code
         AND regexp_full_match(t.koaza_raw, '[0-9０-９一二三四五六七八九十]+字')
         AND strpos(r.address, t.oaza) > 0
-        AND regexp_matches(substr(r.address, strpos(r.address, t.oaza) + length(t.oaza)), '^[0-9０-９]'))"""),
+        AND regexp_matches(substr(r.address, strpos(r.address, t.oaza) + length(t.oaza)), '^[0-9０-９]+([^0-9０-９丁]|$)'))"""),
     # 番号を「28街区28号」「25区486番」「15号5番」と書く住所
     ("gaiku_go", r"regexp_matches(address, '[0-9０-９]+(街区|区)[0-9０-９]|[0-9０-９]+号[0-9０-９]+番')"),
     # 町名に数字の入る住所 (「東9条」「古町通6番町」)。位置参照情報は漢数字で書く
