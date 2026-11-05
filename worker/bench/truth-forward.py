@@ -18,6 +18,14 @@ PREF = r"^(東京都|北海道|京都府|大阪府|.{2,3}県)"
 PATTERNS = [
     ("kyoto_street", r"regexp_matches(address, '(上る|上ル|下る|下ル|東入|西入)')"),
     ("chiwari", r"regexp_matches(address, '地割')"),
+    # 番号を「28街区28号」「25区486番」「15号5番」と書く住所
+    ("gaiku_go", r"regexp_matches(address, '[0-9０-９]+(街区|区)[0-9０-９]|[0-9０-９]+号[0-9０-９]+番')"),
+    # 町名に数字の入る住所 (「東9条」「古町通6番町」)。位置参照情報は漢数字で書く
+    ("jou_bancho", r"regexp_matches(address, '[0-9０-９一二三四五六七八九十]+(条|番町)')"),
+    # 町名の「ケ」「ヶ」「ヵ」。ABR と位置参照情報で書き方が違うことがある
+    ("ke", r"regexp_matches(address, '[一-龥][ケヶヵ][一-龥]')"),
+    # 番号のすぐ後ろに空白なしで建物名が続く住所 (「88プレザンメゾン笠寺」)
+    ("number_building", r"regexp_matches(address, '[0-9０-９][ァ-ヺ][ァ-ヺー]')"),
     # 数字の後の「丁」は「1丁目」の丁目を除く (除かないと、丁目のある住所がほとんどこの型に入る)
     ("kou_otsu", r"regexp_matches(address, '[甲乙丙丁][0-9０-９]|[0-9０-９][甲乙丙]|[0-9０-９]丁([^目]|$)|番[甲乙丙丁]')"),
     ("no_city", "NOT contains(address, city_name)"),
