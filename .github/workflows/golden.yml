@@ -8,6 +8,7 @@ on:
     branches-ignore: [main]
     paths:
       - "worker/bench/truth-forward.py"
+      - "worker/bench/exclude.csv"
       - ".github/workflows/golden.yml"
   workflow_dispatch:
 
