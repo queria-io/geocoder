@@ -30,6 +30,7 @@ import { resolveTables, type Resolved } from "./data/source";
 import { machiazaKey, RSDTDSP_COLUMNS, type RsdtdspRow } from "./repository/rsdtdsp";
 import type { BasicResult, CityResult } from "./repository/types";
 import { nearestAddress, type Nearby } from "./nearby";
+import { withNumberTail } from "./number_tail";
 import { withAzaSkipped } from "./skip_aza";
 import { withOazaChome } from "./oaza_chome";
 import { withRenamedWard } from "./renamed_ward";
@@ -248,8 +249,11 @@ export const geocode = async (
       );
       const retried = await Promise.all(
         candidates.map(async (c) => {
-          const out = await withAzaSkipped(
-            await withOazaChome(await withRenamedWard(c, address, match), address, match),
+          const out = await withNumberTail(
+            await withAzaSkipped(
+              await withOazaChome(await withRenamedWard(c, address, match), address, match),
+              match,
+            ),
             match,
           );
           // 当て直した結果に、市区町村を推定した候補の数と、旧市区町村名を読み替えた印を引き継ぐ
