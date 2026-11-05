@@ -4,6 +4,7 @@
 -- 親番 (「28番地10」の「28」) の点を返すのに使う。住居表示の地域の行 (街区符号) も残す。
 -- 位置参照情報は「学園南三丁目」のように大字・町と丁目を 1 つの名前で持つので、ABR の町字の
 -- 名前を同じ形にして突き合わせる。小字のある行は同じ小字の町字に、小字の無い行と、ABR に無い小字の地番の親番の行は大字・町の町字に付ける。
+-- ABR が小字までを大字・町の名前に含めている町字 (「新里町丁」) には、大字・町と小字の名前をつないで付ける。
 -- ABR は「大字頃藤」「字イサノ」のように頭に「大字」「字」を付けることがあり、位置参照情報は付けないので、
 -- 両側とも、大字・町の名前は頭の「大字」「字」を、小字の名前は頭の「字」「小字」を外して照合する。
 -- 外したことで同じ名前の町字が複数当たるときは、外す前の名前まで一致する町字を優先する
@@ -75,6 +76,20 @@ matched AS (
     FROM koaza_missing b
     JOIN town t
         ON t.lg_code = b.lg_code AND t.name = b.oaza_chome_name AND t.koaza IS NULL
+    UNION ALL
+    -- ABR が小字までを大字・町の名前に含めている行 (ABR の「新里町丁」を、位置参照情報は大字・町「新里町」と
+    -- 小字「丁」に分けて持つ)。大字・町の名前だけでは ABR の町字が無いときに、2 つをつないだ名前で付ける
+    SELECT
+        b.* EXCLUDE (raw_name, raw_koaza),
+        t.machiaza_id,
+        1 AS rank
+    FROM koaza_missing b
+    JOIN town t
+        ON t.lg_code = b.lg_code AND t.name = b.oaza_chome_name || b.koaza_name AND t.koaza IS NULL
+    WHERE NOT EXISTS (
+        SELECT 1 FROM town o
+        WHERE o.lg_code = b.lg_code AND o.name = b.oaza_chome_name AND o.koaza IS NULL
+    )
 )
 SELECT
     lg_code || machiaza_id AS machiaza_key,
