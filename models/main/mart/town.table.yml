@@ -87,7 +87,7 @@ fields:
     description: "代表点の緯度。元データ (ABR 位置参照拡張) のまま。出どころは point_level"
   - name: point_level
     title: 代表点の出どころ
-    description: "town は町字自身の代表点、parent_town は代表点の無い小字などに同じ大字・町の代表点を使ったもの、oaza_mean は大字・町にも代表点が無いときに同じ大字・町の小字などの代表点を平均したもの。isj_oaza はそれも無いときに位置参照情報の大字・町丁目の点を名前で当てたもの。どれも無い町字は NULL"
+    description: "town は町字自身の代表点、parent_town は代表点の無い小字などに同じ大字・町の代表点を使ったもの、oaza_mean は大字・町にも代表点が無いときに同じ大字・町の小字などの代表点を平均したもの。isj_oaza はそれも無いときに位置参照情報の大字・町丁目の点を名前で当てたもの。address_mean はそれも無いときにその町字の地番と街区・地番の親番の点を平均したもの、oaza_address_mean は同じ大字・町の町字のそれを平均したもの。どれも無い町字は NULL"
   - name: small_area_code
     title: 小地域コード
     description: "lng / lat の点が入る国勢調査の小地域 (KEY_CODE)。町字と小地域は 1 対 1 ではなく、これは代表点 1 点で決めたもの。代表点の無い町字は NULL"
