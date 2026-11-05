@@ -79,7 +79,8 @@ COPY (
       AND location IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL
   ),
   shelter AS (
-    -- site_id は「E」＋市区町村コード 5 桁＋連番。政令市は区ではなく市のコード (横浜市は 14100)
+    -- site_id は「E」＋市区町村コード 5 桁＋連番。政令市は区ではなく市のコード (横浜市は 14100)。
+    -- 指定した市区町村のコードで、所在地と違うことがある (室蘭市の住所に登別市のコード)
     SELECT 'shelter', site_id, address, latitude, longitude, substr(site_id, 2, 5)
     FROM gsi.main.designated_shelter
     WHERE address IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL
@@ -96,11 +97,16 @@ COPY (
     WHERE address IS NOT NULL AND geometry IS NOT NULL AND school_status = '開校中'
   ),
   shougai AS (
-    -- 住所は都道府県・市区町村 (address_city) とそれより後ろ (address_detail) に分かれている
-    SELECT 'shougai', establishment_number, address_city || address_detail, latitude, longitude, city_code
-    FROM mhlw.shougai.establishment
-    WHERE address_detail IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL
-    QUALIFY row_number() OVER (PARTITION BY establishment_number ORDER BY service_type) = 1
+    -- 住所は都道府県・市区町村 (address_city) とそれより後ろ (address_detail) に分かれている。
+    -- city_code は所在地ではなく指定した自治体 (都道府県のこともある) のコードなので、市区町村は address_city から決める
+    SELECT 'shougai', s.establishment_number, s.address_city || s.address_detail, s.latitude, s.longitude, c.lg_code_5
+    FROM mhlw.shougai.establishment s
+    JOIN (
+      SELECT DISTINCT lg_code_5, pref_name || coalesce(county_name, '') || city_name || coalesce(ward_name, '') AS name
+      FROM address_br.main.mart_city
+    ) c ON c.name = s.address_city
+    WHERE s.address_detail IS NOT NULL AND s.latitude IS NOT NULL AND s.longitude IS NOT NULL
+    QUALIFY row_number() OVER (PARTITION BY s.establishment_number ORDER BY s.service_type) = 1
   ),
   rows AS (
     SELECT * FROM land UNION ALL SELECT * FROM shelter UNION ALL SELECT * FROM kaigo
