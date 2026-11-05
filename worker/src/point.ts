@@ -32,8 +32,6 @@ export const POINT_COLUMNS = [
 export const PARCEL_PARENT: CoordinateLevel = "parcel_parent";
 
 export const ISJ_ATTRIBUTION = "「街区レベル位置参照情報」（国土交通省）を加工して作成";
-export const MOJ_ATTRIBUTION =
-  "「登記所備付地図データ」（法務省）（https://www.moj.go.jp/MINJI/minji05_00494.html）を加工して作成";
 
 /**
  * 町字の代表点まで落ちたもの。地番まで当たっても筆にも町字にも点が無ければ (座標なし) 同じに扱う。

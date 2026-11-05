@@ -51,10 +51,6 @@ geocoder:
           alias: japan_address_code
           is_ducklake: true
           read_only: true
-        - path: "ducklake:https://data.queria.io/datasets/queria/moj/ducklake.duckdb"
-          alias: moj
-          is_ducklake: true
-          read_only: true
         - path: "ducklake:https://data.queria.io/datasets/queria/codh/ducklake.duckdb"
           alias: codh
           is_ducklake: true

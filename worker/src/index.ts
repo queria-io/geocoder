@@ -34,7 +34,7 @@ import {
   versionOf,
 } from "./answer";
 import { dataVersion, geocode, nearby, type ForwardEnv } from "./forward";
-import { ISJ_ATTRIBUTION, MOJ_ATTRIBUTION } from "./point";
+import { ISJ_ATTRIBUTION } from "./point";
 import { ErrAddressTooLong, ErrEmptyAddress } from "./normalize/input";
 import { type Level, resolveAreas, type TilePoint } from "./lookup";
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "./model/model";
@@ -397,7 +397,7 @@ const GeocodeResult = z
     }),
     coordinates_level: CoordinatesLevel.nullable().openapi({
       description:
-        "座標を取った代表点の階層。値の意味は match_level と同じ。番号まで照合できてもその代表点に座標が無ければ町字の代表点で埋め、machiaza になる。parcel は地番の筆の代表点で、ABR にその筆の点が無ければ法務省の登記所備付地図の筆の代表点を使う。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、ABR の親番の筆の点、国交省の街区レベル位置参照情報の点、ABR の枝番の筆の点の平均の順に取る (ABR にその地番の点が無いとき)。どれも代表点で、建物の位置ではない",
+        "座標を取った代表点の階層。値の意味は match_level と同じ。番号まで照合できてもその代表点に座標が無ければ町字の代表点で埋め、machiaza になる。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、ABR の親番の筆の点、国交省の街区レベル位置参照情報の点、ABR の枝番の筆の点の平均の順に取る (ABR にその地番の点が無いとき)。どれも代表点で、建物の位置ではない",
     }),
     lg_code: z
       .string()
@@ -632,20 +632,13 @@ const record = (c: Context<{ Bindings: Env }>, entries: RequestLogEntry[]) => {
   );
 };
 
-/** ABR 以外の点の出典。その点を使った答えがあれば出典に足す */
-const POINT_ATTRIBUTION: Readonly<Record<string, string>> = {
-  isj: ISJ_ATTRIBUTION,
-  moj: MOJ_ATTRIBUTION,
-};
+/** 位置参照情報の点で座標を埋めた答え */
+const usesIsj = (r: MatchedResult) => r.coordinate_source === "isj";
 
-/** sources は答えの座標の出典 (coordinate_source) */
-const attributionFor = (
-  groups: ReadonlySet<Include>,
-  sources: ReadonlySet<string>,
-  former = false,
-) => [
+/** isj は位置参照情報の点を使った答えがあるか。あればその出典も足す */
+const attributionFor = (groups: ReadonlySet<Include>, isj: boolean, former = false) => [
   ABR_ATTRIBUTION,
-  ...Object.entries(POINT_ATTRIBUTION).flatMap(([s, a]) => (sources.has(s) ? [a] : [])),
+  ...(isj ? [ISJ_ATTRIBUTION] : []),
   ...(former ? [FORMER_CITY_ATTRIBUTION] : []),
   ...(groups.has("small_area") ? [SMALL_AREA_ATTRIBUTION] : []),
 ];
@@ -723,7 +716,7 @@ const forwardItems = async (
       version,
       attribution: attributionFor(
         groups,
-        new Set(flat.flatMap(([r]) => (r.coordinate_source ? [r.coordinate_source] : []))),
+        flat.some(([r]) => usesIsj(r)),
         flat.some(([r]) => r.former_city === true),
       ),
     },
