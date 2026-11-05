@@ -31,6 +31,7 @@ import { machiazaKey, RSDTDSP_COLUMNS, type RsdtdspRow } from "./repository/rsdt
 import type { BasicResult, CityResult } from "./repository/types";
 import { nearestAddress, type Nearby } from "./nearby";
 import { withNumberTail } from "./number_tail";
+import { withNumberedKoaza } from "./numbered_koaza";
 import { withAzaSkipped } from "./skip_aza";
 import { withOazaChome } from "./oaza_chome";
 import { withRenamedWard } from "./renamed_ward";
@@ -250,7 +251,10 @@ export const geocode = async (
       const retried = await Promise.all(
         candidates.map(async (c) => {
           const skipped = await withAzaSkipped(
-            await withOazaChome(await withRenamedWard(c, address, match), address, match),
+            await withNumberedKoaza(
+              await withOazaChome(await withRenamedWard(c, address, match), address, match),
+              match,
+            ),
             match,
           );
           // 市区町村を推定した候補は、番号まで再照合すると並びが変わり別の市区町村が勝つので、再照合しない
