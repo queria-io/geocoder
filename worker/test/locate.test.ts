@@ -92,6 +92,11 @@ describe("locate", () => {
     expect(r?.point).toEqual([141.5, 41.5]);
     expect(r?.machiazaId).toBe("0001002");
   });
+  it("頭の甲乙丙丁の付いた番号に点が無ければ、字を外した番号で引く", () => {
+    const r = at("本町甲10");
+    expect(r?.point).toEqual([141.5, 41.5]);
+    expect(r?.number?.parts).toEqual(["10"]);
+  });
   it("読み飛ばす区域の名前と地番を振る区域を、番号を読む候補にする", () => {
     expect(candidates(norm("本町字上野10"), index.areas)).toContain("本町");
   });

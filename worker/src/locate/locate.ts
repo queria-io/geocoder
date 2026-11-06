@@ -3,7 +3,8 @@
 //   2. 住所の頭から最も長く一致した、点のある節点 (区域、区域＋番号) を採る。同じ長さなら点の優先順
 //      (point_priority の rank) の小さいもの
 //   3. 区域の名前のあとに索引に無い文字があれば、読み飛ばして番号を引く。番号は区域そのものと、
-//      地番を振る区域 (起番でない小字なら大字・丁目) で引く
+//      地番を振る区域 (起番でない小字なら大字・丁目) で引く。頭の甲乙丙丁の付いた番号に点が無ければ、
+//      字を外した番号でも引く (出典によって甲乙丙丁を番号に書くものと書かないものがある)
 //   4. 住所の頭から番号まで読めたら、途中から読む読み方は使わない
 import { norm } from "./norm";
 
@@ -81,12 +82,14 @@ const options = (
     const parts = m.slice(1).filter((x): x is string => x !== undefined);
     for (const kk of numbering === null ? [k] : [k, numbering]) {
       const node = numbers(kk).points;
-      const i = [...Array(parts.length).keys()]
-        .map((j) => parts.length - j)
-        .find((n) => node.has(parts.slice(0, n).join("-")));
-      if (i === undefined) continue;
-      const key = parts.slice(0, i).join("-");
-      const hit = node.get(key) as NumberPoint;
+      // 長い番号から引く。頭の甲乙丙丁の付いた番号に点が無ければ、字を外した番号でも引く
+      const found = [...Array(parts.length).keys()]
+        .map((j) => parts.slice(0, parts.length - j).join("-"))
+        .flatMap((key) => [key, key.replace(/^[甲乙丙丁]/, "")].map((n) => ({ key, n })))
+        .find(({ n }) => node.has(n));
+      if (found === undefined) continue;
+      const { key } = found;
+      const hit = node.get(found.n) as NumberPoint;
       hits.push({
         cover: k.length + key.length,
         rank: hit.rank,
