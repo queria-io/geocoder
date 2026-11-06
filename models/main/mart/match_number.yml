@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: match_number
+    description: |
+      住所の照合に使う番号の索引のうち、町字の表（rsdtdsp・parcel）に無い番号の点。番号を振る区域で引く地番、地番の親番、
+      位置参照情報（過去の版を含む）の街区・地番を、区域（match_area の area_id）と番号と出典ごとに 1 行持つ。
+      「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）と「街区レベル位置参照情報　国土交通省」を加工して作成。
+    access: public
+    columns:
+      - name: area_id
+        data_type: bigint
+      - name: lg_code
+        data_type: varchar
+      - name: num
+        data_type: varchar
+      - name: point_type
+        data_type: varchar
+      - name: source
+        data_type: varchar
+      - name: rank
+        data_type: integer
+      - name: machiaza_id
+        data_type: varchar
+      - name: lng
+        data_type: double
+      - name: lat
+        data_type: double

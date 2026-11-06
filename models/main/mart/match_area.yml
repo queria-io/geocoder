@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: match_area
+    description: |
+      住所の照合に使う区域の索引。大字・町、丁目、小字をつないだ名前を、出典の表記のまま 1 行ずつ持つ。
+      ABR の町字、ABR に行の無い大字・町（丁目まで）、位置参照情報（過去の版を含む）にだけある名前を含む。
+      「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）と「街区レベル位置参照情報　国土交通省」を加工して作成。
+    access: public
+    columns:
+      - name: area_id
+        data_type: bigint
+      - name: lg_code
+        data_type: varchar
+      - name: machiaza_id
+        data_type: varchar
+      - name: name
+        data_type: varchar
+      - name: numbering_name
+        data_type: varchar
+      - name: own_point
+        data_type: boolean
+      - name: lng
+        data_type: double
+      - name: lat
+        data_type: double

@@ -9,7 +9,7 @@ keywords:
 fields:
   - name: point_type
     title: 点の種類
-    description: "parcel は筆、parcel_parent は親番、rsdt は住居表示の号、block は街区"
+    description: "parcel は筆、parcel_parent は親番、rsdt は住居表示の号、block は街区、history は位置参照情報の過去の版にだけある街区・地番"
   - name: source
     title: 出どころ
     description: "abr はアドレス・ベース・レジストリ、isj は街区レベル位置参照情報"
