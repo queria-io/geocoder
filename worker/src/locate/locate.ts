@@ -3,8 +3,9 @@
 //   2. 住所の頭から最も長く一致した、点のある節点 (区域、区域＋番号) を採る。同じ長さなら点の優先順
 //      (point_priority の rank) の小さいもの
 //   3. 区域の名前のあとに索引に無い文字があれば、読み飛ばして番号を引く。番号は区域そのものと、
-//      地番を振る区域 (起番でない小字なら大字・丁目) で引く。頭の甲乙丙丁の付いた番号に点が無ければ、
-//      字を外した番号でも引く (出典によって甲乙丙丁を番号に書くものと書かないものがある)
+//      地番を振る区域 (起番でない小字なら大字・丁目) で引く。書かれたとおりの番号に点が無ければ、
+//      頭の甲乙丙丁を外した番号でも引く (出典によって甲乙丙丁を番号に書くものと書かないものがある)。
+//      外した字は照合できなかった部分に残す
 //   4. 住所の頭から番号まで読めたら、途中から読む読み方は使わない
 import { norm } from "./norm";
 
@@ -82,26 +83,26 @@ const options = (
     const parts = m.slice(1).filter((x): x is string => x !== undefined);
     for (const kk of numbering === null ? [k] : [k, numbering]) {
       const node = numbers(kk).points;
-      // 長い番号から引く。頭の甲乙丙丁の付いた番号に点が無ければ、字を外した番号でも引く
-      const found = [...Array(parts.length).keys()]
-        .map((j) => parts.slice(0, parts.length - j).join("-"))
-        .flatMap((key) => {
-          const bare = key.replace(/^[甲乙丙丁]/, "");
-          return (bare === key ? [key] : [key, bare]).map((n) => ({ key, n }));
-        })
-        .find(({ n }) => node.has(n));
-      if (found === undefined) continue;
-      const { key } = found;
-      const hit = node.get(found.n) as NumberPoint;
+      // 長い番号から、書かれたとおりに引く。点が無ければ、頭の甲乙丙丁を外した番号を長い順に引く
+      const keys = [...Array(parts.length).keys()].map((j) =>
+        parts.slice(0, parts.length - j).join("-"),
+      );
+      const bare = keys.filter((key) => /^[甲乙丙丁]/.test(key)).map((key) => key.slice(1));
+      const n = [...keys, ...bare].find((x) => node.has(x));
+      if (n === undefined) continue;
+      const hit = node.get(n) as NumberPoint;
+      // 外した字は照合できなかった部分に残す
+      const dropped = keys.includes(n) ? "" : parts[0][0];
       hits.push({
-        cover: k.length + key.length,
+        cover: k.length + n.length,
         rank: hit.rank,
         located: {
           point: hit.point,
           area: kk,
           machiazaId: hit.machiazaId ?? areas.get(kk)?.machiazaId ?? null,
           number: hit,
-          rest: t.slice(skipped + (m[0].startsWith("-") ? 1 : 0) + key.length),
+          rest:
+            dropped + t.slice(skipped + (m[0].startsWith("-") ? 1 : 0) + dropped.length + n.length),
         },
       });
     }
