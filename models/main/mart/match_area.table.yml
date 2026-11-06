@@ -1,0 +1,38 @@
+schema: town
+name: match_area
+title: 照合の区域
+description: |
+  住所の照合に使う区域の索引。大字・町、丁目、小字を連結した名前を、出典の表記のまま 1 行ずつ持つ。
+  ABR の町字、ABR に行の無い大字・町（丁目まで）、位置参照情報（過去の版を含む）にだけある名前を含む。
+  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）と「街区レベル位置参照情報　国土交通省」を加工して作成。
+keywords:
+  - 住所
+  - ジオコーディング
+sources:
+  - path: https://dataset.address-br.digital.go.jp/
+  - path: https://nlftp.mlit.go.jp/isj/
+fields:
+  - name: area_id
+    title: 区域の番号
+    description: "区域の名前ごとの番号。match_number はこの番号で区域を指す。ビルドごとに振り直す"
+  - name: lg_code
+    title: 全国地方公共団体コード
+    description: "6桁（検査数字あり）。この順に並ぶ"
+    annotations: { queria: { semantic: { role: entity, name: city } } }
+  - name: machiaza_id
+    title: 町字ID
+    description: "ABR の町字の行だけ。ABR に行の無い大字・町と、位置参照情報にだけある名前は空"
+  - name: name
+    title: 区域の名前
+    description: "大字・町、丁目、小字を連結した名前。出典の表記のまま（京都の通り名は含めない）"
+  - name: numbering_name
+    title: 地番を振る区域の名前
+    description: "起番でない小字の町字で、地番を振っている大字・町（丁目まで）の名前。それ以外は空"
+  - name: own_point
+    title: 区域の点
+    description: "ABR の町字の代表点がその町字自身の点なら true"
+  - name: lng
+    title: 経度
+    description: "区域の点。ABR に行の無い大字・町は、その下の町字の点の平均。位置参照情報にだけある名前は空"
+  - name: lat
+    title: 緯度
