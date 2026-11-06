@@ -9,9 +9,7 @@
 -- 町字の名前と番号を振る区域の名前は match_area と同じ規則で決める (ABR の町字の行は machiaza_id を持つ)
 WITH town AS (
     SELECT lg_code, machiaza_id, name, numbering_name
-    FROM {{ ref('match_area') }} m
-    -- 別名の区域は指す区域と同じ町字を持つ。地番は指す区域の名前で引くので、別名では持たない
-    ANTI JOIN {{ ref('area_alias') }} x ON x.lg_code = m.lg_code AND x.alias = m.name
+    FROM {{ ref('match_area') }}
     WHERE machiaza_id IS NOT NULL
 ),
 parcel AS NOT MATERIALIZED (
