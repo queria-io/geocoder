@@ -1,9 +1,8 @@
 schema: main
 name: rsdtdsp_blk
 title: 住居表示 街区
-description: |
-  住居表示の街区（「○丁目1番」の「1番」）と代表点。
-  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
+description: |-
+  住居表示の街区（「○丁目1番」の「1番」）と代表点です。
 keywords:
   - 住所
   - 住居表示

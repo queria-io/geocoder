@@ -1,9 +1,10 @@
 schema: main
 name: parcel
 title: 地番の住所
-description: |
-  地番の住所（「○番地」「○番○」）と代表点。住居表示でない町字の分。座標の付く筆は一部だけ。
-  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
+description: |-
+  地番の住所（「○番地」「○番○」）と代表点です。住居表示でない町字の分を収録しています。
+
+  - 座標の付く筆は一部だけです
 keywords:
   - 住所
   - 地番

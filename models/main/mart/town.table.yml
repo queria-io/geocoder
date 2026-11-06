@@ -1,11 +1,12 @@
 schema: town
 name: town
 title: 町字
-description: |
-  全国の町字の名前・別名・代表点と、代表点が入る国勢調査の小地域。住所の文字列を町字に当てるのに使う。名前の中の全角の英数字・記号は半角にそろえる。
-  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
-  小地域は「国勢調査 町丁・字等別境界データ」（総務省統計局）（https://www.e-stat.go.jp/gis）を使用。
-  どこにも代表点の無い大字・町は「大字・町丁目レベル位置参照情報」（国土交通省）（https://nlftp.mlit.go.jp/isj/）の点で埋める。
+description: |-
+  全国の町字の名前・別名・代表点と、代表点が入る国勢調査の小地域です。住所の文字列を町字に当てるのに使います。
+
+  - 名前の中の全角の英数字・記号は半角に正規化しています
+  - 代表点の作り方は point_level で分かれます
+  - 町字と小地域は 1 対 1 ではありません。small_area_code は代表点 1 点で決めたものです
 keywords:
   - 住所
   - 町字
@@ -48,7 +49,7 @@ fields:
     description: "同じ市区町村に同じ名前の町字があるときに見分けるための文字列。住所の表記には含まれない"
   - name: has_chome
     title: 丁目がある
-    description: "true はこの町字か、同じ大字・町のどれかに丁目があるもの。町名のすぐ後の数字を丁目と読むかどうかに使う"
+    description: "この町字か同じ大字・町に丁目があれば true"
   - name: rsdtdsp_count
     title: 住居表示の住所の数
     description: "rsdtdsp の表にあるこの町字の行の数。住居表示を実施していない町字は 0"
@@ -64,19 +65,19 @@ fields:
     description: "'1' は住居表示の町字で、rsdtdsp_blk・rsdtdsp_rsdt まで引ける"
   - name: rsdt_addr_partial
     title: 一部だけ住居表示
-    description: "true は住居表示の町字の中に地番で表す住所も残っているもの。rsdt_addr_flg は '1'"
+    description: "住居表示の町字に地番の住所も残っていれば true"
   - name: wake_num_flg
     title: 起番フラグ
     description: "'1' はこの町字で地番が振られている、'2' は振られていない、'0' は登記情報に無い"
   - name: numbering_id
     title: 地番の区域の町字ID
-    description: "この町字の地番が振られている町字。小字が起番でなければ大字・町の町字 ID。address_point の地番は町字そのものとこの町字の両方で引く"
+    description: "この町字の地番が振られている町字の ID"
   - name: parcel_unique
     title: 地番が区域で一意
-    description: "true は numbering_id の町字の中で地番が 1 つに決まる。false は小字ごとに地番が振られた大字・町で、小字を省いた地番の住所は当てない"
+    description: "numbering_id の町字の中で地番が 1 つに決まれば true"
   - name: post_code
     title: 郵便番号
-    description: "7桁（ハイフンなし）。ABR の町字マスタの値、無ければ japan_address_code の town_postal_code で町域名が一致し、町字に 1 つに決まる番号。決まらなければ NULL"
+    description: "7 桁（ハイフンなし）。1 つに決まらなければ NULL"
   - name: efct_date
     title: 効力発生日
   - name: lng
@@ -87,8 +88,8 @@ fields:
     description: "代表点の緯度。元データ (ABR 位置参照拡張) のまま。出どころは point_level"
   - name: point_level
     title: 代表点の出どころ
-    description: "town は町字自身の代表点、parent_town は代表点の無い小字などに同じ大字・町の代表点を使ったもの、oaza_mean は大字・町にも代表点が無いときに同じ大字・町の小字などの代表点を平均したもの。isj_oaza はそれも無いときに位置参照情報の大字・町丁目の点を名前で当てたもの。address_mean はそれも無いときにその町字の地番と街区・地番の親番の点を平均したもの、oaza_address_mean は同じ大字・町の町字のそれを平均したもの。どれも無い町字は NULL"
+    description: "代表点の作り方（town・parent_town・oaza_mean など）"
   - name: small_area_code
     title: 小地域コード
-    description: "lng / lat の点が入る国勢調査の小地域 (KEY_CODE)。町字と小地域は 1 対 1 ではなく、これは代表点 1 点で決めたもの。代表点の無い町字は NULL"
+    description: "代表点が入る国勢調査の小地域（KEY_CODE）"
     annotations: { queria: { semantic: { role: entity, name: small_area } } }

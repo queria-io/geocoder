@@ -1,8 +1,8 @@
 schema: main
 name: point_priority
 title: 住所の点の優先順
-description: |
-  住所の点の種類と出どころごとの優先順と、測った誤差。address_point の既定の点はこの順で選ぶ。
+description: |-
+  住所の代表点の種類と出典ごとの優先順位と、計測した誤差です。address_point の代表点はこの順で選びます。
 keywords:
   - 住所
   - ジオコーディング
