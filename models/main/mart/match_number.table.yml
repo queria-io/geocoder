@@ -21,7 +21,7 @@ fields:
     annotations: { queria: { semantic: { role: entity, name: city } } }
   - name: num
     title: 番号
-    description: "街区符号・住居番号・地番を「-」でつないだもの（「12-3」）。半角の数字と全角のカナ"
+    description: "街区符号・住居番号・地番を「-」で連結したもの（「12-3」）。半角の数字と全角のカナ"
   - name: point_type
     title: 点の種類
     description: "point_priority の point_type"
