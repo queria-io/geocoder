@@ -1,9 +1,11 @@
 schema: main
 name: address_point
 title: 住所の点
-description: |
-  住所ごとに 1 つ選んだ点。点のある住所だけで、出どころが複数あれば point_priority の順で選ぶ。点の無い住所は親の番号の行を、地番は地番が振られた区域の町字（town.numbering_id）の行も引いて使う。
-  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）、「街区レベル位置参照情報」（国土交通省）（https://nlftp.mlit.go.jp/isj/）を加工して作成。
+description: |-
+  住所ごとに 1 つ選んだ代表点です。代表点のある住所だけを収録し、出典が複数あれば point_priority の順で選びます。
+
+  - 代表点のない住所は、親の番号の行を使います
+  - 地番は、地番が振られた区域の町字（town.numbering_id）の行も使います
 keywords:
   - 住所
   - ジオコーディング
@@ -35,7 +37,7 @@ fields:
     description: "住居表示は住居番号の枝番、地番は枝番の枝番。無ければ NULL"
   - name: point_type
     title: 点の種類
-    description: "parcel は筆、parcel_parent は親番、rsdt は号、block は街区。point_priority を参照"
+    description: "parcel（筆）・parcel_parent（親番）・rsdt（号）・block（街区）"
   - name: source
     title: 出どころ
     description: "abr はアドレス・ベース・レジストリ、isj は街区レベル位置参照情報"
