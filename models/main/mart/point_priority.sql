@@ -10,6 +10,8 @@ SELECT * FROM (VALUES
     ('parcel_parent', 'isj', 3, 37,   DATE '2026-11-01'),
     ('parcel_parent', 'abr', 4, NULL, NULL),
     ('block',         'abr', 5, 76,   DATE '2026-11-01'),
-    ('block',         'isj', 6, NULL, NULL)
+    ('block',         'isj', 6, NULL, NULL),
+    -- 今の版から消えた街区・地番 (位置参照情報の過去の版)。今の版のどの点よりも後に置く
+    ('history',       'isj', 7, NULL, NULL)
 ) AS t(point_type, source, rank, error_m, measured_on)
 ORDER BY rank

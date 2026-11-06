@@ -43,6 +43,13 @@ models:
             - "CREATE SCHEMA IF NOT EXISTS geocoder.town"
             - "CALL geocoder.set_option('parquet_row_group_size', 4096, schema => 'town')"
             - "CALL geocoder.set_option('parquet_compression', 'zstd', schema => 'town')"
+        # 照合の区域も市区町村ごとに 1 回ずつ読むので、町字の表と同じ置き場にする
+        match_area:
+          +schema: town
+          +pre-hook:
+            - "CREATE SCHEMA IF NOT EXISTS geocoder.town"
+            - "CALL geocoder.set_option('parquet_row_group_size', 4096, schema => 'town')"
+            - "CALL geocoder.set_option('parquet_compression', 'zstd', schema => 'town')"
         # 旧市区町村名の索引も、頭 2 文字で 1 つの行グループだけを読む
         former_city:
           +schema: town

@@ -4,14 +4,7 @@
 import { preNormalize } from "./matching/pre_normalize";
 import { parquetReadObjects } from "hyparquet";
 
-import {
-  compressors,
-  openR2Table,
-  readCity,
-  readWhere,
-  retryOnce,
-  type Table,
-} from "./data/parquet";
+import { compressors, openR2Table, readCity, readWhere, type Table } from "./data/parquet";
 import { Match } from "./matching/match_core";
 import { NewMatcher, type Impl } from "./matching/matcher";
 import { Detail, type MatchedResult } from "./model/model";
@@ -45,6 +38,13 @@ import {
 } from "./no_city";
 import { POINT_COLUMNS, type PointRow, withAddressPoint } from "./point";
 import { withParentPoint } from "./parent_point";
+import {
+  MATCH_AREA_COLUMNS,
+  MATCH_NUMBER_COLUMNS,
+  type MatchAreaRow,
+  type MatchNumberRow,
+} from "./locate/index";
+import { type LocateDeps, withLocated } from "./locate/result";
 
 export type ForwardEnv = {
   DATA: R2Bucket;
@@ -87,10 +87,15 @@ const openAll = (bucket: R2Bucket, keys: string[]): Promise<Table[]> =>
  * ファイルが分かれていれば全部のフッターを開き、行グループの範囲で当たるものだけ読む。
  * 覚えるのは最近の 1,024 個の値だけにする。keys が空なら何も読まない
  */
-const keyLoader = <T>(bucket: R2Bucket, keys: string[], column: string, columns: string[]) => {
+const keyLoader = <T, K extends string | number = string>(
+  bucket: R2Bucket,
+  keys: string[],
+  column: string,
+  columns: string[],
+) => {
   let tables: Promise<Table[]> | null = null;
-  const rows = new Map<string, Promise<T[]>>();
-  return (value: string): Promise<T[]> => {
+  const rows = new Map<K, Promise<T[]>>();
+  return (value: K): Promise<T[]> => {
     if (keys.length === 0) return Promise.resolve([]);
     const hit = rows.get(value);
     if (hit) return hit;
@@ -102,7 +107,7 @@ const keyLoader = <T>(bucket: R2Bucket, keys: string[], column: string, columns:
         ),
       )
       .then((parts) => parts.flat());
-    if (rows.size >= 1024) rows.delete(rows.keys().next().value as string);
+    if (rows.size >= 1024) rows.delete(rows.keys().next().value as K);
     rows.set(value, p);
     p.catch(() => {
       rows.delete(value);
@@ -130,6 +135,9 @@ type Built = {
   names: (key: string) => Promise<TownNameRow[]>;
   formers: (key: string) => Promise<FormerCityRow[]>;
   cities: readonly CityResult[];
+  locate: LocateDeps;
+  /** 照合の索引 (match_area・match_number) があるか */
+  hasIndex: boolean;
 };
 
 // isolate の中で使い回す。表のファイルが変われば作り直す
@@ -157,17 +165,48 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
   };
   const loadMachiaza = machiazaLoader<RsdtdspRow>(bucket, tables.rsdtdsp, RSDTDSP_COLUMNS);
   const loadParcels = machiazaLoader<ParcelRow>(bucket, tables.parcel, PARCEL_COLUMNS);
+  const townOf = async (lgCode: string, machiazaId: string) =>
+    (await loadCity(lgCode)).find((b) => b.machiazaId === machiazaId) ?? null;
+  const cityOf = (lgCode: string) => cityByCode.get(lgCode);
+  let areaTables: Promise<Table[]> | null = null;
+  const loadAreas = (lgCode: string) => {
+    // 開けなかったときは覚えずに、次の問い合わせで開き直す (keyLoader と同じ)
+    areaTables ??= openAll(bucket, tables.match_area).catch((e: unknown) => {
+      areaTables = null;
+      throw e;
+    });
+    return areaTables.then((ts) =>
+      Promise.all(
+        ts.map((t) =>
+          readCity<MatchAreaRow>(t, lgCode, MATCH_AREA_COLUMNS, (n) => (stats.rows += n)),
+        ),
+      ).then((parts) => parts.flat()),
+    );
+  };
   return {
     matcher: NewMatcher(lazyRepository(loadCity, cities, prefs, loadMachiaza, loadParcels), cities),
-    town: async (lgCode, machiazaId) =>
-      (await loadCity(lgCode)).find((b) => b.machiazaId === machiazaId) ?? null,
+    town: townOf,
     towns: loadCity,
     rows: loadMachiaza,
     points: machiazaLoader<PointRow>(bucket, tables.point, POINT_COLUMNS),
-    city: (lgCode) => cityByCode.get(lgCode),
+    city: cityOf,
     cities,
     names: keyLoader<TownNameRow>(bucket, tables.town_name, "name_key", TOWN_NAME_COLUMNS),
     formers: keyLoader<FormerCityRow>(bucket, tables.former_city, "name_key", FORMER_CITY_COLUMNS),
+    hasIndex: tables.match_area.length > 0 && tables.match_number.length > 0,
+    locate: {
+      areas: loadAreas,
+      numbers: keyLoader<MatchNumberRow, number>(
+        bucket,
+        tables.match_number,
+        "area_id",
+        MATCH_NUMBER_COLUMNS,
+      ),
+      rsdt: loadMachiaza,
+      parcels: loadParcels,
+      town: townOf,
+      city: cityOf,
+    },
   };
 };
 
@@ -271,10 +310,13 @@ export const geocode = async (
   );
   // ログには住所を書かない。読んだ量と時間だけ (住所と結果は src/request_log.ts で別に記録する)
   console.log(JSON.stringify({ geocode: true, cold, ...stats }));
-  const withPoint = (r: MatchedResult) =>
-    withAddressPoint(r, built.points, built.town).then((x) =>
-      withParentPoint(x, built.town, built.city),
-    );
+  // 照合の索引が無いデータ (作り直す前) では、これまでの点の引き方を使う
+  const withPoint = built.hasIndex
+    ? (r: MatchedResult) => withLocated(r, address, built.locate)
+    : (r: MatchedResult) =>
+        withAddressPoint(r, built.points, built.town).then((x) =>
+          withParentPoint(x, built.town, built.city),
+        );
   // 市区町村を推定した組は、座標を引いてから点の細かい順に並べる。ほかの結果は頭の limit 件だけ座標を引く
   const ordered: MatchedResult[] = [];
   for (const g of groups) {

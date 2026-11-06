@@ -1,0 +1,40 @@
+schema: main
+name: match_number
+title: 照合の番号
+description: |
+  住所の照合に使う番号の索引のうち、町字の表（rsdtdsp・parcel）に無い番号の点。番号を振る区域で引く地番、地番の親番、
+  位置参照情報（過去の版を含む）の街区・地番を、区域（match_area の area_id）と番号と出典ごとに 1 行持つ。
+  「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）と「街区レベル位置参照情報　国土交通省」を加工して作成。
+keywords:
+  - 住所
+  - ジオコーディング
+sources:
+  - path: https://dataset.address-br.digital.go.jp/
+  - path: https://nlftp.mlit.go.jp/isj/
+fields:
+  - name: area_id
+    title: 区域の番号
+    description: "match_area の area_id。この順に並ぶ"
+  - name: lg_code
+    title: 全国地方公共団体コード
+    description: "6桁（検査数字あり）"
+    annotations: { queria: { semantic: { role: entity, name: city } } }
+  - name: num
+    title: 番号
+    description: "街区符号・住居番号・地番を「-」で連結したもの（「12-3」）。半角の数字と全角のカナ"
+  - name: point_type
+    title: 点の種類
+    description: "point_priority の point_type"
+  - name: source
+    title: 出典
+    description: "abr はアドレス・ベース・レジストリ、isj は街区レベル位置参照情報"
+  - name: rank
+    title: 優先順
+    description: "point_priority の rank。同じ区域と番号の行はこの順に並ぶ"
+  - name: machiaza_id
+    title: 町字ID
+    description: "ABR の点だけ。位置参照情報の点は空"
+  - name: lng
+    title: 経度
+  - name: lat
+    title: 緯度
