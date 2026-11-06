@@ -46,7 +46,7 @@ export type RowRange = { rowStart: number; rowEnd: number };
  */
 export const rowRangesFor = (
   metadata: FileMetaData,
-  value: string,
+  value: string | number,
   key = "lg_code",
 ): RowRange[] => {
   const column = metadata.schema.findIndex((s) => s.name === key) - 1;
@@ -55,10 +55,15 @@ export const rowRangesFor = (
     ({ start, ranges }, group) => {
       const rows = Number(group.num_rows);
       const stats = group.columns[column]?.meta_data?.statistics;
-      const min = String(stats?.min_value ?? stats?.min ?? "");
-      const max = String(stats?.max_value ?? stats?.max ?? "\uffff");
+      const lo = stats?.min_value ?? stats?.min;
+      const hi = stats?.max_value ?? stats?.max;
+      // 数の列 (area_id) は数として比べる。文字列にすると「10」が「9」より前になる
+      const inside =
+        typeof value === "number"
+          ? (lo == null || Number(lo) <= value) && (hi == null || value <= Number(hi))
+          : String(lo ?? "") <= value && value <= String(hi ?? "\uffff");
       const last = ranges.at(-1);
-      const next = !(min <= value && value <= max)
+      const next = !inside
         ? ranges
         : last?.rowEnd === start
           ? [...ranges.slice(0, -1), { rowStart: last.rowStart, rowEnd: start + rows }]
@@ -128,7 +133,7 @@ export const openTable = async (file: AsyncBuffer): Promise<Table> => ({
 export const readWhere = async <T>(
   { file, metadata }: Table,
   key: string,
-  value: string,
+  value: string | number,
   columns: string[],
   onRows?: (rows: number) => void,
 ): Promise<T[]> => {
@@ -144,7 +149,9 @@ export const readWhere = async <T>(
       compressors,
       ...range,
     }) as Promise<Record<string, unknown>[]>;
-  return (await Promise.all(ranges.map(read))).flat().filter((row) => row[key] === value) as T[];
+  return (await Promise.all(ranges.map(read)))
+    .flat()
+    .filter((row) => (typeof value === "number" ? Number(row[key]) : row[key]) === value) as T[];
 };
 
 /** 市区町村 1 つ分の行を読む */

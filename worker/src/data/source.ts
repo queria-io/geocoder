@@ -15,6 +15,8 @@ export const TABLES = {
   point: "main.address_point",
   town_name: "town.town_name",
   former_city: "town.former_city",
+  match_area: "town.match_area",
+  match_number: "main.match_number",
 } as const;
 export type TableName = keyof typeof TABLES;
 
