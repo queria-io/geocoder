@@ -44,7 +44,6 @@ export type Located = {
   rest: string;
 };
 
-const X = () => (globalThis as { X?: string }).X ?? "";
 const NUM = /^-?([甲乙丙丁]?[0-9]+[甲乙丙丁]?)(?:-([甲乙丙丁]?[0-9]+))?(?:-([0-9]+))?/;
 
 type Option = { score: readonly [number, number, number, number]; located: Located };
@@ -67,20 +66,18 @@ const options = (
   areas: ReadonlyMap<string, Area>,
   numbers: (k: string) => Numbers,
 ): Option[] => {
-  const k = areaOf(rest.slice(s, e), s, rest.slice(e), areas) as string;
+  const k = rest.slice(s, e);
   const area = areas.get(k) as Area;
   const t = rest.slice(e);
   const numbering = area.numbering;
-  const hasNumbers = numbers(k).has || (numbering !== null && numbers(numbering).has);
-  // 番号はどの数字から読んでもよい。頭の数字以外から読むのは、区域が番号を持つときだけ
-  const starts = [...t.matchAll(/(?<![0-9甲乙丙丁])[甲乙丙丁]?[0-9]/g)]
-    .map((x) => x.index)
-    .filter((i) => i === 0 || (t[0] === "-" && i === 1) || hasNumbers)
-    .slice(0, X().includes("a") ? undefined : 1);
-  const hits: { cover: number; rank: number; skipped: number; located: Located }[] = [];
-  for (const at of starts) {
-    const m = NUM.exec(t.slice(at)) as RegExpExecArray;
-    const skipped = at === 1 && t[0] === "-" ? 0 : at;
+  const direct = NUM.exec(t);
+  const at = direct ? -1 : t.search(/[甲乙丙丁]?[0-9]/);
+  const skip =
+    !direct && at >= 0 && (numbers(k).has || (numbering !== null && numbers(numbering).has));
+  const m = direct ?? (skip ? NUM.exec(t.slice(at)) : null);
+  const skipped = skip ? at : 0;
+  const hits: { cover: number; rank: number; located: Located }[] = [];
+  if (m) {
     const parts = m.slice(1).filter((x): x is string => x !== undefined);
     for (const kk of numbering === null ? [k] : [k, numbering]) {
       const node = numbers(kk).points;
@@ -91,15 +88,14 @@ const options = (
       const key = parts.slice(0, i).join("-");
       const hit = node.get(key) as NumberPoint;
       hits.push({
-        cover: e - s + key.length,
+        cover: k.length + key.length,
         rank: hit.rank,
-        skipped,
         located: {
           point: hit.point,
           area: kk,
           machiazaId: hit.machiazaId ?? areas.get(kk)?.machiazaId ?? null,
           number: hit,
-          rest: t.slice(at + (m[0].startsWith("-") ? 1 : 0) + key.length),
+          rest: t.slice(skipped + (m[0].startsWith("-") ? 1 : 0) + key.length),
         },
       });
     }
@@ -111,9 +107,8 @@ const options = (
     if (any !== undefined) {
       const a = areas.get(any) as Area;
       hits.push({
-        cover: own === undefined ? 0 : Math.min(any.length, e - s),
+        cover: own === undefined ? 0 : any.length,
         rank: 9,
-        skipped: 0,
         located: {
           point: a.point as Point,
           area: any,
@@ -124,25 +119,7 @@ const options = (
       });
     }
   }
-  return hits.map((h) => ({ score: [h.cover, -h.rank, -h.skipped, -s], located: h.located }));
-};
-
-/**
- * 住所の name に当たる区域の名前。無ければ、住所の頭から読む名前で、後ろに番号が続き、
- * 名前を頭に持つ区域が 1 つだけならその区域 (「御幸ケ原53」→「御幸ケ原町」)
- */
-const areaOf = (
-  name: string,
-  s: number,
-  after: string,
-  areas: ReadonlyMap<string, Area>,
-): string | null => {
-  if (areas.has(name)) return name;
-  if (!X().includes("p")) return null;
-  // 数字の途中で名前を切らない (「伯太町3」を「伯太町三丁目」と読まない)
-  if (s !== 0 || /[0-9]$/.test(name) || !/^[甲乙丙丁]?[0-9]/.test(after)) return null;
-  const longer = [...areas.keys()].filter((a) => a.startsWith(name));
-  return longer.length === 1 ? longer[0] : null;
+  return hits.map((h) => ({ score: [h.cover, -h.rank, -skipped, -s], located: h.located }));
 };
 
 /**
@@ -157,10 +134,10 @@ export const locate = (
   const r = rest.replace(/-+$/, "") + "-";
   let best: Option | null = null;
   for (let s = 0; s < r.length; s++) {
-    // 住所の頭から区域が当たれば、途中から読む読み方は使わない
-    if (s === 1 && (X().includes("h") ? best !== null : best?.located.number)) break;
+    // 住所の頭から番号まで読めたら、途中から読む読み方は使わない
+    if (s === 1 && best?.located.number) break;
     for (let e = r.length; e > s; e--) {
-      if (areaOf(r.slice(s, e), s, r.slice(e), areas) === null) continue;
+      if (!areas.has(r.slice(s, e))) continue;
       for (const o of options(r, s, e, areas, numbers))
         if (best === null || better(o.score, best.score)) best = o;
     }
@@ -174,10 +151,10 @@ export const candidates = (rest: string, areas: ReadonlyMap<string, Area>): stri
   const keys = new Set<string>();
   for (let s = 0; s < r.length; s++)
     for (let e = r.length; e > s; e--) {
-      const k = areaOf(r.slice(s, e), s, r.slice(e), areas);
-      const a = k === null ? undefined : areas.get(k);
+      const k = r.slice(s, e);
+      const a = areas.get(k);
       // 後ろに数字が無ければ番号を引かない (options は数字の無い残りで番号を見ない)
-      if (k === null || !a || !/[0-9]/.test(r.slice(e))) continue;
+      if (!a || !/[0-9]/.test(r.slice(e))) continue;
       keys.add(k);
       if (a.numbering !== null) keys.add(a.numbering);
     }

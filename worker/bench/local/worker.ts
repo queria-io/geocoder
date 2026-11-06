@@ -32,5 +32,5 @@ const bucket = (env: LocalEnv) =>
   }) as unknown as R2Bucket;
 
 export default {
-  fetch: (request, env, ctx) => (((globalThis as { X?: string }).X = (env as { X?: string }).X ?? ""), app.fetch(request, { ...env, DATA: bucket(env) }, ctx)),
+  fetch: (request, env, ctx) => app.fetch(request, { ...env, DATA: bucket(env) }, ctx),
 } satisfies ExportedHandler<LocalEnv>;
