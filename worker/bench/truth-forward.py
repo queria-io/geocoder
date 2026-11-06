@@ -11,13 +11,16 @@
 # 1 つの住所が複数の型に当てはまるときは、少ない型 (PATTERNS の上のもの) に入れる。
 # 照合の規則を直すときに結果を見た住所 (bench/exclude.csv の source と id) は選ばない。見た住所に合わせた
 # 改善で、ベンチマークの値が実力より高く出ないようにするため。
+# 正解の座標が住所の場所でない住所 (bench/wrong-truth.csv、市区町村の役所の点が入っているものなど) も選ばない。
 # 型の判定に使う町字 (town) は、同じ市区町村の町字のうち、大字・町の名前が住所の中に現れるもの。
 # 使い方: uv run --with 'duckdb>=1.4,<2' python bench/truth-forward.py 20 > bench/golden/truth-forward.csv
 import os, sys, duckdb
 
 k = int(sys.argv[1]) if len(sys.argv) > 1 else 20
 data = "https://data.queria.io/datasets/queria"
-exclude = os.path.join(os.path.dirname(os.path.abspath(__file__)), "exclude.csv")
+here = os.path.dirname(os.path.abspath(__file__))
+exclude = os.path.join(here, "exclude.csv")
+wrong = os.path.join(here, "wrong-truth.csv")
 
 PREF = r"^(東京都|北海道|京都府|大阪府|.{2,3}県)"
 # (型, 当てはまる条件)。上から順に判定する
@@ -119,7 +122,11 @@ COPY (
     FROM address_br.main.mart_town
     WHERE status_flg <> '3' AND oaza_cho IS NOT NULL
   ),
-  excluded AS (SELECT source, id FROM read_csv('{exclude}', all_varchar = true)),
+  excluded AS (
+    SELECT source, id FROM read_csv('{exclude}', all_varchar = true)
+    UNION ALL
+    SELECT source, id FROM read_csv('{wrong}', all_varchar = true)
+  ),
   cities AS (
     SELECT lg_code_5 AS city_code, any_value(county_name) AS county_name, any_value(city_name) AS city_name
     FROM address_br.main.mart_city GROUP BY ALL
