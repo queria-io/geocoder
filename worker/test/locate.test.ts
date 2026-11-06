@@ -9,6 +9,7 @@ describe("norm", () => {
     expect(norm("霞が関一丁目２番３号")).toBe("霞関1-2-3-");
     expect(norm("１ー２")).toBe("1-2");
   });
+  it("漢数字の間の「の」は区切り", () => expect(norm("本町三の五")).toBe("本町3-5"));
   it("番号の部分をつなぐ", () => expect(numberKey(["12", null, "３"])).toBe("12-3"));
 });
 
@@ -93,6 +94,41 @@ describe("locate", () => {
   });
   it("読み飛ばす区域の名前と地番を振る区域を、番号を読む候補にする", () => {
     expect(candidates(norm("本町字上野10"), index.areas)).toContain("本町");
+  });
+});
+
+describe("numbersOf", () => {
+  it("住居表示の区域では、同じ番号の地番より住居表示の点を採る", () => {
+    const n = numbersOf({
+      rsdt: [
+        {
+          lg_code: "011011",
+          machiaza_id: "0001001",
+          blk_id: "001",
+          rsdt_id: "002",
+          rsdt2_id: null,
+          blk_num: "2",
+          rsdt_num: "3",
+          rsdt_num2: null,
+          lng: 140.1,
+          lat: 40.1,
+        },
+      ],
+      parcel: [
+        {
+          lg_code: "011011",
+          machiaza_id: "0001001",
+          prc_id: "000020000300000",
+          prc_num1: "2",
+          prc_num2: "3",
+          prc_num3: null,
+          lng: 140.9,
+          lat: 40.9,
+        },
+      ],
+      numbers: [],
+    });
+    expect(n.points.get("2-3")?.point).toEqual([140.1, 40.1]);
   });
 });
 

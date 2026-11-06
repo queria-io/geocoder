@@ -45,6 +45,8 @@ export const norm = (s: string | null | undefined): string =>
         .replace(/[ヶヵ]/g, "ケ")
         // 数字の間のカタカナの長音は「-」と読む (「1ー2」)
         .replace(/(?<=[0-9〇一二三四五六七八九十])[ーｰ](?=[0-9〇一二三四五六七八九十])/g, "-")
+        // 漢数字の間の「の」「ノ」も区切り (「三の五」は 3-5)。省略できる字として落とすと 35 になる
+        .replace(/(?<=[〇一二三四五六七八九十百千])[のノ之](?=[〇一二三四五六七八九十百千])/g, "-")
         .replace(OPTIONAL, "")
         .replace(KANJI_RUN, kanjiNumber)
         .replace(/大字|小字/g, "")

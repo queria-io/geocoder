@@ -16,6 +16,8 @@ export type NumberPoint = {
   machiazaId: string | null;
   /** ABR の町字の表の行から引いたときの ID (住居表示の街区・住居、地番) */
   ids?: { blk_id?: string; rsdt_id?: string | null; rsdt2_id?: string | null; prc_id?: string };
+  /** point_priority の point_type (rsdt・block は住居表示の番号、ほかは地番) */
+  pointType: string;
   source: string;
   parts: readonly string[];
 };
@@ -151,7 +153,8 @@ export const candidates = (rest: string, areas: ReadonlyMap<string, Area>): stri
     for (let e = r.length; e > s; e--) {
       const k = r.slice(s, e);
       const a = areas.get(k);
-      if (!a) continue;
+      // 後ろに数字が無ければ番号を引かない (options は数字の無い残りで番号を見ない)
+      if (!a || !/[0-9]/.test(r.slice(e))) continue;
       keys.add(k);
       if (a.numbering !== null) keys.add(a.numbering);
     }

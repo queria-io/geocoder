@@ -170,7 +170,11 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
   const cityOf = (lgCode: string) => cityByCode.get(lgCode);
   let areaTables: Promise<Table[]> | null = null;
   const loadAreas = (lgCode: string) => {
-    areaTables ??= openAll(bucket, tables.match_area);
+    // 開けなかったときは覚えずに、次の問い合わせで開き直す (keyLoader と同じ)
+    areaTables ??= openAll(bucket, tables.match_area).catch((e: unknown) => {
+      areaTables = null;
+      throw e;
+    });
     return areaTables.then((ts) =>
       Promise.all(
         ts.map((t) =>

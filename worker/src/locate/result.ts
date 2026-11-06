@@ -34,9 +34,13 @@ const LEVEL: Record<number, CoordinateLevel> = {
   7: "parcel_parent",
 };
 
-const indexes = new Map<string, Promise<CityIndex>>();
+// 表のバージョンが変わると forward.ts が deps を作り直す。area_id はビルドごとに振り直すので、
+// 市区町村の索引は deps ごとに覚える (isolate 全体で覚えると古い area_id で match_number を引く)
+const indexCache = new WeakMap<LocateDeps, Map<string, Promise<CityIndex>>>();
 
 const cityIndexOf = (deps: LocateDeps, lgCode: string): Promise<CityIndex> => {
+  const indexes = indexCache.get(deps) ?? new Map<string, Promise<CityIndex>>();
+  indexCache.set(deps, indexes);
   const hit = indexes.get(lgCode);
   if (hit) return hit;
   const p = deps.areas(lgCode).then(cityIndex);
@@ -68,11 +72,15 @@ const toResult = async (
   found: Located,
   deps: LocateDeps,
   lgCode: string,
+  whole: string,
 ): Promise<MatchedResult> => {
   const town = found.machiazaId === null ? null : await deps.town(lgCode, found.machiazaId);
-  const n = found.number;
+  // 町字が決まらなければ (位置参照情報にだけある区域など)、住所の表記は市区町村までにし、
+  // 番号も表記と ID に載せない。区域の名前を落として番号だけを市区町村名に続けないため
+  const n = town === null ? null : found.number;
   const fromRsdt = n?.ids?.blk_id !== undefined;
   const fromParcel = n?.ids?.prc_id !== undefined;
+  const residential = n?.pointType === "rsdt" || n?.pointType === "block";
   const ids = {
     ...r.ids,
     machiaza_id: town?.machiazaId ?? null,
@@ -90,15 +98,16 @@ const toResult = async (
     chome: town?.chome ?? null,
     koaza: town?.koaza ?? null,
     machiaza_dist: town?.machiazaDist ?? null,
-    blk_num: fromRsdt ? (parts[0] ?? null) : null,
-    rsdt_num: fromRsdt ? (parts[1] ?? null) : null,
-    rsdt_num2: fromRsdt ? (parts[2] ?? null) : null,
-    prc_num1: fromRsdt ? null : (parts[0] ?? null),
-    prc_num2: fromRsdt ? null : (parts[1] ?? null),
-    prc_num3: fromRsdt ? null : (parts[2] ?? null),
+    blk_num: residential ? (parts[0] ?? null) : null,
+    rsdt_num: residential ? (parts[1] ?? null) : null,
+    rsdt_num2: residential ? (parts[2] ?? null) : null,
+    prc_num1: residential ? null : (parts[0] ?? null),
+    prc_num2: residential ? null : (parts[1] ?? null),
+    prc_num3: residential ? null : (parts[2] ?? null),
   };
   const level = DetermineMatchLevel(ids);
-  const rest = found.rest.replace(/^-+|-+$/g, "");
+  const rest = (town === null ? whole : found.rest).replace(/^-+|-+$/g, "");
+  const point = found.number;
   return {
     ...r,
     matched_address: FormatAddress(sa),
@@ -107,9 +116,12 @@ const toResult = async (
     ids,
     structured_address: sa,
     coordinates: [found.point[0], found.point[1]],
-    ...(n === null || fromRsdt || fromParcel
+    ...(point === null || fromRsdt || fromParcel
       ? { coordinate_level: undefined, coordinate_source: undefined }
-      : { coordinate_level: LEVEL[n.rank] ?? "parcel_parent", coordinate_source: n.source }),
+      : {
+          coordinate_level: LEVEL[point.rank] ?? "parcel_parent",
+          coordinate_source: point.source,
+        }),
   };
 };
 
@@ -168,5 +180,5 @@ export const withLocated = async (
   const found = locate(rest, index.areas, (k) => loaded.get(k) ?? EMPTY_NUMBERS);
   return found === null
     ? atCity(r, city, rest.replace(/^-+|-+$/g, ""))
-    : toResult(r, found, deps, lgCode);
+    : toResult(r, found, deps, lgCode, rest);
 };

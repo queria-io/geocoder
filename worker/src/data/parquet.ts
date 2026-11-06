@@ -57,7 +57,7 @@ export const rowRangesFor = (
       const stats = group.columns[column]?.meta_data?.statistics;
       const lo = stats?.min_value ?? stats?.min;
       const hi = stats?.max_value ?? stats?.max;
-      // 数の列 (area_id) は数として比べる。文字列にすると「10」が「9」より前になる
+      // 数の列 (area_id) は数として比較する。文字列にすると「10」が「9」より前になる
       const inside =
         typeof value === "number"
           ? (lo == null || Number(lo) <= value) && (hi == null || value <= Number(hi))

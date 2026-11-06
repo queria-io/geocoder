@@ -91,12 +91,21 @@ export const cityIndex = (rows: readonly MatchAreaRow[]): CityIndex => {
 
 type Loaded = { rsdt: RsdtdspRow[]; parcel: ParcelRow[]; numbers: MatchNumberRow[] };
 
-/** 区域の行から読んだ番号を、番号ごとに優先順の最も小さい点 1 つにまとめる */
+const RESIDENTIAL = new Set(["rsdt", "block"]);
+
+/**
+ * 区域の行から読んだ番号を、番号ごとに優先順の最も小さい点 1 つにまとめる。
+ * 住居表示の区域 (住居表示の号・街区を持つ) では、同じ番号の地番より住居表示の点を先にする。
+ * 住居表示の町字にも地番の点があり、番号が同じでも別の場所を指す
+ */
 export const numbersOf = ({ rsdt, parcel, numbers }: Loaded): Numbers => {
+  const residential = rsdt.length > 0 || numbers.some((r) => r.point_type === "block");
+  const order = (p: NumberPoint) =>
+    residential && !RESIDENTIAL.has(p.pointType) ? p.rank + 100 : p.rank;
   const points = new Map<string, NumberPoint>();
   const put = (key: string, p: NumberPoint) => {
     const prev = points.get(key);
-    if (prev === undefined || p.rank < prev.rank) points.set(key, p);
+    if (prev === undefined || order(p) < order(prev)) points.set(key, p);
   };
   for (const r of rsdt) {
     const pt = point(r.lng, r.lat);
@@ -107,6 +116,7 @@ export const numbersOf = ({ rsdt, parcel, numbers }: Loaded): Numbers => {
       point: pt,
       machiazaId: r.machiaza_id,
       ids: { blk_id: r.blk_id, rsdt_id: r.rsdt_id, rsdt2_id: r.rsdt2_id },
+      pointType: r.rsdt_id !== null ? "rsdt" : "block",
       source: "abr",
       parts,
     });
@@ -120,6 +130,7 @@ export const numbersOf = ({ rsdt, parcel, numbers }: Loaded): Numbers => {
       point: pt,
       machiazaId: r.machiaza_id,
       ids: { prc_id: r.prc_id },
+      pointType: "parcel",
       source: "abr",
       parts,
     });
@@ -130,6 +141,7 @@ export const numbersOf = ({ rsdt, parcel, numbers }: Loaded): Numbers => {
       rank: Number(r.rank),
       point: [r.lng, r.lat],
       machiazaId: r.machiaza_id,
+      pointType: r.point_type,
       source: r.source,
       parts,
     });
