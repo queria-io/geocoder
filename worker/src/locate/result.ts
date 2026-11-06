@@ -3,6 +3,7 @@ import {
   type CoordinateLevel,
   DetermineMatchLevel,
   Detail,
+  emptySA,
   FormatAddress,
   type MatchedResult,
 } from "../model/model";
@@ -113,7 +114,7 @@ const toResult = async (
 };
 
 /** 市区町村の点だけを返す (町字に当たらなかったとき) */
-const atCity = (r: MatchedResult, city: CityResult | undefined): MatchedResult => {
+const atCity = (r: MatchedResult, city: CityResult | undefined, rest: string): MatchedResult => {
   const ids = {
     ...r.ids,
     machiaza_id: null,
@@ -123,10 +124,20 @@ const atCity = (r: MatchedResult, city: CityResult | undefined): MatchedResult =
     rsdt2_id: null,
     prc_id: null,
   };
+  const sa = {
+    ...emptySA(),
+    pref: r.structured_address.pref,
+    county: r.structured_address.county,
+    city: r.structured_address.city,
+    ward: r.structured_address.ward,
+  };
   return {
     ...r,
+    matched_address: FormatAddress(sa),
+    unmatched_address: rest === "" ? null : [rest],
     match_level: DetermineMatchLevel(ids),
     ids,
+    structured_address: sa,
     coordinates: city?.lon != null && city.lat != null ? [city.lon, city.lat] : null,
     coordinate_level: "city",
     coordinate_source: undefined,
@@ -155,5 +166,7 @@ export const withLocated = async (
     ),
   );
   const found = locate(rest, index.areas, (k) => loaded.get(k) ?? EMPTY_NUMBERS);
-  return found === null ? atCity(r, city) : toResult(r, found, deps, lgCode);
+  return found === null
+    ? atCity(r, city, rest.replace(/^-+|-+$/g, ""))
+    : toResult(r, found, deps, lgCode);
 };
