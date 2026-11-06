@@ -141,6 +141,31 @@ describe("locate", () => {
     );
     expect(r?.point).toEqual([141.5, 41]);
   });
+  it("番号に甲乙丙丁が書かれていなければ、甲乙丙丁の付いた番号をすべて候補にする", () => {
+    const row = (num: string, lng: number) => ({
+      area_id: 2,
+      num,
+      point_type: "parcel",
+      source: "abr",
+      rank: 1,
+      machiaza_id: "0001000",
+      lng,
+      lat: 41,
+    });
+    const both = numbersOf({
+      rsdt: [],
+      parcel: [],
+      numbers: [row("甲10", 141.5), row("丙10", 141.7)],
+    });
+    const r = locate(norm("本町10"), index.areas, (k) =>
+      k === "本町" ? both : { has: false, points: new Map() },
+    );
+    expect([r?.number?.parts, ...(r?.others ?? []).map((o) => o.number?.parts)]).toEqual([
+      ["甲10"],
+      ["丙10"],
+    ]);
+    expect(r?.rest).toBe("-");
+  });
   it("読み飛ばす区域の名前と地番を振る区域を、番号を読む候補にする", () => {
     expect(candidates(norm("本町字上野10"), index.areas)).toContain("本町");
   });

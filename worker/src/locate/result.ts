@@ -158,17 +158,18 @@ const atCity = (r: MatchedResult, city: CityResult | undefined, rest: string): M
 
 /**
  * 市区町村まで決まった答え r の、町字から先を住所 address から引き直す。
- * 区域に当たらなければ市区町村の点を返す
+ * 区域に当たらなければ市区町村の点を返す。住所の書き方から 1 つに決められない番号 (甲乙丙丁の違いだけ) は、
+ * 候補をすべて返し、candidates にその数を入れる
  */
 export const withLocated = async (
   r: MatchedResult,
   address: string,
   deps: LocateDeps,
-): Promise<MatchedResult> => {
+): Promise<MatchedResult[]> => {
   const lgCode = r.ids.lg_code;
-  if (!lgCode || Detail(r.match_level) < Detail("city")) return r;
+  if (!lgCode || Detail(r.match_level) < Detail("city")) return [r];
   const city = deps.city(lgCode);
-  if (!city) return r;
+  if (!city) return [r];
   const index = await cityIndexOf(deps, lgCode);
   const rest = remainder(address, city);
   const keys = candidates(rest, index.areas);
@@ -178,7 +179,10 @@ export const withLocated = async (
     ),
   );
   const found = locate(rest, index.areas, (k) => loaded.get(k) ?? EMPTY_NUMBERS);
-  return found === null
-    ? atCity(r, city, rest.replace(/^-+|-+$/g, ""))
-    : toResult(r, found, deps, lgCode, rest);
+  if (found === null) return [atCity(r, city, rest.replace(/^-+|-+$/g, ""))];
+  const all = [found, ...(found.others ?? [])];
+  const results = await Promise.all(all.map((f) => toResult(r, f, deps, lgCode, rest)));
+  return all.length > 1
+    ? results.map((x) => ({ ...x, candidates: (r.candidates ?? 1) * all.length }))
+    : results;
 };

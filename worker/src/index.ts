@@ -405,11 +405,11 @@ const GeocodeResult = z
       .openapi({ description: "全国地方公共団体コード (6 桁、検査数字つき)" }),
     ambiguous: z.boolean().openapi({
       description:
-        "市区町村名の無い住所で、同じ町名を持つ市区町村が複数あり、市区町村を推定したか。true のときは prefecture_code・city_code で絞ってください",
+        "住所から 1 つに決められない候補が複数あり、そのうち 1 つを選んだか。市区町村名の無い住所で同じ町名を持つ市区町村が複数あるときと、地番に甲乙丙丁が書かれておらず、甲乙丙丁の違いだけの地番が複数あるときに true になる。市区町村は prefecture_code・city_code で絞れる",
     }),
     candidates: z.number().int().openapi({
       description:
-        "同じ町名で照合できた市区町村の数 (ふつうは 1)。候補は人口の多い順に並ぶ。limit を増やすと全部を受け取れる",
+        "照合できた候補の数 (ふつうは 1)。市区町村の候補は人口の多い順、地番の候補は代表点の優先順位の順に並ぶ。limit を増やすと全部を受け取れる",
     }),
     score: optional(
       z.number().openapi({ description: "候補の並び順に使う一致の度合い。1 は完全一致" }),
