@@ -314,16 +314,19 @@ export const geocode = async (
   const withPoint = built.hasIndex
     ? (r: MatchedResult) => withLocated(r, address, built.locate)
     : (r: MatchedResult) =>
-        withAddressPoint(r, built.points, built.town).then((x) =>
-          withParentPoint(x, built.town, built.city),
-        );
+        withAddressPoint(r, built.points, built.town).then(async (x) => [
+          await withParentPoint(x, built.town, built.city),
+        ]);
   // 市区町村を推定した組は、座標を引いてから点の細かい順に並べる。ほかの結果は頭の limit 件だけ座標を引く
   const ordered: MatchedResult[] = [];
   for (const g of groups) {
     if (ordered.length >= limit) break;
     if (g.length > 1 && g.some((x) => (x.candidates ?? 1) > 1))
-      ordered.push(...orderCandidates(await Promise.all(g.map(withPoint))));
-    else ordered.push(...(await Promise.all(g.slice(0, limit - ordered.length).map(withPoint))));
+      ordered.push(...orderCandidates((await Promise.all(g.map(withPoint))).flat()));
+    else
+      ordered.push(
+        ...(await Promise.all(g.slice(0, limit - ordered.length).map(withPoint))).flat(),
+      );
   }
   const found = ordered.slice(0, limit);
   const postalCode = async (r: MatchedResult) =>

@@ -3,8 +3,10 @@
 //   2. 住所の頭から最も長く一致した、点のある節点 (区域、区域＋番号) を採る。同じ長さなら点の優先順
 //      (point_priority の rank) の小さいもの
 //   3. 区域の名前のあとに索引に無い文字があれば、読み飛ばして番号を引く。番号は区域そのものと、
-//      地番を振る区域 (起番でない小字なら大字・丁目) で引く。頭の甲乙丙丁の付いた番号に点が無ければ、
-//      字を外した番号でも引く (出典によって甲乙丙丁を番号に書くものと書かないものがある)
+//      地番を振る区域 (起番でない小字なら大字・丁目) で引く。書かれたとおりの番号に点が無ければ、
+//      頭の甲乙丙丁を外した番号でも引く (出典によって甲乙丙丁を番号に書くものと書かないものがある)。
+//      外した字は照合できなかった部分に残す。住所の番号に甲乙丙丁が無く、甲乙丙丁を付けた番号にだけ
+//      点があれば、当たったものをすべて候補として返す
 //   4. 住所の頭から番号まで読めたら、途中から読む読み方は使わない
 import { norm } from "./norm";
 
@@ -43,11 +45,13 @@ export type Located = {
   number: NumberPoint | null;
   /** 住所の残りのうち、使わなかった後ろの部分 */
   rest: string;
+  /** 住所の書き方からは決められない、ほかの候補 (甲乙丙丁の違いだけの番号) */
+  others?: Located[];
 };
 
 const NUM = /^-?([甲乙丙丁]?[0-9]+[甲乙丙丁]?)(?:-([甲乙丙丁]?[0-9]+))?(?:-([0-9]+))?/;
 
-type Option = { score: readonly [number, number, number, number]; located: Located };
+type Option = { score: readonly [number, number, number, number, number]; located: Located };
 
 const better = (a: Option["score"], b: Option["score"]): boolean => {
   const i = a.findIndex((x, j) => x !== b[j]);
@@ -77,33 +81,52 @@ const options = (
     !direct && at >= 0 && (numbers(k).has || (numbering !== null && numbers(numbering).has));
   const m = direct ?? (skip ? NUM.exec(t.slice(at)) : null);
   const skipped = skip ? at : 0;
-  const hits: { cover: number; rank: number; located: Located }[] = [];
+  const hits: { cover: number; guessed: number; rank: number; located: Located }[] = [];
   if (m) {
     const parts = m.slice(1).filter((x): x is string => x !== undefined);
-    for (const kk of numbering === null ? [k] : [k, numbering]) {
-      const node = numbers(kk).points;
-      // 長い番号から引く。頭の甲乙丙丁の付いた番号に点が無ければ、字を外した番号でも引く
-      const found = [...Array(parts.length).keys()]
-        .map((j) => parts.slice(0, parts.length - j).join("-"))
-        .flatMap((key) => {
-          const bare = key.replace(/^[甲乙丙丁]/, "");
-          return (bare === key ? [key] : [key, bare]).map((n) => ({ key, n }));
-        })
-        .find(({ n }) => node.has(n));
-      if (found === undefined) continue;
-      const { key } = found;
-      const hit = node.get(found.n) as NumberPoint;
-      hits.push({
-        cover: k.length + key.length,
-        rank: hit.rank,
-        located: {
-          point: hit.point,
-          area: kk,
-          machiazaId: hit.machiazaId ?? areas.get(kk)?.machiazaId ?? null,
-          number: hit,
-          rest: t.slice(skipped + (m[0].startsWith("-") ? 1 : 0) + key.length),
-        },
-      });
+    const keys = [...Array(parts.length).keys()].map((j) =>
+      parts.slice(0, parts.length - j).join("-"),
+    );
+    // 番号を引く順: 書かれたとおりの番号、頭の甲乙丙丁を外した番号、(番号に甲乙丙丁が無ければ) 甲乙丙丁を付けた番号。
+    // それぞれ長い順に引き、区域そのものか地番を振る区域で当たった段で止める。甲乙丙丁を付けた番号は、
+    // 当たったものをすべて候補にする (住所からはどれか決められない)
+    const stages: { ns: (key: string) => string[]; drop: boolean; add: boolean }[] = [
+      { ns: (key) => [key], drop: false, add: false },
+      { ns: (key) => (/^[甲乙丙丁]/.test(key) ? [key.slice(1)] : []), drop: true, add: false },
+      {
+        ns: (key) => (/^[0-9]/.test(key) ? [..."甲乙丙丁"].map((c) => c + key) : []),
+        drop: false,
+        add: true,
+      },
+    ];
+    for (const stage of stages) {
+      for (const kk of numbering === null ? [k] : [k, numbering]) {
+        const node = numbers(kk).points;
+        const found = keys
+          .map((key) => ({ key, ns: stage.ns(key).filter((n) => node.has(n)) }))
+          .find((x) => x.ns.length > 0);
+        if (found === undefined) continue;
+        // 照合できた文字数は住所に書かれた番号の長さで数える。外した字は照合できなかった部分に残す
+        const dropped = stage.drop ? found.key[0] : "";
+        const all = found.ns
+          .map((n) => node.get(n) as NumberPoint)
+          .sort((a, b) => a.rank - b.rank)
+          .map((hit): Located => ({
+            point: hit.point,
+            area: kk,
+            machiazaId: hit.machiazaId ?? areas.get(kk)?.machiazaId ?? null,
+            number: hit,
+            rest: dropped + t.slice(skipped + (m[0].startsWith("-") ? 1 : 0) + found.key.length),
+          }));
+        const first = all[0] as Located;
+        hits.push({
+          cover: k.length + found.key.length - dropped.length,
+          guessed: stage.add ? 1 : 0,
+          rank: (first.number as NumberPoint).rank,
+          located: all.length > 1 ? { ...first, others: all.slice(1) } : first,
+        });
+      }
+      if (hits.length > 0) break;
     }
   }
   if (s === 0 || hits.length > 0) {
@@ -114,6 +137,7 @@ const options = (
       const a = areas.get(any) as Area;
       hits.push({
         cover: own === undefined ? 0 : any.length,
+        guessed: 0,
         rank: 9,
         located: {
           point: a.point as Point,
@@ -125,7 +149,10 @@ const options = (
       });
     }
   }
-  return hits.map((h) => ({ score: [h.cover, -h.rank, -skipped, -s], located: h.located }));
+  return hits.map((h) => ({
+    score: [h.cover, -h.guessed, -h.rank, -skipped, -s],
+    located: h.located,
+  }));
 };
 
 /**
