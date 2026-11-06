@@ -96,6 +96,29 @@ describe("locate", () => {
     const r = at("本町甲10");
     expect(r?.point).toEqual([141.5, 41.5]);
     expect(r?.number?.parts).toEqual(["10"]);
+    expect(r?.rest).toBe("-");
+  });
+  it("頭の甲乙丙丁の付いた番号に点があれば、字を外した番号より先に採る", () => {
+    const row = (num: string, lng: number) => ({
+      area_id: 2,
+      num,
+      point_type: "parcel",
+      source: "abr",
+      rank: 1,
+      machiaza_id: "0001000",
+      lng,
+      lat: 41,
+    });
+    const both = numbersOf({
+      rsdt: [],
+      parcel: [],
+      numbers: [row("10", 141.5), row("甲10", 141.7)],
+    });
+    const r = locate(norm("本町甲10"), index.areas, (k) =>
+      k === "本町" ? both : { has: false, points: new Map() },
+    );
+    expect(r?.point).toEqual([141.7, 41]);
+    expect(r?.number?.parts).toEqual(["甲10"]);
   });
   it("読み飛ばす区域の名前と地番を振る区域を、番号を読む候補にする", () => {
     expect(candidates(norm("本町字上野10"), index.areas)).toContain("本町");

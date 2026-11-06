@@ -85,7 +85,10 @@ const options = (
       // 長い番号から引く。頭の甲乙丙丁の付いた番号に点が無ければ、字を外した番号でも引く
       const found = [...Array(parts.length).keys()]
         .map((j) => parts.slice(0, parts.length - j).join("-"))
-        .flatMap((key) => [key, key.replace(/^[甲乙丙丁]/, "")].map((n) => ({ key, n })))
+        .flatMap((key) => {
+          const bare = key.replace(/^[甲乙丙丁]/, "");
+          return (bare === key ? [key] : [key, bare]).map((n) => ({ key, n }));
+        })
         .find(({ n }) => node.has(n));
       if (found === undefined) continue;
       const { key } = found;
