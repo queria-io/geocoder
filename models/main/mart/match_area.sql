@@ -45,6 +45,12 @@ isj AS (
     SELECT DISTINCT lg_code, oaza_chome_name || coalesce(koaza_name, '') AS name
     FROM nlftp.isj.block_history
     WHERE lg_code IS NOT NULL
+),
+-- 別名 (area_alias) は、指す区域と同じ町字・点を持ち、番号は指す区域の名前で引く
+alias AS (
+    SELECT a.lg_code, t.machiaza_id, a.alias AS name, t.name AS numbering_name, t.own_point, t.lng, t.lat
+    FROM {{ ref('area_alias') }} a
+    JOIN abr t ON t.lg_code = a.lg_code AND t.name = a.name
 )
 -- area_id は区域の名前ごとの番号。match_number はこの番号で区域を指す (名前の文字列より並べ替えが軽い)
 SELECT dense_rank() OVER (ORDER BY lg_code, name) AS area_id, * FROM (
@@ -56,5 +62,7 @@ SELECT dense_rank() OVER (ORDER BY lg_code, name) AS area_id, * FROM (
     FROM isj i
     ANTI JOIN abr a USING (lg_code, name)
     ANTI JOIN parent p USING (lg_code, name)
+    UNION ALL
+    SELECT * FROM alias
 )
 ORDER BY lg_code, name, machiaza_id
