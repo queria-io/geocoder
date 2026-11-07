@@ -185,6 +185,8 @@ describe("locate", () => {
     expect(marked("本町コーポ10")?.number).toBeNull();
     expect(marked("本町ABC10")?.number).toBeNull();
     expect(marked("本町字中10")?.number?.parts).toEqual(["10"]);
+    expect(marked("本町ソデ山10")?.number?.parts).toEqual(["10"]);
+    expect(marked("本町ハケノ山10")?.number?.parts).toEqual(["10"]);
   });
   it("「町目」も丁目と同じに扱う", () => expect(norm("松戸三町目1791", true)).toBe("松戸3=1791"));
   it("番号まで最も長く当たる点", () => {
