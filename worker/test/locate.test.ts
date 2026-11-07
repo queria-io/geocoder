@@ -154,6 +154,12 @@ describe("locate", () => {
   it("頭から区域が読めなければ、途中から読む", () => {
     expect(at("上る本町10")?.point).toEqual([141.5, 41.5]);
   });
+  it("読み飛ばす文字が建物名なら、後ろの番号を読まない", () => {
+    expect(marked("本町グランドハイツ10")?.number).toBeNull();
+    expect(marked("本町コーポ10")?.number).toBeNull();
+    expect(marked("本町ABC10")?.number).toBeNull();
+    expect(marked("本町字中10")?.number?.parts).toEqual(["10"]);
+  });
   it("「町目」も丁目と同じに扱う", () => expect(norm("松戸三町目1791", true)).toBe("松戸3=1791"));
   it("番号まで最も長く当たる点", () => {
     expect(at("本町一丁目2番3号")?.point).toEqual([140.1, 40.1]);
