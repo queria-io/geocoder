@@ -33,7 +33,6 @@ import {
   orderCandidates,
   TOWN_NAME_COLUMNS,
   type TownNameRow,
-  withLeadingNoise,
   withoutCity,
 } from "./no_city";
 import { POINT_COLUMNS, type PointRow, withAddressPoint } from "./point";
@@ -272,13 +271,7 @@ export const geocode = async (
   // 上流の結果ごとに、市区町村を補った候補の組を作る
   const groups = await Promise.all(
     upstream.map(async (r) => {
-      const n = await withFormerCity(
-        await withLeadingNoise(r, address, match),
-        address,
-        built.formers,
-        built.city,
-        match,
-      );
+      const n = await withFormerCity(r, address, built.formers, built.city, match);
       // 市区町村まで決まった地域の外の結果は、この後の段で地域の中に移らない
       if (Detail(n.match_level) >= Detail("city") && !inArea(n.ids.lg_code)) return [];
       // 候補は座標を引いてから並べ直すので、limit ではなく上限まで残す

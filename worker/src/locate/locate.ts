@@ -7,8 +7,9 @@
 //      頭の甲乙丙丁を外した番号でも引く (出典によって甲乙丙丁を番号に書くものと書かないものがある)。
 //      外した字は照合できなかった部分に残す。住所の番号に甲乙丙丁が無く、甲乙丙丁を付けた番号にだけ
 //      点があれば、当たったものをすべて候補として返す。「丁目」と書かれた数字は地番として読まない
-//      (区域に無い丁目は、読み飛ばす文字として扱う)
-//   4. 住所の頭から番号まで読めたら、途中から読む読み方は使わない
+//      (区域に無い丁目は、読み飛ばす文字として扱う)。読み飛ばす文字が建物名なら番号を読まない
+//   4. 住所の頭から番号まで読めたら、途中から読む読み方は使わない。途中から読むときも、頭から読んだ区域の
+//      名前の途中から始まる区域 (「東本町5」の「本町」) は読まない (名前の後半が重なる別の区域の番号を採らない)
 import { CHOME, norm } from "./norm";
 
 export type Point = readonly [number, number];
@@ -52,6 +53,12 @@ export type Located = {
 
 const NUM = /^-?([甲乙丙丁]?[0-9]+[甲乙丙丁]?)(?:-([甲乙丙丁]?[0-9]+))?(?:-([0-9]+))?/;
 
+/**
+ * 建物名とみる文字。英字か、2 字以上続く片仮名で後ろに漢字が続かないもの (「グランドハイツ」「コーポ」)。
+ * 片仮名の後ろに漢字が続く名前 (「ソデ山」) は小字なので建物名とみない。長音は正規化で「-」になっている
+ */
+const BUILDING = /[A-Za-z]|[ァ-ヺ](?:-?[ァ-ヺ])+(?![-]?[ァ-ヺ一-鿿々])/;
+
 type Option = { score: readonly [number, number, number, number, number]; located: Located };
 
 const better = (a: Option["score"], b: Option["score"]): boolean => {
@@ -81,8 +88,12 @@ const options = (
   const nums = [...marked.slice(e).matchAll(/[甲乙丙丁]?[0-9]+(=?)/g)];
   const direct = nums[0]?.[1] === "" ? NUM.exec(t) : null;
   const at = direct ? -1 : (nums.find((x) => x[1] === "")?.index ?? -1);
+  // 読み飛ばす文字が建物名 (片仮名の続く名前や英字。「グランドハイツ」) なら、後ろの番号は部屋番号なので読まない
   const skip =
-    !direct && at >= 0 && (numbers(k).has || (numbering !== null && numbers(numbering).has));
+    !direct &&
+    at >= 0 &&
+    !BUILDING.test(t.slice(0, at)) &&
+    (numbers(k).has || (numbering !== null && numbers(numbering).has));
   const m = direct ?? (skip ? NUM.exec(t.slice(at)) : null);
   const skipped = skip ? at : 0;
   const hits: { cover: number; guessed: number; rank: number; located: Located }[] = [];
@@ -190,9 +201,14 @@ export const locate = (
 ): Located | null => {
   const { marked, plain: r } = prepared(rest);
   let best: Option | null = null;
+  // 住所の頭から読める区域の名前の長さ (最長)。途中から読むのは、この名前より後ろから始まる区域だけ
+  let head = 0;
+  for (let e = r.length; e > 0 && head === 0; e--) if (areas.has(r.slice(0, e))) head = e;
   for (let s = 0; s < r.length; s++) {
     // 住所の頭から番号まで読めたら、途中から読む読み方は使わない
     if (s === 1 && best?.located.number) break;
+    // 頭から読んだ区域の名前の途中から始まる区域 (「東本町」の「本町」) は読まない
+    if (s > 0 && s < head) continue;
     for (let e = r.length; e > s; e--) {
       if (!areas.has(r.slice(s, e))) continue;
       for (const o of options(r, marked, s, e, areas, numbers))
