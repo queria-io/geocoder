@@ -29,6 +29,22 @@ describe("fromVersion", () => {
     expect(r.tables.town).toEqual([]);
   });
 
+  it("files.json にファイルの大きさとフッターの長さがあれば、キーごとに持つ", () => {
+    const sized = {
+      tables: {
+        "main.parcel": {
+          files: [
+            { path: "main/p1.parquet", bytes: 1000, footer_bytes: 100 },
+            { path: "main/p2.parquet" },
+          ],
+        },
+      },
+    };
+    expect(fromVersion("root/", "d/", record, sized).sizes).toEqual({
+      "root/d/main/p1.parquet": { bytes: 1000, footer: 100 },
+    });
+  });
+
   it("削除ファイルや列の改名がある表は読まない", () => {
     const deletes = {
       tables: { "main.parcel": { files: [{ path: "p", deletes: { path: "d" } }] } },

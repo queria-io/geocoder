@@ -150,13 +150,22 @@ export const openTable = async (file: AsyncBuffer, keep?: Keep): Promise<Table> 
   metadata: compact(parquetMetadata(await readFooter(file)), keep),
 });
 
-/** R2 のファイルを開く */
+/**
+ * R2 のファイルを開く。ファイルの大きさとフッターの長さ (size) が分かっていれば、フッターを 1 回の読みで取る。
+ * 分からなければ、大きさを問い合わせ、末尾 8 バイトでフッターの長さを読んでから取る
+ */
 export const openR2Table = async (
   bucket: R2Bucket,
   key: string,
   onRead?: (bytes: number, ms: number) => void,
   keep?: Keep,
+  size?: { bytes: number; footer: number },
 ): Promise<Table> => {
+  if (size) {
+    const file = r2Buffer(bucket, key, size.bytes, onRead);
+    const footer = await file.slice(size.bytes - size.footer - 8, size.bytes);
+    return { file, metadata: compact(parquetMetadata(footer), keep) };
+  }
   const head = await retryOnce(() => bucket.head(key));
   if (!head) throw new Error(`not found: ${key}`);
   return openTable(r2Buffer(bucket, key, head.size, onRead), keep);

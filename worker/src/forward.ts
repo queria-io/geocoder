@@ -95,6 +95,9 @@ const KEEP: Record<KeyedTable, Keep & { sortKey: string; columns: string[] }> = 
   former_city: { sortKey: "name_key", columns: FORMER_CITY_COLUMNS },
 };
 
+/** 町字が決まった後に読む表 (都道府県ごとのファイル) */
+const AFTER_TOWN: readonly KeyedTable[] = ["match_area", "match_number", "rsdtdsp", "parcel"];
+
 /** 丸ごと読む表 (市区町村・都道府県) は全部の列を残す */
 const keepOf = (name: TableName): Keep | undefined =>
   name === "city" || name === "pref" ? undefined : KEEP[name];
@@ -119,13 +122,13 @@ type Built = {
 
 let cached: { key: string; built: Promise<Built> } | null = null;
 
-const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => {
+const build = async (bucket: R2Bucket, { tables, sizes }: Resolved): Promise<Built> => {
   // 分けていない表のファイルはどの都道府県からも開くので、ファイルごとに 1 回だけ開く
   const opened = new Map<string, Promise<Table>>();
   const openFile = (name: TableName, key: string) => {
     const hit = opened.get(key);
     if (hit) return hit;
-    const p = openR2Table(bucket, key, countRead, keepOf(name));
+    const p = openR2Table(bucket, key, countRead, keepOf(name), sizes[key]);
     opened.set(key, p);
     // 開けなかったファイルは覚えずに、次の問い合わせで開き直す
     p.catch(() => opened.delete(key));
@@ -212,6 +215,9 @@ const session = (built: Built): Session => {
     const missing = [...new Set(lgCodes)].filter((c) => !kept.has(c));
     stats.cities.push(...missing);
     for (const [prefCode, codes] of Map.groupBy(missing, prefOf)) {
+      // 町字から先で読む表のファイルも、この都道府県のものを今のうちに開いておく (フッターの読みを並べる)。
+      // 開けなくても、使うときに開き直す
+      for (const name of AFTER_TOWN) built.open(name, prefCode).catch(() => []);
       const read = townRows(prefCode, codes);
       for (const c of codes)
         kept.set(
