@@ -122,6 +122,38 @@ describe("locate", () => {
     );
     expect(r?.number?.parts).toEqual(["10"]);
   });
+  it("頭から読んだ区域に番号の点が無くても、途中から読んだ別の区域の番号を採らない", () => {
+    const both = cityIndex([
+      area(1, "東本町", "0002000", [140, 40]),
+      area(2, "本町", "0001000", [141, 41]),
+    ]);
+    const five = numbersOf({
+      rsdt: [],
+      parcel: [],
+      numbers: [
+        {
+          area_id: 2,
+          num: "5",
+          point_type: "parcel",
+          source: "abr",
+          rank: 1,
+          machiaza_id: "0001000",
+          lng: 141.5,
+          lat: 41.5,
+        },
+      ],
+    });
+    for (const a of ["東本町5", "東本町5番地", "東本町字中5"]) {
+      const r = locate(norm(a, true), both.areas, (k) =>
+        k === "本町" ? five : { has: false, points: new Map() },
+      );
+      expect(r?.area).toBe("東本町");
+      expect(r?.point).toEqual([140, 40]);
+    }
+  });
+  it("頭から区域が読めなければ、途中から読む", () => {
+    expect(at("上る本町10")?.point).toEqual([141.5, 41.5]);
+  });
   it("「町目」も丁目と同じに扱う", () => expect(norm("松戸三町目1791", true)).toBe("松戸3=1791"));
   it("番号まで最も長く当たる点", () => {
     expect(at("本町一丁目2番3号")?.point).toEqual([140.1, 40.1]);
