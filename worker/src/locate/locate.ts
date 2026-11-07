@@ -8,8 +8,8 @@
 //      外した字は照合できなかった部分に残す。住所の番号に甲乙丙丁が無く、甲乙丙丁を付けた番号にだけ
 //      点があれば、当たったものをすべて候補として返す。「丁目」と書かれた数字は地番として読まない
 //      (区域に無い丁目は、読み飛ばす文字として扱う)。読み飛ばす文字が建物名なら番号を読まない
-//   4. 住所の頭から区域が 1 つでも読めたら、途中から読む読み方は使わない (頭から読んだ区域に番号の点が
-//      無くても、名前の後半が重なる別の区域 (「東本町」と「本町」) の番号を採らない)
+//   4. 住所の頭から番号まで読めたら、途中から読む読み方は使わない。途中から読むときも、頭から読んだ区域の
+//      名前の途中から始まる区域 (「東本町5」の「本町」) は読まない (名前の後半が重なる別の区域の番号を採らない)
 import { CHOME, norm } from "./norm";
 
 export type Point = readonly [number, number];
@@ -198,9 +198,14 @@ export const locate = (
 ): Located | null => {
   const { marked, plain: r } = prepared(rest);
   let best: Option | null = null;
+  // 住所の頭から読める区域の名前の長さ (最長)。途中から読むのは、この名前より後ろから始まる区域だけ
+  let head = 0;
+  for (let e = r.length; e > 0 && head === 0; e--) if (areas.has(r.slice(0, e))) head = e;
   for (let s = 0; s < r.length; s++) {
-    // 住所の頭から区域が 1 つでも読めたら、途中から読む読み方は使わない
-    if (s === 1 && best !== null) break;
+    // 住所の頭から番号まで読めたら、途中から読む読み方は使わない
+    if (s === 1 && best?.located.number) break;
+    // 頭から読んだ区域の名前の途中から始まる区域 (「東本町」の「本町」) は読まない
+    if (s > 0 && s < head) continue;
     for (let e = r.length; e > s; e--) {
       if (!areas.has(r.slice(s, e))) continue;
       for (const o of options(r, marked, s, e, areas, numbers))

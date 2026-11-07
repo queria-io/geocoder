@@ -151,6 +151,32 @@ describe("locate", () => {
       expect(r?.point).toEqual([140, 40]);
     }
   });
+  it("頭から読んだ区域の名前より後ろから始まる区域は、途中から読む", () => {
+    const kyoto = cityIndex([
+      area(1, "大黒町", "0003000", [140, 40]),
+      area(2, "塗師屋町", "0004000", [141, 41]),
+    ]);
+    const n585 = numbersOf({
+      rsdt: [],
+      parcel: [],
+      numbers: [
+        {
+          area_id: 2,
+          num: "585",
+          point_type: "parcel",
+          source: "abr",
+          rank: 1,
+          machiaza_id: "0004000",
+          lng: 141.5,
+          lat: 41.5,
+        },
+      ],
+    });
+    const r = locate(norm("大黒町通正面下ル塗師屋町585", true), kyoto.areas, (k) =>
+      k === "塗師屋町" ? n585 : { has: false, points: new Map() },
+    );
+    expect(r?.point).toEqual([141.5, 41.5]);
+  });
   it("頭から区域が読めなければ、途中から読む", () => {
     expect(at("上る本町10")?.point).toEqual([141.5, 41.5]);
   });
