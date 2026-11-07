@@ -10,6 +10,10 @@ describe("norm", () => {
     expect(norm("１ー２")).toBe("1-2");
   });
   it("漢数字の間の「の」は区切り", () => expect(norm("本町三の五")).toBe("本町3-5"));
+  it("住所では丁目に印を付けられる", () =>
+    expect(norm("松戸字三丁目１７９１番１", true)).toBe("松戸3=1791-1"));
+  it("住所に書かれた「=」は丁目の印にしない", () =>
+    expect(norm("本町１＝２", true)).toBe("本町1-2"));
   it("番号の部分をつなぐ", () => expect(numberKey(["12", null, "３"])).toBe("12-3"));
 });
 
@@ -78,9 +82,47 @@ describe("locate", () => {
       }),
     ],
   ]);
-  const at = (rest: string) =>
-    locate(norm(rest), index.areas, (k) => nums.get(k) ?? { has: false, points: new Map() });
+  const at = (rest: string, markChome = false) =>
+    locate(
+      norm(rest, markChome),
+      index.areas,
+      (k) => nums.get(k) ?? { has: false, points: new Map() },
+    );
+  const marked = (rest: string) => at(rest, true);
 
+  it("丁目に印を付けても、丁目の区域は同じに引く", () => {
+    expect(marked("本町一丁目2番3号")?.point).toEqual([140.1, 40.1]);
+  });
+  it("住所の末尾の丁目も地番として読まない", () => {
+    expect(marked("本町字十丁目")?.number).toBeNull();
+  });
+  it("区域に無い丁目は地番として読まず、読み飛ばして後ろの番号を引く", () => {
+    const r = marked("本町字三丁目10番");
+    expect(r?.point).toEqual([141.5, 41.5]);
+    expect(r?.number?.parts).toEqual(["10"]);
+  });
+  it("2 つ目より後ろの丁目と書かれた数字は番号に含めない", () => {
+    const row = (num: string, lng: number) => ({
+      area_id: 2,
+      num,
+      point_type: "parcel",
+      source: "abr",
+      rank: 1,
+      machiaza_id: "0001000",
+      lng,
+      lat: 41,
+    });
+    const both = numbersOf({
+      rsdt: [],
+      parcel: [],
+      numbers: [row("10", 141.5), row("10-3", 141.7)],
+    });
+    const r = locate(norm("本町10番3丁目", true), index.areas, (k) =>
+      k === "本町" ? both : { has: false, points: new Map() },
+    );
+    expect(r?.number?.parts).toEqual(["10"]);
+  });
+  it("「町目」も丁目と同じに扱う", () => expect(norm("松戸三町目1791", true)).toBe("松戸3=1791"));
   it("番号まで最も長く当たる点", () => {
     expect(at("本町一丁目2番3号")?.point).toEqual([140.1, 40.1]);
   });
@@ -168,6 +210,10 @@ describe("locate", () => {
   });
   it("読み飛ばす区域の名前と地番を振る区域を、番号を読む候補にする", () => {
     expect(candidates(norm("本町字上野10"), index.areas)).toContain("本町");
+  });
+  it("丁目と書かれた数字しか無ければ、番号を読む候補にしない", () => {
+    expect(candidates(norm("本町字三丁目", true), index.areas)).not.toContain("本町");
+    expect(candidates(norm("本町字三丁目10番", true), index.areas)).toContain("本町");
   });
 });
 
