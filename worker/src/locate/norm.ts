@@ -30,39 +30,42 @@ const kanjiNumber = (s: string): string => {
 };
 
 const KANJI_RUN = /[〇一二三四五六七八九十百千]+/g;
-const DASH = /[-‐‑–—―−ー－ｰ﹣]/g;
+// 「=」も区切りとして読む。「=」は丁目の印 (CHOME) に使うので、住所に書かれた「=」「＝」を印として読まない
+const DASH = /[-‐‑–—―−ー－ｰ﹣=]/g;
 const SEP_AFTER_DIGIT =
   /(?<=[0-9甲乙丙丁])(丁目|丁|番地の|番地|番の|番|号|の|地割|街区|区|字|町目)/g;
 const OPTIONAL = /(?<=[一-鿿々〆])[ノのケヶヵガがツッ之](?=[一-鿿々〆])/g;
 
 /**
- * 住所の「丁目」の印。照合の前に住所の残りだけ norm(…, true) で「丁目」をこの字にし、区域の名前は「-」として引く。
+ * 住所の「丁目」の印。照合の前に住所の残りだけ norm(…, true) で「丁目」「町目」をこの字にし、区域の名前は「-」として引く。
  * 番号を読むときに、丁目として書かれた数字を地番として読まないために使う
  */
 export const CHOME = "=";
+const CHOME_AFTER_DIGIT = /(?<=[0-9])(丁目|町目)/g;
+const AROUND_CHOME = /-*=-*/g;
 
-export const norm = (s: string | null | undefined, markChome = false): string =>
-  !s
-    ? ""
-    : s
-        .normalize("NFKC")
-        .replace(/\s+/g, "")
-        .replace(ITAI_CHARS, (c) => ITAI[c])
-        .replace(/[ヶヵ]/g, "ケ")
-        // 数字の間のカタカナの長音は「-」と読む (「1ー2」)
-        .replace(/(?<=[0-9〇一二三四五六七八九十])[ーｰ](?=[0-9〇一二三四五六七八九十])/g, "-")
-        // 漢数字の間の「の」「ノ」も区切り (「三の五」は 3-5)。省略できる字として落とすと 35 になる
-        .replace(/(?<=[〇一二三四五六七八九十百千])[のノ之](?=[〇一二三四五六七八九十百千])/g, "-")
-        .replace(OPTIONAL, "")
-        .replace(KANJI_RUN, kanjiNumber)
-        .replace(/大字|小字/g, "")
-        .replace(/(?<![0-9甲乙丙丁])字/g, "")
-        .replace(/第(?=[0-9])/g, "")
-        .replace(DASH, "-")
-        .replace(markChome ? /(?<=[0-9])丁目/g : /(?!)/g, CHOME)
-        .replace(SEP_AFTER_DIGIT, "-")
-        .replace(/-+/g, "-")
-        .replace(/-*=-*/g, CHOME);
+export const norm = (s: string | null | undefined, markChome = false): string => {
+  if (!s) return "";
+  const t = s
+    .normalize("NFKC")
+    .replace(/\s+/g, "")
+    .replace(ITAI_CHARS, (c) => ITAI[c])
+    .replace(/[ヶヵ]/g, "ケ")
+    // 数字の間のカタカナの長音は「-」と読む (「1ー2」)
+    .replace(/(?<=[0-9〇一二三四五六七八九十])[ーｰ](?=[0-9〇一二三四五六七八九十])/g, "-")
+    // 漢数字の間の「の」「ノ」も区切り (「三の五」は 3-5)。省略できる字として落とすと 35 になる
+    .replace(/(?<=[〇一二三四五六七八九十百千])[のノ之](?=[〇一二三四五六七八九十百千])/g, "-")
+    .replace(OPTIONAL, "")
+    .replace(KANJI_RUN, kanjiNumber)
+    .replace(/大字|小字/g, "")
+    .replace(/(?<![0-9甲乙丙丁])字/g, "")
+    .replace(/第(?=[0-9])/g, "")
+    .replace(DASH, "-");
+  return (markChome ? t.replace(CHOME_AFTER_DIGIT, CHOME) : t)
+    .replace(SEP_AFTER_DIGIT, "-")
+    .replace(/-+/g, "-")
+    .replace(AROUND_CHOME, CHOME);
+};
 
 /** 番号の部分 (「12」「3」「4」) を「12-3-4」の形に。空の部分は落とす */
 export const numberKey = (parts: readonly (string | null | undefined)[]): string =>

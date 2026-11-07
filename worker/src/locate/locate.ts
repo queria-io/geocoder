@@ -87,7 +87,14 @@ const options = (
   const skipped = skip ? at : 0;
   const hits: { cover: number; guessed: number; rank: number; located: Located }[] = [];
   if (m) {
-    const parts = m.slice(1).filter((x): x is string => x !== undefined);
+    // 2 つ目より後ろに丁目と書かれた数字があれば、その手前までを番号にする (「10-3丁目5」は 10)
+    const read = marked.slice(e + skipped, e + skipped + m[0].length + 1);
+    const chomeAt = read.indexOf(CHOME);
+    const head = chomeAt < 0 ? null : read.slice(0, chomeAt).replace(/^-/, "");
+    const parts = m
+      .slice(1)
+      .filter((x): x is string => x !== undefined)
+      .slice(0, head === null ? undefined : head.split("-").length - 1);
     const keys = [...Array(parts.length).keys()].map((j) =>
       parts.slice(0, parts.length - j).join("-"),
     );
@@ -160,6 +167,19 @@ const options = (
 };
 
 /**
+ * 照合に使う住所の残りの 2 つの形。marked は丁目の印を残したもの (番号を読むときに使う)、
+ * plain は印を「-」に戻したもの (区域の名前を引くときに使う)。2 つは同じ長さで、位置がそろう
+ */
+const prepared = (rest: string): { marked: string; plain: string } => {
+  // 末尾の丁目の印は残す (外すと「本町3丁目」の 3 を地番として読む)
+  const marked = rest.endsWith(CHOME) ? rest : rest.replace(/-+$/, "") + "-";
+  return { marked, plain: marked.replaceAll(CHOME, "-") };
+};
+
+/** 丁目の印が付いていない数字があるか (番号として読める数字があるか) */
+const UNMARKED_NUMBER = /[0-9]+(?!=|[0-9])/;
+
+/**
  * 住所の残り rest (市区町村名より後) から点を引く。numbers は区域の名前 (正規化したもの) の番号で、
  * 照合の前に読んでおく (candidates が引く区域の名前を返す)
  */
@@ -168,8 +188,7 @@ export const locate = (
   areas: ReadonlyMap<string, Area>,
   numbers: (k: string) => Numbers,
 ): Located | null => {
-  const marked = rest.replace(/[-=]+$/, "") + "-";
-  const r = marked.replaceAll(CHOME, "-");
+  const { marked, plain: r } = prepared(rest);
   let best: Option | null = null;
   for (let s = 0; s < r.length; s++) {
     // 住所の頭から番号まで読めたら、途中から読む読み方は使わない
@@ -185,14 +204,14 @@ export const locate = (
 
 /** 照合で番号を引くかもしれない区域の名前。照合の前に、この区域の番号を読んでおく */
 export const candidates = (rest: string, areas: ReadonlyMap<string, Area>): string[] => {
-  const r = rest.replaceAll(CHOME, "-").replace(/-+$/, "") + "-";
+  const { marked, plain: r } = prepared(rest);
   const keys = new Set<string>();
   for (let s = 0; s < r.length; s++)
     for (let e = r.length; e > s; e--) {
       const k = r.slice(s, e);
       const a = areas.get(k);
-      // 後ろに数字が無ければ番号を引かない (options は数字の無い残りで番号を見ない)
-      if (!a || !/[0-9]/.test(r.slice(e))) continue;
+      // 後ろに丁目の印の無い数字が無ければ番号を引かない (options は丁目と書かれた数字を番号として読まない)
+      if (!a || !UNMARKED_NUMBER.test(marked.slice(e))) continue;
       keys.add(k);
       if (a.numbering !== null) keys.add(a.numbering);
     }
