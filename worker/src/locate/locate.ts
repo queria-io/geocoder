@@ -1,14 +1,15 @@
 // 住所の残り (市区町村名より後) から点を引く。規則は次の 4 つだけ:
 //   1. 区域の名前 (match_area) は出典の名前のまま、住所と同じ正規化 (norm) で引く
-//   2. 住所の頭から最も長く一致した、点のある節点 (区域、区域＋番号) を採る。同じ長さなら点の優先順
-//      (point_priority の rank) の小さいもの
+//   2. 住所の頭から最も長く一致した、点のある節点 (区域、区域＋番号) を採る。同じ長さなら読み飛ばした文字の
+//      少ないもの、次に点の優先順 (point_priority の rank) の小さいもの
 //   3. 区域の名前のあとに索引に無い文字があれば、読み飛ばして番号を引く。番号は区域そのものと、
 //      地番を振る区域 (起番でない小字なら大字・丁目) で引く。書かれたとおりの番号に点が無ければ、
 //      頭の甲乙丙丁を外した番号でも引く (出典によって甲乙丙丁を番号に書くものと書かないものがある)。
 //      外した字は照合できなかった部分に残す。住所の番号に甲乙丙丁が無く、甲乙丙丁を付けた番号にだけ
-//      点があれば、当たったものをすべて候補として返す
+//      点があれば、当たったものをすべて候補として返す。「丁目」と書かれた数字は地番として読まない
+//      (区域に無い丁目は、読み飛ばす文字として扱う)
 //   4. 住所の頭から番号まで読めたら、途中から読む読み方は使わない
-import { norm } from "./norm";
+import { CHOME, norm } from "./norm";
 
 export type Point = readonly [number, number];
 
@@ -66,6 +67,7 @@ const parentAreas = (k: string, areas: ReadonlyMap<string, Area>): string[] =>
 
 const options = (
   rest: string,
+  marked: string,
   s: number,
   e: number,
   areas: ReadonlyMap<string, Area>,
@@ -75,8 +77,10 @@ const options = (
   const area = areas.get(k) as Area;
   const t = rest.slice(e);
   const numbering = area.numbering;
-  const direct = NUM.exec(t);
-  const at = direct ? -1 : t.search(/[甲乙丙丁]?[0-9]/);
+  // 「丁目」と書かれた数字は地番として読まない (区域に無い丁目なら、読み飛ばして後ろの番号を引く)
+  const nums = [...marked.slice(e).matchAll(/[甲乙丙丁]?[0-9]+(=?)/g)];
+  const direct = nums[0]?.[1] === "" ? NUM.exec(t) : null;
+  const at = direct ? -1 : (nums.find((x) => x[1] === "")?.index ?? -1);
   const skip =
     !direct && at >= 0 && (numbers(k).has || (numbering !== null && numbers(numbering).has));
   const m = direct ?? (skip ? NUM.exec(t.slice(at)) : null);
@@ -150,7 +154,7 @@ const options = (
     }
   }
   return hits.map((h) => ({
-    score: [h.cover, -h.guessed, -h.rank, -skipped, -s],
+    score: [h.cover, -h.guessed, -skipped, -h.rank, -s],
     located: h.located,
   }));
 };
@@ -164,14 +168,15 @@ export const locate = (
   areas: ReadonlyMap<string, Area>,
   numbers: (k: string) => Numbers,
 ): Located | null => {
-  const r = rest.replace(/-+$/, "") + "-";
+  const marked = rest.replace(/[-=]+$/, "") + "-";
+  const r = marked.replaceAll(CHOME, "-");
   let best: Option | null = null;
   for (let s = 0; s < r.length; s++) {
     // 住所の頭から番号まで読めたら、途中から読む読み方は使わない
     if (s === 1 && best?.located.number) break;
     for (let e = r.length; e > s; e--) {
       if (!areas.has(r.slice(s, e))) continue;
-      for (const o of options(r, s, e, areas, numbers))
+      for (const o of options(r, marked, s, e, areas, numbers))
         if (best === null || better(o.score, best.score)) best = o;
     }
   }
@@ -180,7 +185,7 @@ export const locate = (
 
 /** 照合で番号を引くかもしれない区域の名前。照合の前に、この区域の番号を読んでおく */
 export const candidates = (rest: string, areas: ReadonlyMap<string, Area>): string[] => {
-  const r = rest.replace(/-+$/, "") + "-";
+  const r = rest.replaceAll(CHOME, "-").replace(/-+$/, "") + "-";
   const keys = new Set<string>();
   for (let s = 0; s < r.length; s++)
     for (let e = r.length; e > s; e--) {
@@ -199,7 +204,7 @@ export const remainder = (
   address: string,
   city: { pref: string; county: string | null; city: string; ward: string | null },
 ): string => {
-  const a = norm(address);
+  const a = norm(address, true);
   const names = [norm(city.city + (city.ward ?? "")), norm(city.ward), norm(city.city)];
   const hit = names.find((n) => n !== "" && a.includes(n));
   if (hit !== undefined) return a.slice(a.indexOf(hit) + hit.length);

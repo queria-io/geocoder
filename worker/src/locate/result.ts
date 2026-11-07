@@ -10,6 +10,7 @@ import {
 import type { BasicResult, CityResult } from "../repository/types";
 import { cityIndex, type CityIndex, type MatchAreaRow, numbersOf } from "./index";
 import { candidates, EMPTY_NUMBERS, locate, type Located, type Numbers, remainder } from "./locate";
+import { CHOME } from "./norm";
 import type { ParcelRow } from "../repository/parcel";
 import type { RsdtdspRow } from "../repository/rsdtdsp";
 import type { MatchNumberRow } from "./index";
@@ -179,9 +180,11 @@ export const withLocated = async (
     ),
   );
   const found = locate(rest, index.areas, (k) => loaded.get(k) ?? EMPTY_NUMBERS);
-  if (found === null) return [atCity(r, city, rest.replace(/^-+|-+$/g, ""))];
+  // 照合できなかった部分には丁目の印を残さない
+  const plain = rest.replaceAll(CHOME, "-");
+  if (found === null) return [atCity(r, city, plain.replace(/^-+|-+$/g, ""))];
   const all = [found, ...(found.others ?? [])];
-  const results = await Promise.all(all.map((f) => toResult(r, f, deps, lgCode, rest)));
+  const results = await Promise.all(all.map((f) => toResult(r, f, deps, lgCode, plain)));
   return all.length > 1
     ? results.map((x) => ({ ...x, candidates: (r.candidates ?? 1) * all.length }))
     : results;

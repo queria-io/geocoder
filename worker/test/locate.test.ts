@@ -10,6 +10,8 @@ describe("norm", () => {
     expect(norm("１ー２")).toBe("1-2");
   });
   it("漢数字の間の「の」は区切り", () => expect(norm("本町三の五")).toBe("本町3-5"));
+  it("住所では丁目に印を付けられる", () =>
+    expect(norm("松戸字三丁目１７９１番１", true)).toBe("松戸3=1791-1"));
   it("番号の部分をつなぐ", () => expect(numberKey(["12", null, "３"])).toBe("12-3"));
 });
 
@@ -81,6 +83,17 @@ describe("locate", () => {
   const at = (rest: string) =>
     locate(norm(rest), index.areas, (k) => nums.get(k) ?? { has: false, points: new Map() });
 
+  const marked = (rest: string) =>
+    locate(norm(rest, true), index.areas, (k) => nums.get(k) ?? { has: false, points: new Map() });
+
+  it("丁目に印を付けても、丁目の区域は同じに引く", () => {
+    expect(marked("本町一丁目2番3号")?.point).toEqual([140.1, 40.1]);
+  });
+  it("区域に無い丁目は地番として読まず、読み飛ばして後ろの番号を引く", () => {
+    const r = marked("本町字三丁目10番");
+    expect(r?.point).toEqual([141.5, 41.5]);
+    expect(r?.number?.parts).toEqual(["10"]);
+  });
   it("番号まで最も長く当たる点", () => {
     expect(at("本町一丁目2番3号")?.point).toEqual([140.1, 40.1]);
   });

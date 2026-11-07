@@ -35,7 +35,13 @@ const SEP_AFTER_DIGIT =
   /(?<=[0-9甲乙丙丁])(丁目|丁|番地の|番地|番の|番|号|の|地割|街区|区|字|町目)/g;
 const OPTIONAL = /(?<=[一-鿿々〆])[ノのケヶヵガがツッ之](?=[一-鿿々〆])/g;
 
-export const norm = (s: string | null | undefined): string =>
+/**
+ * 住所の「丁目」の印。照合の前に住所の残りだけ norm(…, true) で「丁目」をこの字にし、区域の名前は「-」として引く。
+ * 番号を読むときに、丁目として書かれた数字を地番として読まないために使う
+ */
+export const CHOME = "=";
+
+export const norm = (s: string | null | undefined, markChome = false): string =>
   !s
     ? ""
     : s
@@ -53,8 +59,10 @@ export const norm = (s: string | null | undefined): string =>
         .replace(/(?<![0-9甲乙丙丁])字/g, "")
         .replace(/第(?=[0-9])/g, "")
         .replace(DASH, "-")
+        .replace(markChome ? /(?<=[0-9])丁目/g : /(?!)/g, CHOME)
         .replace(SEP_AFTER_DIGIT, "-")
-        .replace(/-+/g, "-");
+        .replace(/-+/g, "-")
+        .replace(/-*=-*/g, CHOME);
 
 /** 番号の部分 (「12」「3」「4」) を「12-3-4」の形に。空の部分は落とす */
 export const numberKey = (parts: readonly (string | null | undefined)[]): string =>
