@@ -247,21 +247,3 @@ export const withoutCity = async (
   const count = found.length + Math.max(0, candidates.length - MAX_LIMIT);
   return count > 1 ? found.map((x) => ({ ...x, candidates: count })) : found;
 };
-
-// 都道府県名の前に付いた 1〜2 文字 (「ｼ静岡県浜松市…」)。入力の誤りとみて外す
-const LEADING_NOISE =
-  /^[\p{Script=Katakana}\p{Script=Hiragana}\p{ASCII}ー]{1,2}(?=東京都|北海道|京都府|大阪府|\p{Script=Han}{2,3}県)/u;
-
-/** 何も当たらず、都道府県名の前に余計な文字があれば、それを外して当て直す */
-export const withLeadingNoise = async (
-  r: MatchedResult,
-  input: string,
-  match: (address: string) => Promise<MatchedResult[]>,
-): Promise<MatchedResult> => {
-  if (Detail(r.match_level) >= Detail("city")) return r;
-  const all = townNameOf(input);
-  const noise = LEADING_NOISE.exec(all);
-  if (noise === null) return r;
-  const best = strongestResult(await match(all.slice(noise[0].length)));
-  return best !== undefined && compareResultStrength(best, r) < 0 ? best : r;
-};

@@ -6,7 +6,6 @@ import {
   numeralsOf,
   orderCandidates,
   townNameOf,
-  withLeadingNoise,
   withoutCity,
   type TownNameRow,
 } from "../src/no_city";
@@ -361,16 +360,6 @@ describe("withoutCity の区と余計な文字", () => {
     );
     expect(asked).toEqual(["北海道札幌市西区西野6条"]);
     expect(r.ids.lg_code).toBe("011061");
-  });
-
-  it("都道府県名の前の余計な文字を外して当て直す", async () => {
-    const asked: string[] = [];
-    const r = await withLeadingNoise(unmatched(), "ｼ静岡県浜松市中央区元城町103-2", async (a) => {
-      asked.push(a);
-      return [hit("221384", "parcel")];
-    });
-    expect(asked).toEqual(["静岡県浜松市中央区元城町103-2"]);
-    expect(r.ids.lg_code).toBe("221384");
   });
 });
 
