@@ -6,7 +6,8 @@ Queria Geocoder の改修で守る 5 つの観点と、それぞれの検証方�
 
 住所を正しい町字に照合し、真の位置にできるだけ近い代表点を返す。
 
-- 照合規則は [abr-geocoder](https://github.com/digital-go-jp/abr-geocoder)（デジタル庁）の移植を維持する（[`worker/upstream/`](worker/upstream/README.md)）。規則を上流と揃えることで、上流のテストと issue をそのまま取り込め、照合結果の根拠を上流の規則で説明できる。上流にない再照合が必要な場合は、上流の規則を書き換えず、照合に失敗したときだけ実行する段として追加する（`oaza_chome.ts`・`skip_aza.ts`・`renamed_ward.ts`・`no_city.ts` と同じ構成）
+- 市区町村までの照合は [abr-geocoder](https://github.com/digital-go-jp/abr-geocoder)（デジタル庁）の移植を維持する（[`worker/upstream/`](worker/upstream/README.md)）。規則を上流と揃えることで、上流のテストと issue をそのまま取り込め、照合結果の根拠を上流の規則で説明できる。上流にない再照合が必要な場合は、上流の規則を書き換えず、照合に失敗したときだけ実行する段として追加する（`renamed_ward.ts`・`no_city.ts` と同じ構成）
+- 市区町村より後（町字・番号・座標）は、照合の索引（`match_area`・`match_number`）を [`worker/src/locate/`](worker/src/locate/locate.ts) の規則で引く。規則の一覧は [BENCHMARK.md](BENCHMARK.md#queria-geocoder-の照合の規則) にある。規則を追加するときは、この一覧に 1 文で追加できるものに限る
 - 代表点が不足している箇所は、照合規則より先にオープンデータの点の追加で補う
 - 検証方法: Worker またはデータのモデルを変更する PR は、精度チェック（[`accuracy.yml`](.github/workflows/accuracy.yml)）を通す。変更したモデルとその下流の表だけを再構築し、PR の Worker でベンチマークの住所を照合して本番の結果と比較する
 
@@ -53,7 +54,7 @@ Workers の 1 リクエストのメモリ上限は 128MB である。辞書全�
 
 ## 今後の改善点
 
-- 照合の取りこぼし: 大字＋番地で書かれた地番（大子町頃藤5094番地）、大字の下の丁目（幸手市平須賀2-224）、区の再編（浜松市浜北区→浜名区）で、番地まで照合できていない。原因を特定して再照合の段を追加する（[BENCHMARK.md](BENCHMARK.md)）
+- 照合の取りこぼし: 地番・街区レベル以上の割合が低い書き方の型（大字のすぐ後ろに小字の番号を書いた住所、全角の数字、甲乙丙丁の付いた番号）の原因を調べる（[BENCHMARK.md](BENCHMARK.md#今後の改善点)）
 - ベンチマークに 1 件あたりの R2 の読み込み回数・量と CPU 時間を追加し、処理速度とメモリ使用量も毎週計測する
 - 代表点のない町字（市区町村の代表点を返している住所）: japan_address_code の町字の形状から代表点を補う
 - 郵便番号: japan_address_code の対応表で町域名の前方一致（prefix）のものは正解率が 86% のため使っていない。町字に複数の郵便番号がある場合（約 1 万 3 千町字）は、番地の範囲で選べるようにする
