@@ -115,7 +115,13 @@ test("上流の matching/issues", async () => {
   // REPO=lazy で、Worker と同じく市区町村ごとに読む形を流す
   const repo =
     process.env.REPO === "lazy"
-      ? lazyRepository(async (lg) => byCity.get(lg) ?? [], cities, prefs, loadMachiaza, loadParcels)
+      ? lazyRepository(
+          async (lgs) => lgs.flatMap((lg) => byCity.get(lg) ?? []),
+          cities,
+          prefs,
+          loadMachiaza,
+          loadParcels,
+        )
       : {
           ...memoryRepository(towns, cities, prefs),
           FindResidentialBestMatch: async (

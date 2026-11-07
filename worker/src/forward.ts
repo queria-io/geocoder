@@ -8,9 +8,9 @@ import {
   compressors,
   type Keep,
   openR2Table,
-  readCity,
   readWhere,
   type Table,
+  valueOf,
 } from "./data/parquet";
 import { Match } from "./matching/match_core";
 import { NewMatcher, type Impl } from "./matching/matcher";
@@ -81,8 +81,11 @@ const countRead = (bytes: number, ms: number) => {
 };
 const countRows = (n: number) => (stats.rows += n);
 
+/** 行を絞って読む表 (市区町村と都道府県の表は丸ごと読む) */
+type KeyedTable = Exclude<TableName, "city" | "pref">;
+
 /** 表ごとの、行グループを絞る列と読む列 */
-const KEEP: Partial<Record<TableName, Keep & { sortKey: string; columns: string[] }>> = {
+const KEEP: Record<KeyedTable, Keep & { sortKey: string; columns: string[] }> = {
   town: { sortKey: "lg_code", columns: TOWN_COLUMNS },
   match_area: { sortKey: "lg_code", columns: MATCH_AREA_COLUMNS },
   match_number: { sortKey: "area_id", columns: MATCH_NUMBER_COLUMNS },
@@ -91,6 +94,10 @@ const KEEP: Partial<Record<TableName, Keep & { sortKey: string; columns: string[
   town_name: { sortKey: "name_key", columns: TOWN_NAME_COLUMNS },
   former_city: { sortKey: "name_key", columns: FORMER_CITY_COLUMNS },
 };
+
+/** 丸ごと読む表 (市区町村・都道府県) は全部の列を残す */
+const keepOf = (name: TableName): Keep | undefined =>
+  name === "city" || name === "pref" ? undefined : KEEP[name];
 
 const readAll = async <T>(t: Table): Promise<T[]> =>
   (await parquetReadObjects({ file: t.file, metadata: t.metadata, compressors })) as T[];
@@ -106,6 +113,8 @@ type Built = {
   city: (lgCode: string) => CityResult | undefined;
   /** 表 name の、都道府県 prefCode の行が入るファイルを開く (一度開いたファイルは使い回す) */
   open: (name: TableName, prefCode: string) => Promise<Table[]>;
+  /** 照合の索引 (match_area・match_number) があるか。無い目録では町字から先を引き直さない */
+  hasIndex: boolean;
 };
 
 let cached: { key: string; built: Promise<Built> } | null = null;
@@ -116,7 +125,7 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
   const openFile = (name: TableName, key: string) => {
     const hit = opened.get(key);
     if (hit) return hit;
-    const p = openR2Table(bucket, key, countRead, KEEP[name]);
+    const p = openR2Table(bucket, key, countRead, keepOf(name));
     opened.set(key, p);
     // 開けなかったファイルは覚えずに、次の問い合わせで開き直す
     p.catch(() => opened.delete(key));
@@ -137,6 +146,7 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
     prefs,
     city: (lgCode) => cityByCode.get(lgCode),
     open,
+    hasIndex: tables.match_area.length > 0 && tables.match_number.length > 0,
   };
 };
 
@@ -158,26 +168,28 @@ const once = <K, V>(load: (k: K) => Promise<V>): ((k: K) => Promise<V>) => {
  */
 const rowsOf = <T extends Record<string, unknown>, V extends string | number>(
   built: Built,
-  name: TableName,
+  name: KeyedTable,
 ) => {
-  const { sortKey, columns } = KEEP[name] ?? { sortKey: "", columns: [] };
+  const { sortKey, columns } = KEEP[name];
   const kept = new Map<V, Promise<T[]>>();
   return async (prefCode: string, values: readonly V[]): Promise<T[]> => {
-    const missing = [...new Set(values)].filter((v) => !kept.has(v));
+    const unique = [...new Set(values)];
+    const missing = unique.filter((v) => !kept.has(v));
     if (missing.length > 0) {
+      // 読んだ行は値ごとに 1 回で分ける (値ごとに全部の行を見直さない)
       const read = built
         .open(name, prefCode)
         .then((ts) =>
           Promise.all(ts.map((t) => readWhere<T>(t, sortKey, missing, columns, countRows))),
         )
-        .then((parts) => parts.flat());
+        .then((parts) => Map.groupBy(parts.flat(), (r) => valueOf(r[sortKey])));
       for (const v of missing)
         kept.set(
           v,
-          read.then((rows) => rows.filter((r) => r[sortKey] === v || Number(r[sortKey]) === v)),
+          read.then((byValue) => byValue.get(v) ?? []),
         );
     }
-    return (await Promise.all(values.map((v) => kept.get(v) ?? []))).flat();
+    return (await Promise.all(unique.map((v) => kept.get(v) ?? []))).flat();
   };
 };
 
@@ -193,16 +205,26 @@ type Session = {
 };
 
 const session = (built: Built): Session => {
-  const towns = once(async (lgCode: string) => {
-    stats.cities.push(lgCode);
-    const ts = await built.open("town", prefOf(lgCode));
-    const keep = KEEP.town?.columns ?? [];
-    const parts = await Promise.all(ts.map((t) => readCity<TownRow>(t, lgCode, keep, countRows)));
-    return parts.flat().map(toBasic);
-  });
+  const townRows = rowsOf<TownRow, string>(built, "town");
+  /** 市区町村ごとの町字。まだ読んでいない市区町村は、都道府県ごとに 1 回の読みでまとめて読む */
+  const kept = new Map<string, Promise<BasicResult[]>>();
+  const townsOf = async (lgCodes: readonly string[]): Promise<BasicResult[]> => {
+    const missing = [...new Set(lgCodes)].filter((c) => !kept.has(c));
+    stats.cities.push(...missing);
+    for (const [prefCode, codes] of Map.groupBy(missing, prefOf)) {
+      const read = townRows(prefCode, codes);
+      for (const c of codes)
+        kept.set(
+          c,
+          read.then((rows) => rows.filter((r) => r.lg_code === c).map(toBasic)),
+        );
+    }
+    return (await Promise.all(lgCodes.map((c) => kept.get(c) ?? []))).flat();
+  };
+  const towns = (lgCode: string) => townsOf([lgCode]);
   const town = async (lgCode: string, machiazaId: string) =>
     (await towns(lgCode)).find((b) => b.machiazaId === machiazaId) ?? null;
-  const byMachiaza = <T extends Record<string, unknown>>(name: TableName) => {
+  const byMachiaza = <T extends Record<string, unknown>>(name: KeyedTable) => {
     const read = rowsOf<T, string>(built, name);
     return (lgCode: string, machiazaIds: readonly string[]) =>
       read(
@@ -213,15 +235,9 @@ const session = (built: Built): Session => {
   const rsdt = byMachiaza<RsdtdspRow>("rsdtdsp");
   const parcels = byMachiaza<ParcelRow>("parcel");
   const numbers = rowsOf<MatchNumberRow, number>(built, "match_number");
-  const areas = once(async (lgCode: string) => {
-    const ts = await built.open("match_area", prefOf(lgCode));
-    const keep = KEEP.match_area?.columns ?? [];
-    const parts = await Promise.all(
-      ts.map((t) => readCity<MatchAreaRow>(t, lgCode, keep, countRows)),
-    );
-    return cityIndex(parts.flat());
-  });
-  const byName = <T extends Record<string, unknown>>(name: TableName) => {
+  const areaRows = rowsOf<MatchAreaRow, string>(built, "match_area");
+  const areas = once(async (lgCode: string) => cityIndex(await areaRows(prefOf(lgCode), [lgCode])));
+  const byName = <T extends Record<string, unknown>>(name: KeyedTable) => {
     const read = rowsOf<T, string>(built, name);
     return (key: string) => read("", [key]);
   };
@@ -229,11 +245,10 @@ const session = (built: Built): Session => {
     <T>(read: (lgCode: string, ids: readonly string[]) => Promise<T[]>) =>
     (lgCode: string, machiazaId: string) =>
       read(lgCode, [machiazaId]);
-  const loadCity = (lgCode: string) => towns(lgCode);
   return {
     matcher: {
       ...built.base,
-      repo: lazyRepository(loadCity, built.cities, built.prefs, one(rsdt), one(parcels)),
+      repo: lazyRepository(townsOf, built.cities, built.prefs, one(rsdt), one(parcels)),
     },
     town,
     towns,
@@ -346,7 +361,10 @@ export const geocode = async (
   );
   // ログには住所を書かない。読んだ量と時間だけ (住所と結果は src/request_log.ts で別に記録する)
   console.log(JSON.stringify({ geocode: true, cold, ...stats }));
-  const withPoint = (r: MatchedResult) => withLocated(r, address, s.locate);
+  // 照合の索引の無い目録では、引き直すと町字の答えがすべて市区町村に落ちるので、上流の答えのまま返す
+  const withPoint = built.hasIndex
+    ? (r: MatchedResult) => withLocated(r, address, s.locate)
+    : async (r: MatchedResult) => [r];
   // 市区町村を推定した組は、座標を引いてから点の細かい順に並べる。ほかの結果は頭の limit 件だけ座標を引く
   const ordered: MatchedResult[] = [];
   for (const g of groups) {

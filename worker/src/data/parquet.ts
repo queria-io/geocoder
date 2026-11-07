@@ -162,8 +162,8 @@ export const openR2Table = async (
   return openTable(r2Buffer(bucket, key, head.size, onRead), keep);
 };
 
-/** 列の値を比べられる形にする。BIGINT の列 (area_id) は hyparquet が bigint で返すので数にする */
-const valueOf = (v: unknown): Value | null =>
+/** 列の値を比較できる形にする。BIGINT の列 (area_id) は hyparquet が bigint で返すので数にする */
+export const valueOf = (v: unknown): Value | null =>
   typeof v === "string" || typeof v === "number" ? v : typeof v === "bigint" ? Number(v) : null;
 
 /**

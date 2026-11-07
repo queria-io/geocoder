@@ -12,7 +12,8 @@ import type { BasicResult, Repository } from "./types";
 const maxFuzzyCities = 20;
 
 export const lazyRepository = (
-  loadCity: (lgCode: string) => Promise<BasicResult[]>,
+  /** 市区町村の町字をまとめて読む口。同じ行グループに入る市区町村は 1 回の読みで済む */
+  loadCities: (lgCodes: string[]) => Promise<BasicResult[]>,
   cities: CityRow[],
   prefs: PrefRow[],
   loadMachiaza: (lgCode: string, machiazaId: string) => Promise<RsdtdspRow[]> = async () => [],
@@ -45,9 +46,7 @@ export const lazyRepository = (
   );
   const over = async (lgCodes: string[]) =>
     memoryRepository(
-      (
-        await Promise.all([...new Set(lgCodes)].filter((c) => !designated.has(c)).map(loadCity))
-      ).flat(),
+      await loadCities([...new Set(lgCodes)].filter((c) => !designated.has(c))),
       cities,
       prefs,
     );
