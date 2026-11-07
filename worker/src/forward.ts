@@ -111,19 +111,19 @@ type Built = {
 let cached: { key: string; built: Promise<Built> } | null = null;
 
 const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => {
-  const opened = new Map<string, Promise<Table[]>>();
-  const open = (name: TableName, prefCode: string) => {
-    const id = `${name}/${prefCode}`;
-    const hit = opened.get(id);
+  // 分けていない表のファイルはどの都道府県からも開くので、ファイルごとに 1 回だけ開く
+  const opened = new Map<string, Promise<Table>>();
+  const openFile = (name: TableName, key: string) => {
+    const hit = opened.get(key);
     if (hit) return hit;
-    const p = Promise.all(
-      filesFor(tables[name], prefCode).map((k) => openR2Table(bucket, k, countRead, KEEP[name])),
-    );
-    opened.set(id, p);
+    const p = openR2Table(bucket, key, countRead, KEEP[name]);
+    opened.set(key, p);
     // 開けなかったファイルは覚えずに、次の問い合わせで開き直す
-    p.catch(() => opened.delete(id));
+    p.catch(() => opened.delete(key));
     return p;
   };
+  const open = (name: TableName, prefCode: string) =>
+    Promise.all(filesFor(tables[name], prefCode).map((k) => openFile(name, k)));
   const [city, pref] = await Promise.all([open("city", ""), open("pref", "")]);
   const cities = (await Promise.all(city.map((t) => readAll<CityTableRow>(t)))).flat().map(toCity);
   const prefs = (await Promise.all(pref.map((t) => readAll<PrefTableRow>(t)))).flat().map(toPref);
