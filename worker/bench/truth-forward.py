@@ -11,7 +11,8 @@
 # 1 つの住所が複数の型に当てはまるときは、少ない型 (PATTERNS の上のもの) に入れる。
 # 照合の規則を直すときに結果を見た住所 (bench/exclude.csv の source と id) は選ばない。見た住所に合わせた
 # 改善で、ベンチマークの値が実力より高く出ないようにするため。
-# 正解の座標が住所の場所でない住所 (bench/wrong-truth.csv、市区町村の役所の点が入っているものなど) も選ばない。
+# 正解の座標が住所の場所でない住所 (市区町村の役所の点が入っているものなど) と、住所に誤記のある住所
+# (bench/wrong-truth.csv) も選ばない。誤記に合わせた規則を足さないようにするため。
 # 型の判定に使う町字 (town) は、同じ市区町村の町字のうち、大字・町の名前が住所の中に現れるもの。
 # 使い方: uv run --with 'duckdb>=1.4,<2' python bench/truth-forward.py 20 > bench/golden/truth-forward.csv
 import os, sys, duckdb
