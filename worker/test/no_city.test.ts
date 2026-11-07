@@ -180,6 +180,32 @@ describe("withoutCity", () => {
     expect(found[0].candidates).toBe(20);
   });
 
+  it("京都の通り名から書いた住所は、通り名の後ろの町名を持つ京都市の区で当て直す", async () => {
+    const kamigyo: CityResult = {
+      lgCode: "261025",
+      pref: "京都府",
+      county: null,
+      city: "京都市",
+      ward: "上京区",
+      lon: null,
+      lat: null,
+      population: 83000,
+    };
+    const asked: string[] = [];
+    const [r] = await withoutCity(
+      unmatched(),
+      "大宮通今出川上る観世町117",
+      names([row("観世町", "261025"), row("観世町", "202011")]),
+      [...Object.values(cities), kamigyo],
+      async (a) => {
+        asked.push(a);
+        return a.startsWith("京都府") ? [hit("261025", "parcel")] : [];
+      },
+    );
+    expect(asked).toEqual(["京都府京都市上京区大宮通今出川上る観世町117"]);
+    expect(r.ids.lg_code).toBe("261025");
+  });
+
   it("町名を持つ市区町村が 1 つなら、市区町村名を補って当て直す", async () => {
     const asked: string[] = [];
     const [r] = await withoutCity(
