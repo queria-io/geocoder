@@ -12,7 +12,6 @@ export const TABLES = {
   pref: "main.pref",
   rsdtdsp: "main.rsdtdsp",
   parcel: "main.parcel",
-  point: "main.address_point",
   town_name: "town.town_name",
   former_city: "town.former_city",
   match_area: "town.match_area",
@@ -20,15 +19,44 @@ export const TABLES = {
 } as const;
 export type TableName = keyof typeof TABLES;
 
-/** 表ごとの R2 キー (読む順)。空の配列は「その段は流さない」 */
-export type Resolved = { version: string; tables: Record<TableName, string[]> };
+/**
+ * 表のファイルのうち、都道府県 prefCode (2 桁) の行が入るもの。都道府県ごとに分けた表はパスに
+ * 「pref_code=13/」を持つ。分けていない表 (パスに無い) のファイルは、どの都道府県でも全部を読む
+ */
+export const filesFor = (keys: readonly string[], prefCode: string): string[] =>
+  keys.filter((k) => {
+    const m = /(?:^|\/)pref_code=([^/]+)\//.exec(k);
+    return m === null || m[1] === prefCode;
+  });
+
+/** ファイルの大きさとフッター (メタデータ) の長さ。分かればフッターを 1 回の読みで取れる */
+export type FileSize = { bytes: number; footer: number };
+
+/**
+ * 表ごとの R2 キー (読む順)。空の配列は「その段は流さない」。
+ * sizes は FDL の files.json にあるファイルの大きさ (目録には無い)
+ */
+export type Resolved = {
+  version: string;
+  tables: Record<TableName, string[]>;
+  sizes: Record<string, FileSize>;
+};
 
 type Manifest = { version: string; tables: Partial<Record<TableName, string[]>> };
 /** FDL の versions/<ID>/files.json (カタログから作った表ごとのファイル一覧) */
 export type FileList = {
   tables: Record<
     string,
-    { renamed_columns?: boolean; files: { path?: string; url?: string; deletes?: unknown }[] }
+    {
+      renamed_columns?: boolean;
+      files: {
+        path?: string;
+        url?: string;
+        deletes?: unknown;
+        bytes?: number;
+        footer_bytes?: number;
+      }[];
+    }
   >;
 };
 type VersionRecord = { id: string; created_at: string };
@@ -50,6 +78,7 @@ const fill = (pick: (t: TableName) => string[]): Record<TableName, string[]> =>
 export const fromManifest = (key: string, m: Manifest): Resolved => ({
   version: m.version,
   tables: fill((t) => (m.tables[t] ?? []).map((p) => dirOf(key) + p)),
+  sizes: {},
 });
 
 export const fromVersion = (
@@ -71,6 +100,15 @@ export const fromVersion = (
       return root + dataDir + f.path;
     });
   }),
+  sizes: Object.fromEntries(
+    Object.values(list.tables).flatMap(({ files }) =>
+      files.flatMap((f) =>
+        f.path !== undefined && f.bytes !== undefined && f.footer_bytes !== undefined
+          ? [[root + dataDir + f.path, { bytes: f.bytes, footer: f.footer_bytes }]]
+          : [],
+      ),
+    ),
+  ),
 });
 
 const resolve = async (bucket: R2Bucket, source: string, pin: string): Promise<Resolved> => {

@@ -66,3 +66,5 @@ models:
         data_type: varchar
       - name: small_area_code
         data_type: varchar
+      - name: pref_code
+        data_type: varchar

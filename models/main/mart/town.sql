@@ -181,7 +181,8 @@ SELECT
     ST_X(t.point) AS lng,
     ST_Y(t.point) AS lat,
     t.point_level,
-    s.small_area_code
+    s.small_area_code,
+    left(t.lg_code, 2) AS pref_code
 FROM located t
 LEFT JOIN oaza_has_chome h ON h.lg_code = t.lg_code AND h.oaza_cho = t.oaza_cho
 LEFT JOIN rsdtdsp_count c ON c.lg_code = t.lg_code AND c.machiaza_id = t.machiaza_id

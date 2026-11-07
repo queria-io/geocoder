@@ -43,3 +43,6 @@ fields:
   - name: lat
     title: 緯度
     description: "代表点の緯度。代表点の無い行は NULL"
+  - name: pref_code
+    title: 都道府県コード
+    description: "lg_code の頭 2 桁。ファイルはこの値ごとに分かれる"

@@ -40,6 +40,7 @@ export const ABR_ATTRIBUTION =
   "「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成";
 export const FORMER_CITY_ATTRIBUTION =
   "『歴史的行政区域データセットβ版』（CODH作成） doi:10.20676/00000447 を加工して作成";
+export const ISJ_ATTRIBUTION = "「街区レベル位置参照情報」（国土交通省）を加工して作成";
 export const SMALL_AREA_ATTRIBUTION =
   "「国勢調査 境界データ（小地域）」（総務省統計局、e-Stat）を加工して作成";
 

@@ -93,3 +93,6 @@ fields:
     title: 小地域コード
     description: "代表点が入る国勢調査の小地域（KEY_CODE）"
     annotations: { queria: { semantic: { role: entity, name: small_area } } }
+  - name: pref_code
+    title: 都道府県コード
+    description: "lg_code の頭 2 桁。ファイルはこの値ごとに分かれる"

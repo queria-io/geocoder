@@ -8,7 +8,7 @@ import {
   type MatchedResult,
 } from "../model/model";
 import type { BasicResult, CityResult } from "../repository/types";
-import { cityIndex, type CityIndex, type MatchAreaRow, numbersOf } from "./index";
+import { type CityIndex, numbersOf } from "./index";
 import { candidates, EMPTY_NUMBERS, locate, type Located, type Numbers, remainder } from "./locate";
 import { CHOME } from "./norm";
 import type { ParcelRow } from "../repository/parcel";
@@ -16,10 +16,13 @@ import type { RsdtdspRow } from "../repository/rsdtdsp";
 import type { MatchNumberRow } from "./index";
 
 export type LocateDeps = {
-  areas: (lgCode: string) => Promise<MatchAreaRow[]>;
-  numbers: (areaId: number) => Promise<MatchNumberRow[]>;
-  rsdt: (lgCode: string, machiazaId: string) => Promise<RsdtdspRow[]>;
-  parcels: (lgCode: string, machiazaId: string) => Promise<ParcelRow[]>;
+  /** 市区町村 1 つ分の区域の索引 */
+  index: (lgCode: string) => Promise<CityIndex>;
+  /** 区域の番号ごとの点 (match_number)。渡した区域の行をまとめて読む */
+  numbers: (lgCode: string, areaIds: readonly number[]) => Promise<MatchNumberRow[]>;
+  /** 町字の住居表示・地番の行。渡した町字の行をまとめて読む */
+  rsdt: (lgCode: string, machiazaIds: readonly string[]) => Promise<RsdtdspRow[]>;
+  parcels: (lgCode: string, machiazaIds: readonly string[]) => Promise<ParcelRow[]>;
   town: (lgCode: string, machiazaId: string) => Promise<BasicResult | null>;
   city: (lgCode: string) => CityResult | undefined;
 };
@@ -35,43 +38,37 @@ const LEVEL: Record<number, CoordinateLevel> = {
   7: "parcel_parent",
 };
 
-// 表のバージョンが変わると forward.ts が deps を作り直す。area_id はビルドごとに振り直すので、
-// 市区町村の索引は deps ごとに覚える (isolate 全体で覚えると古い area_id で match_number を引く)
 /**
- * 問い合わせをまたいで覚える市区町村の数。市区町村の町字と索引は 1 つで数千行あり、
- * 覚えすぎると isolate のメモリの上限 (128 MB) を超える
+ * 区域の名前 keys の番号を読む (区域の行の番号ごとの match_number と、町字ごとの rsdtdsp・parcel)。
+ * 区域の名前が違っても町字の行は同じ行グループに入ることが多いので、全部の名前の分を 1 回で読んでから分ける
  */
-export const CITIES_KEPT = 16;
-
-const indexCache = new WeakMap<LocateDeps, Map<string, Promise<CityIndex>>>();
-
-const cityIndexOf = (deps: LocateDeps, lgCode: string): Promise<CityIndex> => {
-  const indexes = indexCache.get(deps) ?? new Map<string, Promise<CityIndex>>();
-  indexCache.set(deps, indexes);
-  const hit = indexes.get(lgCode);
-  if (hit) return hit;
-  const p = deps.areas(lgCode).then(cityIndex);
-  if (indexes.size >= CITIES_KEPT) indexes.delete(indexes.keys().next().value as string);
-  indexes.set(lgCode, p);
-  p.catch(() => indexes.delete(lgCode));
-  return p;
-};
-
-/** 区域の名前 k の番号を読む (区域の行の番号ごとの match_number と、町字ごとの rsdtdsp・parcel) */
 const loadNumbers = async (
   deps: LocateDeps,
   index: CityIndex,
   lgCode: string,
-  k: string,
-): Promise<Numbers> => {
-  const mids = index.machiazaIds.get(k) ?? [];
-  const ids = index.areaIds.get(k) ?? [];
+  keys: readonly string[],
+): Promise<Map<string, Numbers>> => {
+  const mids = keys.flatMap((k) => index.machiazaIds.get(k) ?? []);
+  const ids = keys.flatMap((k) => index.areaIds.get(k) ?? []);
   const [rsdt, parcel, numbers] = await Promise.all([
-    Promise.all(mids.map((m) => deps.rsdt(lgCode, m))).then((x) => x.flat()),
-    Promise.all(mids.map((m) => deps.parcels(lgCode, m))).then((x) => x.flat()),
-    Promise.all(ids.map((id) => deps.numbers(id))).then((x) => x.flat()),
+    deps.rsdt(lgCode, mids),
+    deps.parcels(lgCode, mids),
+    deps.numbers(lgCode, ids),
   ]);
-  return numbersOf({ rsdt, parcel, numbers });
+  return new Map(
+    keys.map((k) => {
+      const m = new Set(index.machiazaIds.get(k) ?? []);
+      const a = new Set(index.areaIds.get(k) ?? []);
+      return [
+        k,
+        numbersOf({
+          rsdt: rsdt.filter((r) => m.has(r.machiaza_id)),
+          parcel: parcel.filter((r) => m.has(r.machiaza_id)),
+          numbers: numbers.filter((r) => a.has(Number(r.area_id))),
+        }),
+      ];
+    }),
+  );
 };
 
 const toResult = async (
@@ -177,14 +174,10 @@ export const withLocated = async (
   if (!lgCode || Detail(r.match_level) < Detail("city")) return [r];
   const city = deps.city(lgCode);
   if (!city) return [r];
-  const index = await cityIndexOf(deps, lgCode);
+  const index = await deps.index(lgCode);
   const rest = remainder(address, city);
   const keys = candidates(rest, index.areas);
-  const loaded = new Map(
-    await Promise.all(
-      keys.map(async (k) => [k, await loadNumbers(deps, index, lgCode, k)] as const),
-    ),
-  );
+  const loaded = await loadNumbers(deps, index, lgCode, keys);
   const found = locate(rest, index.areas, (k) => loaded.get(k) ?? EMPTY_NUMBERS);
   // 照合できなかった部分には丁目の印を残さない
   const plain = rest.replaceAll(CHOME, "-");

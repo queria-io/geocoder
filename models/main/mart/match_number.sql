@@ -112,7 +112,8 @@ SELECT
     pr.rank,
     c.machiaza_id,
     c.lng,
-    c.lat
+    c.lat,
+    left(c.lg_code, 2) AS pref_code
 FROM candidate c
 JOIN (SELECT DISTINCT area_id, lg_code, name FROM {{ ref('match_area') }}) a
     ON a.lg_code = c.lg_code AND a.name = c.area_name
