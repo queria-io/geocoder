@@ -53,10 +53,10 @@ const [s0, s1] = [stats(base), stats(head)];
 const locatedInBase = moved.filter(({ b }) => b.error_m !== null);
 const [k0, k1] = [stats(locatedInBase.map(({ b }) => b)), stats(locatedInBase.map(({ h }) => h))];
 // 止める条件。数パーセントの揺れは R2 の読みの失敗などでも出るので、わずかな幅は見逃す
+// 地番・街区レベル以上の割合は点の細かさだけを数え、点の町字が正しいかを見ないので、止める条件にしない (表には載せる)
 const failures = [
   s1.answered < s0.answered - 0.1 && "回答率が下がった",
   s1.located < s0.located - 0.1 && "座標付与率が下がった",
-  s1.fine < s0.fine - 0.2 && "地番・街区レベル以上の割合が下がった",
   k1.median > k0.median + 2 && "本番で座標を返した住所の誤差の中央値が、2m を超えて悪くなった",
   k1.over1km > k0.over1km + 0.2 && "本番で座標を返した住所のうち、1km 超の割合が増えた",
   worse.length > better.length && `${FAR}m 以上遠ざかった住所が、近づいた住所より多い`,
