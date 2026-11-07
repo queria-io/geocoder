@@ -72,4 +72,12 @@ describe("readCity", () => {
     expect(await readCity<Town>(table, "472018", cols)).toEqual([]);
     expect(reads).toBe(before);
   });
+
+  it("同じ行グループを続けて引くときは読み直さない", async () => {
+    await readCity<Town>(table, "131016", cols);
+    const before = reads;
+    expect(await readCity<Town>(table, "131016", cols)).toHaveLength(3000);
+    expect(await readCity<Town>(table, "131032", cols)).toEqual([]);
+    expect(reads).toBe(before);
+  });
 });

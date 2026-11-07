@@ -129,26 +129,48 @@ export const openTable = async (file: AsyncBuffer): Promise<Table> => ({
   metadata: await parquetMetadataAsync(file),
 });
 
+/** 表ごとに覚えておく行グループの数 */
+const rowGroupsKept = 4;
+const decoded = new WeakMap<Table, Map<string, Promise<Record<string, unknown>[]>>>();
+
+/**
+ * 読んで展開した行グループを、表ごとに最近の rowGroupsKept 個だけ覚える。
+ * 1 つの行グループに町字がいくつも入るので、町字ごとに引くと同じ行グループを何度も読んで展開することになる
+ */
+const remember = (
+  table: Table,
+  id: string,
+  read: () => Promise<Record<string, unknown>[]>,
+): Promise<Record<string, unknown>[]> => {
+  const kept = decoded.get(table) ?? new Map<string, Promise<Record<string, unknown>[]>>();
+  decoded.set(table, kept);
+  const hit = kept.get(id);
+  if (hit) return hit;
+  const p = read();
+  if (kept.size >= rowGroupsKept) kept.delete(kept.keys().next().value as string);
+  kept.set(id, p);
+  p.catch(() => kept.delete(id));
+  return p;
+};
+
 /** 並べた列 key が value の行を読む。行グループごと読むので、ほかの値の行は読んだあとに落とす */
 export const readWhere = async <T>(
-  { file, metadata }: Table,
+  table: Table,
   key: string,
   value: string | number,
   columns: string[],
   onRows?: (rows: number) => void,
 ): Promise<T[]> => {
+  const { file, metadata } = table;
   const ranges = rowRangesFor(metadata, value, key);
   const names = new Set(metadata.schema.map((c) => c.name));
   onRows?.(ranges.reduce((n, r) => n + r.rowEnd - r.rowStart, 0));
+  // 表に無い列は読まない (列を足した表を作り直す前でも読めるように)
+  const cols = [key, ...columns.filter((c) => c !== key && names.has(c))];
   const read = (range: RowRange) =>
-    parquetReadObjects({
-      file,
-      metadata,
-      // 表に無い列は読まない (列を足した表を作り直す前でも読めるように)
-      columns: [key, ...columns.filter((c) => c !== key && names.has(c))],
-      compressors,
-      ...range,
-    }) as Promise<Record<string, unknown>[]>;
+    remember(table, `${range.rowStart}-${range.rowEnd}:${cols.join(",")}`, () =>
+      parquetReadObjects({ file, metadata, columns: cols, compressors, ...range }),
+    );
   return (await Promise.all(ranges.map(read)))
     .flat()
     .filter((row) => (typeof value === "number" ? Number(row[key]) : row[key]) === value) as T[];
