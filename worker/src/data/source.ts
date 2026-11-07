@@ -12,13 +12,22 @@ export const TABLES = {
   pref: "main.pref",
   rsdtdsp: "main.rsdtdsp",
   parcel: "main.parcel",
-  point: "main.address_point",
   town_name: "town.town_name",
   former_city: "town.former_city",
   match_area: "town.match_area",
   match_number: "main.match_number",
 } as const;
 export type TableName = keyof typeof TABLES;
+
+/**
+ * 表のファイルのうち、都道府県 prefCode (2 桁) の行が入るもの。都道府県ごとに分けた表はパスに
+ * 「pref_code=13/」を持つ。分けていない表 (パスに無い) のファイルは、どの都道府県でも全部を読む
+ */
+export const filesFor = (keys: readonly string[], prefCode: string): string[] =>
+  keys.filter((k) => {
+    const m = /(?:^|\/)pref_code=([^/]+)\//.exec(k);
+    return m === null || m[1] === prefCode;
+  });
 
 /** 表ごとの R2 キー (読む順)。空の配列は「その段は流さない」 */
 export type Resolved = { version: string; tables: Record<TableName, string[]> };

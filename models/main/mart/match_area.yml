@@ -24,3 +24,5 @@ models:
         data_type: double
       - name: lat
         data_type: double
+      - name: pref_code
+        data_type: varchar

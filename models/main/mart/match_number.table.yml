@@ -38,3 +38,6 @@ fields:
     title: 経度
   - name: lat
     title: 緯度
+  - name: pref_code
+    title: 都道府県コード
+    description: "lg_code の頭 2 桁。ファイルはこの値ごとに分かれる"

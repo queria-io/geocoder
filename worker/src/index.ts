@@ -18,6 +18,7 @@ import { cors } from "hono/cors";
 
 import {
   ABR_ATTRIBUTION,
+  ISJ_ATTRIBUTION,
   FORMER_CITY_ATTRIBUTION,
   csvColumns,
   type Extras,
@@ -34,7 +35,6 @@ import {
   versionOf,
 } from "./answer";
 import { dataVersion, geocode, nearby, type ForwardEnv } from "./forward";
-import { ISJ_ATTRIBUTION } from "./point";
 import { ErrAddressTooLong, ErrEmptyAddress } from "./normalize/input";
 import { type Level, resolveAreas, type TilePoint } from "./lookup";
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "./model/model";

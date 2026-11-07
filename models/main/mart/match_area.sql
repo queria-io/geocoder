@@ -47,7 +47,7 @@ isj AS (
     WHERE lg_code IS NOT NULL
 )
 -- area_id は区域の名前ごとの番号。match_number はこの番号で区域を指す (名前の文字列より並べ替えが軽い)
-SELECT dense_rank() OVER (ORDER BY lg_code, name) AS area_id, * FROM (
+SELECT dense_rank() OVER (ORDER BY lg_code, name) AS area_id, *, left(lg_code, 2) AS pref_code FROM (
     SELECT * FROM abr
     UNION ALL
     SELECT p.* FROM parent p ANTI JOIN abr a USING (lg_code, name)

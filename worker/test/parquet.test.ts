@@ -1,7 +1,14 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { openTable, r2Buffer, readCity, rowRangesFor, type Table } from "../src/data/parquet";
+import {
+  openTable,
+  r2Buffer,
+  readCity,
+  readWhere,
+  rowRangesFor,
+  type Table,
+} from "../src/data/parquet";
 // 3 市区町村・行グループ 3 つの town (test/make-parquet-fixture.py)
 import fixture from "./fixture-town.parquet";
 
@@ -12,13 +19,16 @@ let reads = 0;
 beforeAll(async () => {
   await env.BUCKET.put(KEY, fixture);
   const file = r2Buffer(env.BUCKET, KEY, fixture.byteLength);
-  table = await openTable({
-    byteLength: file.byteLength,
-    slice: (start, end) => {
-      reads++;
-      return file.slice(start, end);
+  table = await openTable(
+    {
+      byteLength: file.byteLength,
+      slice: (start, end) => {
+        reads++;
+        return file.slice(start, end);
+      },
     },
-  });
+    { sortKey: "lg_code" },
+  );
 });
 
 type Town = { lg_code: string; machiaza_id: string; oaza_cho: string };
@@ -73,11 +83,15 @@ describe("readCity", () => {
     expect(reads).toBe(before);
   });
 
-  it("同じ行グループを続けて引くときは読み直さない", async () => {
-    await readCity<Town>(table, "131016", cols);
+  it("値をまとめて渡すと、同じ行グループは 1 回だけ読む", async () => {
+    const start = reads;
+    await readCity<Town>(table, "131024", cols);
+    await readCity<Town>(table, "132012", cols);
+    const separate = reads - start;
     const before = reads;
-    expect(await readCity<Town>(table, "131016", cols)).toHaveLength(3000);
-    expect(await readCity<Town>(table, "131032", cols)).toEqual([]);
-    expect(reads).toBe(before);
+    const rows = await readWhere<Town>(table, "lg_code", ["131024", "132012"], cols);
+    expect(rows).toHaveLength(3000);
+    // 131024 は 2 つ目、132012 は 2 つ目と 3 つ目の行グループに入る。2 つ目は 1 回だけ読む
+    expect(reads - before).toBe((separate * 2) / 3);
   });
 });
