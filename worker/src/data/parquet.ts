@@ -1,15 +1,16 @@
-// 直下のデータセット (town / rsdtdsp_blk / rsdtdsp_rsdt) の Parquet を R2 から Range で読む。
-// 表は lg_code 順に並べてあるので、フッターの行グループごとの lg_code の最小・最大を見て、
-// その市区町村が入る行グループだけを読む。DuckDB もカタログも使わない
+// 直下のデータセットの Parquet を R2 から Range で読む。表は lg_code などの列の順に並べてあるので、
+// フッターの行グループごとのその列の最小・最大を見て、値が入る行グループだけを読む。DuckDB もカタログも使わない
 import { decompress } from "fzstd";
 import {
   type AsyncBuffer,
+  type ColumnChunk,
+  type CompressionCodec,
   type Compressors,
-  type Encoding,
   type FileMetaData,
+  type ParquetType,
   parquetMetadata,
-  parquetMetadataAsync,
   parquetReadObjects,
+  type SchemaElement,
 } from "hyparquet";
 
 // 表は zstd で書いている (dbt_project.yml)。fzstd は純粋な JS なので Workers でそのまま動く
@@ -39,43 +40,125 @@ export const r2Buffer = (
   },
 });
 
-export type RowRange = { rowStart: number; rowEnd: number };
+/** 開くときに残す列。sortKey は行グループを絞る列、columns は読む列 (省くと全部の列) */
+export type Keep = { sortKey?: string; columns?: string[] };
+
+/** 列の位置と長さ。dict は辞書のページの位置 (無ければ null) */
+type Chunk = [data: number, dict: number | null, size: number];
+/** 行グループ 1 つ。min・max は sortKey の列の値 (統計が無ければ null) */
+type Group = [rows: number, min: string | number | null, max: string | number | null, Chunk[]];
 
 /**
- * 並べた列 (lg_code など) の値が入りうる行グループの行の範囲。行グループはファイルの中でその順に
- * 並ぶとは限らない (書き手が並行に書く) ので、当たった行グループを 1 つずつ返す。隣り合うものだけ 1 つにまとめる
+ * 表を読むのに要る値だけを抜き出したフッター。Parquet のフッターは行グループごとに全部の列の統計を持ち、
+ * 大きな表では数 MB になる。解析に数百 ms かかり、全部を持つと isolate のメモリ (上限 128 MB) を圧迫する。
+ * この形は JSON のままデータセンターのキャッシュに置き、起動したての isolate はフッターを解析し直さない
  */
-export const rowRangesFor = (
-  metadata: FileMetaData,
-  value: string | number,
-  key = "lg_code",
-): RowRange[] => {
-  const column = metadata.schema.findIndex((s) => s.name === key) - 1;
-  if (column < 0) throw new Error(`${key} の列がありません`);
-  return metadata.row_groups.reduce<{ start: number; ranges: RowRange[] }>(
-    ({ start, ranges }, group) => {
-      const rows = Number(group.num_rows);
-      const stats = group.columns[column]?.meta_data?.statistics;
-      const lo = stats?.min_value ?? stats?.min;
-      const hi = stats?.max_value ?? stats?.max;
-      // 数の列 (area_id) は数として比較する。文字列にすると「10」が「9」より前になる
-      const inside =
-        typeof value === "number"
-          ? (lo == null || Number(lo) <= value) && (hi == null || value <= Number(hi))
-          : String(lo ?? "") <= value && value <= String(hi ?? "\uffff");
-      const last = ranges.at(-1);
-      const next = !inside
-        ? ranges
-        : last?.rowEnd === start
-          ? [...ranges.slice(0, -1), { rowStart: last.rowStart, rowEnd: start + rows }]
-          : [...ranges, { rowStart: start, rowEnd: start + rows }];
-      return { start: start + rows, ranges: next };
-    },
-    { start: 0, ranges: [] },
-  ).ranges;
+export type TableIndex = {
+  version: number;
+  schema: SchemaElement[];
+  sortKey: string | null;
+  columns: { path: string[]; type: ParquetType; codec: CompressionCodec }[];
+  groups: Group[];
 };
 
-export type Table = { file: AsyncBuffer; metadata: FileMetaData };
+export type Table = { file: AsyncBuffer; index: TableIndex };
+
+// BigInt は JSON にできないので数にする (ファイルの位置も行数も 2^53 を超えない)
+const plain = (v: unknown): string | number | null =>
+  v === undefined || v === null
+    ? null
+    : typeof v === "bigint"
+      ? Number(v)
+      : typeof v === "number"
+        ? v
+        : String(v);
+
+/** フッターから TableIndex を作る */
+export const indexOf = (metadata: FileMetaData, { sortKey, columns }: Keep = {}): TableIndex => {
+  const keep = (path: string) =>
+    columns === undefined || path === sortKey || columns.includes(path);
+  const first = metadata.row_groups[0]?.columns ?? [];
+  const picked = first.flatMap((c, i) => {
+    const m = c.meta_data;
+    if (!m) throw new Error("parquet column metadata is undefined");
+    // 入れ子の列 (リスト) は物理的な列が path_in_schema で分かれる。読む・読まないは一番上の名前で決める
+    return keep(m.path_in_schema[0])
+      ? [{ i, path: m.path_in_schema, type: m.type, codec: m.codec }]
+      : [];
+  });
+  const sortAt =
+    sortKey === undefined ? -1 : first.findIndex((c) => c.meta_data?.path_in_schema[0] === sortKey);
+  if (sortKey !== undefined && sortAt < 0) throw new Error(`${sortKey} の列がありません`);
+  return {
+    version: metadata.version,
+    schema: metadata.schema,
+    sortKey: sortKey ?? null,
+    columns: picked.map(({ path, type, codec }) => ({ path, type, codec })),
+    groups: metadata.row_groups.map((g) => {
+      const stats = sortAt < 0 ? undefined : g.columns[sortAt]?.meta_data?.statistics;
+      return [
+        Number(g.num_rows),
+        plain(stats?.min_value ?? stats?.min),
+        plain(stats?.max_value ?? stats?.max),
+        picked.map(({ i, path }): Chunk => {
+          const m = g.columns[i]?.meta_data;
+          if (m === undefined || m.path_in_schema.join(".") !== path.join("."))
+            throw new Error(`行グループごとに列の並びが違います: ${path.join(".")}`);
+          return [
+            Number(m.data_page_offset),
+            m.dictionary_page_offset === undefined ? null : Number(m.dictionary_page_offset),
+            Number(m.total_compressed_size),
+          ];
+        }),
+      ];
+    }),
+  };
+};
+
+/** 行グループ 1 つだけを持つフッターに戻す。hyparquet に渡して、その行グループを読む */
+const metadataOf = (index: TableIndex, [rows, , , chunks]: Group): FileMetaData => ({
+  version: index.version,
+  schema: index.schema,
+  num_rows: BigInt(rows),
+  metadata_length: 0,
+  row_groups: [
+    {
+      num_rows: BigInt(rows),
+      total_byte_size: 0n,
+      columns: chunks.map(([data, dict, size], i): ColumnChunk => {
+        const { path, type, codec } = index.columns[i];
+        return {
+          file_offset: 0n,
+          meta_data: {
+            type,
+            encodings: [],
+            path_in_schema: path,
+            codec,
+            num_values: 0n,
+            total_uncompressed_size: 0n,
+            total_compressed_size: BigInt(size),
+            data_page_offset: BigInt(data),
+            dictionary_page_offset: dict === null ? undefined : BigInt(dict),
+          },
+        };
+      }),
+    },
+  ],
+});
+
+/**
+ * sortKey の値が入りうる行グループの番号。行グループはファイルの中でその順に並ぶとは限らない
+ * (書き手が並行に書く) ので、全部の行グループの最小・最大を見る
+ */
+export const groupsFor = (index: TableIndex, value: string | number): number[] =>
+  index.groups.flatMap(([, lo, hi], i) => {
+    // 数の列 (area_id) は数として比較する。文字列にすると「10」が「9」より前になる
+    const inside =
+      typeof value === "number"
+        ? (lo === null || Number(lo) <= value) && (hi === null || value <= Number(hi))
+        : String(lo ?? "") <= value && value <= String(hi ?? "\uffff");
+    return inside ? [i] : [];
+  });
 
 /** フッター (メタデータ＋末尾 8 バイト) をファイルの末尾から読む */
 const readFooter = async (file: AsyncBuffer): Promise<ArrayBuffer> => {
@@ -86,104 +169,50 @@ const readFooter = async (file: AsyncBuffer): Promise<ArrayBuffer> => {
   return file.slice(file.byteLength - length, file.byteLength);
 };
 
-/** 開くときに残す列。sortKey は行グループを絞る列、columns は読む列 (省くと全部の列) */
-export type Keep = { sortKey?: string; columns?: string[] };
+const INDEX_CACHE = "https://geocoder.cache/parquet-index/v1/";
 
 /**
- * 読まない列のメタデータを捨てる。表によっては行グループが数千あり、全部の列のメタデータと統計を
- * 持つと isolate のメモリ (上限 128 MB) の半分を使う。統計は sortKey の列のものだけを残す
- */
-/** 読むのに使わない値の代わりに入れる (値ごとに BigInt を持たない) */
-const UNUSED = 0n;
-const NO_ENCODINGS: Encoding[] = [];
-
-const compact = (metadata: FileMetaData, { sortKey, columns }: Keep = {}): FileMetaData => {
-  // 列の名前の配列は行グループごとに同じものを指す (行グループの数だけ配列を持たない)
-  const paths = new Map<string, string[]>();
-  const shared = (path: string[]) => {
-    const key = path.join(".");
-    const hit = paths.get(key);
-    if (hit) return hit;
-    paths.set(key, path);
-    return path;
-  };
-  return {
-    ...metadata,
-    key_value_metadata: undefined,
-    row_groups: metadata.row_groups.map((group) => ({
-      num_rows: group.num_rows,
-      total_byte_size: group.total_byte_size,
-      columns: group.columns
-        .filter(
-          ({ meta_data }) =>
-            columns === undefined ||
-            meta_data === undefined ||
-            meta_data.path_in_schema[0] === sortKey ||
-            columns.includes(meta_data.path_in_schema[0]),
-        )
-        // hyparquet が読むのに使うのは列の名前・型・圧縮・ページの位置と長さだけ
-        .map(({ meta_data }) => ({
-          file_offset: UNUSED,
-          meta_data: meta_data && {
-            type: meta_data.type,
-            encodings: NO_ENCODINGS,
-            path_in_schema: shared(meta_data.path_in_schema),
-            codec: meta_data.codec,
-            num_values: UNUSED,
-            total_uncompressed_size: UNUSED,
-            total_compressed_size: meta_data.total_compressed_size,
-            data_page_offset: meta_data.data_page_offset,
-            dictionary_page_offset: meta_data.dictionary_page_offset,
-            statistics: meta_data.path_in_schema[0] === sortKey ? meta_data.statistics : undefined,
-          },
-        })),
-    })),
-  };
-};
-
-const FOOTER_CACHE = "https://geocoder.cache/parquet-footer/";
-
-/**
- * R2 のファイルを開く。フッターはデータセンターのキャッシュ (Cache API) に置き、
- * 起動したての isolate でも R2 から読み直さない。ファイル名にバージョンの ID が入り
- * 中身は書き換わらないので、名前を鍵にしてよい
+ * R2 のファイルを開く。TableIndex はデータセンターのキャッシュ (Cache API) に置き、起動したての isolate でも
+ * フッターを R2 から読み直さず、解析もし直さない。ファイル名にバージョンの ID が入り中身は書き換わらないので、
+ * 名前と残す列を鍵にしてよい
  */
 export const openR2Table = async (
   bucket: R2Bucket,
   key: string,
   onRead?: (bytes: number, ms: number) => void,
-  keep?: Keep,
+  keep: Keep = {},
 ): Promise<Table> => {
-  const cacheKey = new Request(FOOTER_CACHE + encodeURIComponent(key));
+  const cacheKey = new Request(
+    INDEX_CACHE +
+      encodeURIComponent(key) +
+      `?sort=${encodeURIComponent(keep.sortKey ?? "")}&columns=${encodeURIComponent(keep.columns?.join(",") ?? "*")}`,
+  );
   const hit = await caches.default.match(cacheKey);
   if (hit) {
     const size = Number(hit.headers.get("x-file-size"));
-    return {
-      file: r2Buffer(bucket, key, size, onRead),
-      metadata: compact(parquetMetadata(await hit.arrayBuffer()), keep),
-    };
+    return { file: r2Buffer(bucket, key, size, onRead), index: await hit.json<TableIndex>() };
   }
   const head = await retryOnce(() => bucket.head(key));
   if (!head) throw new Error(`not found: ${key}`);
   const file = r2Buffer(bucket, key, head.size, onRead);
-  const footer = await readFooter(file);
+  const index = indexOf(parquetMetadata(await readFooter(file)), keep);
   await caches.default.put(
     cacheKey,
-    new Response(footer, {
+    new Response(JSON.stringify(index), {
       headers: {
-        "Content-Type": "application/octet-stream",
+        "Content-Type": "application/json",
         "Cache-Control": "public, max-age=2592000",
         "x-file-size": String(head.size),
       },
     }),
   );
-  return { file, metadata: compact(parquetMetadata(footer), keep) };
+  return { file, index };
 };
 
-/** ファイルを開く (フッターだけを読む)。結果は呼び出し側で isolate の中に使い回す */
-export const openTable = async (file: AsyncBuffer): Promise<Table> => ({
+/** ファイルを開く (フッターだけを読む)。試験で手元のファイルを開くのに使う */
+export const openTable = async (file: AsyncBuffer, keep?: Keep): Promise<Table> => ({
   file,
-  metadata: await parquetMetadataAsync(file),
+  index: indexOf(parquetMetadata(await readFooter(file)), keep),
 });
 
 /** 問い合わせの間だけ持つ入れ物。endRequest で空にする */
@@ -225,25 +254,32 @@ const remember = (
   return p;
 };
 
+/** 行グループ 1 つを読んで展開する。同じ問い合わせの中では覚えておく */
+const readGroup = (table: Table, i: number): Promise<Record<string, unknown>[]> =>
+  remember(table, String(i), () =>
+    parquetReadObjects({
+      file: table.file,
+      metadata: metadataOf(table.index, table.index.groups[i]),
+      columns: [...new Set(table.index.columns.map((c) => c.path[0]))],
+      compressors,
+    }),
+  );
+
+/** 表の行を全部読む (市区町村・都道府県のような小さな表) */
+export const readAll = async <T>(table: Table): Promise<T[]> =>
+  (await Promise.all(table.index.groups.map((_, i) => readGroup(table, i)))).flat() as T[];
+
 /** 並べた列 key が value の行を読む。行グループごと読むので、ほかの値の行は読んだあとに落とす */
 export const readWhere = async <T>(
   table: Table,
   key: string,
   value: string | number,
-  columns: string[],
   onRows?: (rows: number) => void,
 ): Promise<T[]> => {
-  const { file, metadata } = table;
-  const ranges = rowRangesFor(metadata, value, key);
-  const names = new Set(metadata.schema.map((c) => c.name));
-  onRows?.(ranges.reduce((n, r) => n + r.rowEnd - r.rowStart, 0));
-  // 表に無い列は読まない (列を足した表を作り直す前でも読めるように)
-  const cols = [key, ...columns.filter((c) => c !== key && names.has(c))];
-  const read = (range: RowRange) =>
-    remember(table, `${range.rowStart}-${range.rowEnd}:${cols.join(",")}`, () =>
-      parquetReadObjects({ file, metadata, columns: cols, compressors, ...range }),
-    );
-  return (await Promise.all(ranges.map(read)))
+  if (table.index.sortKey !== key) throw new Error(`${key} で並べた表として開いていません`);
+  const groups = groupsFor(table.index, value);
+  onRows?.(groups.reduce((n, i) => n + table.index.groups[i][0], 0));
+  return (await Promise.all(groups.map((i) => readGroup(table, i))))
     .flat()
     .filter((row) => (typeof value === "number" ? Number(row[key]) : row[key]) === value) as T[];
 };
@@ -252,6 +288,5 @@ export const readWhere = async <T>(
 export const readCity = <T extends { lg_code: string }>(
   table: Table,
   lgCode: string,
-  columns: string[],
   onRows?: (rows: number) => void,
-): Promise<T[]> => readWhere<T>(table, "lg_code", lgCode, columns, onRows);
+): Promise<T[]> => readWhere<T>(table, "lg_code", lgCode, onRows);

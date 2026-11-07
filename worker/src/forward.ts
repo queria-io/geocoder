@@ -2,11 +2,9 @@
 // abr-geocoder から写した当て方 (matching/) に渡す。市区町村と都道府県の表は小さいので丸ごと、
 // 町字の表は市区町村 1 つ分の行グループだけを読む
 import { preNormalize } from "./matching/pre_normalize";
-import { parquetReadObjects } from "hyparquet";
 
 import {
-  compressors,
-  requestScoped,
+  readAll,
   endRequest,
   type Keep,
   openR2Table,
@@ -85,26 +83,43 @@ const countRead = (bytes: number, ms: number) => {
 const open = (bucket: R2Bucket, key: string, keep?: Keep): Promise<Table> =>
   openR2Table(bucket, key, countRead, keep);
 
-const readAll = async <T>(t: Table): Promise<T[]> =>
-  (await parquetReadObjects({ file: t.file, metadata: t.metadata, compressors })) as T[];
-
 const openAll = (bucket: R2Bucket, keys: string[], keep?: Keep): Promise<Table[]> =>
   Promise.all(keys.map((k) => open(bucket, k, keep)));
+
+/** 町字の行を、問い合わせをまたいで覚える行数の合計。isolate のメモリ (上限 128 MB) に収まる量にする */
+const KEPT_ROWS = 100_000;
+
+/** 覚えた行の数を足し、合計が KEPT_ROWS を超えたら古いものから捨てる */
+const keepRows = (() => {
+  const entries = new Map<symbol, { rows: number; drop: () => void }>();
+  let total = 0;
+  return (rows: number, drop: () => void) => {
+    entries.set(Symbol(), { rows, drop });
+    total += rows;
+    for (const [id, e] of entries) {
+      if (total <= KEPT_ROWS) break;
+      e.drop();
+      total -= e.rows;
+      entries.delete(id);
+    }
+  };
+})();
 
 /**
  * 列 column が value の行を読む口。表は初めて引くときに開く。
  * ファイルが分かれていれば全部のフッターを開き、行グループの範囲で当たるものだけ読む。
- * 覚えるのは最近の 1,024 個の値だけにする。scoped なら問い合わせの間だけ覚える。keys が空なら何も読まない
+ * 覚えるのは最近の 1,024 個の値だけにする。many (町字の行のように 1 つの値に行が多い表) なら、
+ * 行数の合計で KEPT_ROWS まで覚える。keys が空なら何も読まない
  */
 const keyLoader = <T, K extends string | number = string>(
   bucket: R2Bucket,
   keys: string[],
   column: string,
   columns: string[],
-  scoped = false,
+  many = false,
 ) => {
   let tables: Promise<Table[]> | null = null;
-  const rows = scoped ? requestScoped<K, Promise<T[]>>() : new Map<K, Promise<T[]>>();
+  const rows = new Map<K, Promise<T[]>>();
   return (value: K): Promise<T[]> => {
     if (keys.length === 0) return Promise.resolve([]);
     const hit = rows.get(value);
@@ -112,12 +127,17 @@ const keyLoader = <T, K extends string | number = string>(
     tables ??= openAll(bucket, keys, { sortKey: column, columns });
     const p = tables
       .then((ts) =>
-        Promise.all(
-          ts.map((t) => readWhere<T>(t, column, value, columns, (n) => (stats.rows += n))),
-        ),
+        Promise.all(ts.map((t) => readWhere<T>(t, column, value, (n) => (stats.rows += n)))),
       )
-      .then((parts) => parts.flat());
-    if (rows.size >= 1024) rows.delete(rows.keys().next().value as K);
+      .then((parts) => {
+        const found = parts.flat();
+        if (many)
+          keepRows(found.length, () => {
+            if (rows.get(value) === p) rows.delete(value);
+          });
+        return found;
+      });
+    if (!many && rows.size >= 1024) rows.delete(rows.keys().next().value as K);
     rows.set(value, p);
     p.catch(() => {
       rows.delete(value);
@@ -129,7 +149,7 @@ const keyLoader = <T, K extends string | number = string>(
 
 /**
  * 町字 1 つ分の行を読む口 (住居表示・地番・代表点の表)。表は番号まである住所で初めて開く。
- * 町字の行は多いので、問い合わせの間だけ覚える
+ * 町字の行は多いので、行数の合計で覚える量を決める
  */
 const machiazaLoader = <T>(bucket: R2Bucket, keys: string[], columns: string[]) => {
   const load = keyLoader<T>(bucket, keys, "machiaza_key", columns, true);
@@ -171,7 +191,7 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
     if (hit) return hit;
     stats.cities.push(lgCode);
     const p = Promise.all(
-      town.map((t) => readCity<TownRow>(t, lgCode, TOWN_COLUMNS, (n) => (stats.rows += n))),
+      town.map((t) => readCity<TownRow>(t, lgCode, (n) => (stats.rows += n))),
     ).then((parts) => parts.flat().map(toBasic));
     if (towns.size >= CITIES_KEPT) towns.delete(towns.keys().next().value as string);
     towns.set(lgCode, p);
@@ -195,11 +215,9 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
       throw e;
     });
     return areaTables.then((ts) =>
-      Promise.all(
-        ts.map((t) =>
-          readCity<MatchAreaRow>(t, lgCode, MATCH_AREA_COLUMNS, (n) => (stats.rows += n)),
-        ),
-      ).then((parts) => parts.flat()),
+      Promise.all(ts.map((t) => readCity<MatchAreaRow>(t, lgCode, (n) => (stats.rows += n)))).then(
+        (parts) => parts.flat(),
+      ),
     );
   };
   return {
