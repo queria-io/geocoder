@@ -4,7 +4,16 @@
 import { preNormalize } from "./matching/pre_normalize";
 import { parquetReadObjects } from "hyparquet";
 
-import { compressors, openR2Table, readCity, readWhere, type Table } from "./data/parquet";
+import {
+  compressors,
+  requestScoped,
+  endRequest,
+  type Keep,
+  openR2Table,
+  readCity,
+  readWhere,
+  type Table,
+} from "./data/parquet";
 import { Match } from "./matching/match_core";
 import { NewMatcher, type Impl } from "./matching/matcher";
 import { Detail, type MatchedResult } from "./model/model";
@@ -43,7 +52,7 @@ import {
   type MatchAreaRow,
   type MatchNumberRow,
 } from "./locate/index";
-import { type LocateDeps, withLocated } from "./locate/result";
+import { CITIES_KEPT, type LocateDeps, withLocated } from "./locate/result";
 
 export type ForwardEnv = {
   DATA: R2Bucket;
@@ -73,32 +82,34 @@ const countRead = (bytes: number, ms: number) => {
   stats.r2_ms += ms;
 };
 
-const open = (bucket: R2Bucket, key: string): Promise<Table> => openR2Table(bucket, key, countRead);
+const open = (bucket: R2Bucket, key: string, keep?: Keep): Promise<Table> =>
+  openR2Table(bucket, key, countRead, keep);
 
 const readAll = async <T>(t: Table): Promise<T[]> =>
   (await parquetReadObjects({ file: t.file, metadata: t.metadata, compressors })) as T[];
 
-const openAll = (bucket: R2Bucket, keys: string[]): Promise<Table[]> =>
-  Promise.all(keys.map((k) => open(bucket, k)));
+const openAll = (bucket: R2Bucket, keys: string[], keep?: Keep): Promise<Table[]> =>
+  Promise.all(keys.map((k) => open(bucket, k, keep)));
 
 /**
  * 列 column が value の行を読む口。表は初めて引くときに開く。
  * ファイルが分かれていれば全部のフッターを開き、行グループの範囲で当たるものだけ読む。
- * 覚えるのは最近の 1,024 個の値だけにする。keys が空なら何も読まない
+ * 覚えるのは最近の 1,024 個の値だけにする。scoped なら問い合わせの間だけ覚える。keys が空なら何も読まない
  */
 const keyLoader = <T, K extends string | number = string>(
   bucket: R2Bucket,
   keys: string[],
   column: string,
   columns: string[],
+  scoped = false,
 ) => {
   let tables: Promise<Table[]> | null = null;
-  const rows = new Map<K, Promise<T[]>>();
+  const rows = scoped ? requestScoped<K, Promise<T[]>>() : new Map<K, Promise<T[]>>();
   return (value: K): Promise<T[]> => {
     if (keys.length === 0) return Promise.resolve([]);
     const hit = rows.get(value);
     if (hit) return hit;
-    tables ??= openAll(bucket, keys);
+    tables ??= openAll(bucket, keys, { sortKey: column, columns });
     const p = tables
       .then((ts) =>
         Promise.all(
@@ -116,9 +127,12 @@ const keyLoader = <T, K extends string | number = string>(
   };
 };
 
-/** 町字 1 つ分の行を読む口 (住居表示・地番・代表点の表)。表は番号まである住所で初めて開く */
+/**
+ * 町字 1 つ分の行を読む口 (住居表示・地番・代表点の表)。表は番号まである住所で初めて開く。
+ * 町字の行は多いので、問い合わせの間だけ覚える
+ */
 const machiazaLoader = <T>(bucket: R2Bucket, keys: string[], columns: string[]) => {
-  const load = keyLoader<T>(bucket, keys, "machiaza_key", columns);
+  const load = keyLoader<T>(bucket, keys, "machiaza_key", columns, true);
   return (lgCode: string, machiazaId: string): Promise<T[]> =>
     load(machiazaKey(lgCode, machiazaId));
 };
@@ -143,9 +157,11 @@ type Built = {
 let cached: { key: string; matcher: Promise<Built> } | null = null;
 
 const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => {
-  const [town, city, pref] = await Promise.all(
-    [tables.town, tables.city, tables.pref].map((keys) => openAll(bucket, keys)),
-  );
+  const [town, city, pref] = await Promise.all([
+    openAll(bucket, tables.town, { sortKey: "lg_code", columns: TOWN_COLUMNS }),
+    openAll(bucket, tables.city),
+    openAll(bucket, tables.pref),
+  ]);
   const cities = (await Promise.all(city.map((t) => readAll<CityTableRow>(t)))).flat().map(toCity);
   const prefs = (await Promise.all(pref.map((t) => readAll<PrefTableRow>(t)))).flat().map(toPref);
   const cityByCode = new Map(cities.map((c) => [c.lgCode, c]));
@@ -157,6 +173,7 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
     const p = Promise.all(
       town.map((t) => readCity<TownRow>(t, lgCode, TOWN_COLUMNS, (n) => (stats.rows += n))),
     ).then((parts) => parts.flat().map(toBasic));
+    if (towns.size >= CITIES_KEPT) towns.delete(towns.keys().next().value as string);
     towns.set(lgCode, p);
     // 読めなかった市区町村は覚えずに、次の問い合わせで読み直す
     p.catch(() => towns.delete(lgCode));
@@ -170,7 +187,10 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
   let areaTables: Promise<Table[]> | null = null;
   const loadAreas = (lgCode: string) => {
     // 開けなかったときは覚えずに、次の問い合わせで開き直す (keyLoader と同じ)
-    areaTables ??= openAll(bucket, tables.match_area).catch((e: unknown) => {
+    areaTables ??= openAll(bucket, tables.match_area, {
+      sortKey: "lg_code",
+      columns: MATCH_AREA_COLUMNS,
+    }).catch((e: unknown) => {
       areaTables = null;
       throw e;
     });
@@ -200,6 +220,7 @@ const build = async (bucket: R2Bucket, { tables }: Resolved): Promise<Built> => 
         tables.match_number,
         "area_id",
         MATCH_NUMBER_COLUMNS,
+        true,
       ),
       rsdt: loadMachiaza,
       parcels: loadParcels,
@@ -260,6 +281,7 @@ export const geocode = async (
   postalCode: (r: MatchedResult) => Promise<string | null>;
 }> => {
   stats = emptyStats();
+  endRequest();
   const cold = cached === null;
   const built = await matcherFor(env);
   const match = (a: string, n = limit) =>
@@ -321,6 +343,8 @@ export const geocode = async (
         ...(await Promise.all(g.slice(0, limit - ordered.length).map(withPoint))).flat(),
       );
   }
+  // 町字の行と展開した行グループはこの問い合わせの中でしか使わないので、答える前に手放す
+  endRequest();
   const found = ordered.slice(0, limit);
   const postalCode = async (r: MatchedResult) =>
     r.ids.lg_code && r.ids.machiaza_id

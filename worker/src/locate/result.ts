@@ -37,6 +37,12 @@ const LEVEL: Record<number, CoordinateLevel> = {
 
 // 表のバージョンが変わると forward.ts が deps を作り直す。area_id はビルドごとに振り直すので、
 // 市区町村の索引は deps ごとに覚える (isolate 全体で覚えると古い area_id で match_number を引く)
+/**
+ * 問い合わせをまたいで覚える市区町村の数。市区町村の町字と索引は 1 つで数千行あり、
+ * 覚えすぎると isolate のメモリの上限 (128 MB) を超える
+ */
+export const CITIES_KEPT = 16;
+
 const indexCache = new WeakMap<LocateDeps, Map<string, Promise<CityIndex>>>();
 
 const cityIndexOf = (deps: LocateDeps, lgCode: string): Promise<CityIndex> => {
@@ -45,7 +51,7 @@ const cityIndexOf = (deps: LocateDeps, lgCode: string): Promise<CityIndex> => {
   const hit = indexes.get(lgCode);
   if (hit) return hit;
   const p = deps.areas(lgCode).then(cityIndex);
-  if (indexes.size >= 256) indexes.delete(indexes.keys().next().value as string);
+  if (indexes.size >= CITIES_KEPT) indexes.delete(indexes.keys().next().value as string);
   indexes.set(lgCode, p);
   p.catch(() => indexes.delete(lgCode));
   return p;
