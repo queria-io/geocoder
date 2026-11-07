@@ -105,6 +105,13 @@ const depthOf = (rows: readonly TownNameRow[], tail: string): number => {
   return Number(koaza !== undefined) + Number(chomeRows.length > 0) + Number(numberHit);
 };
 
+/**
+ * 京都市の通り名 (「大宮通今出川上る」「四条通烏丸東入」)。町名の前に書かれるので、町名の索引を引く前に外す。
+ * 通り名は京都市の区 (lg_code が 261 で始まる) にしかない
+ */
+const KYOTO_STREET = /^[^0-9]*?通[^0-9]*?(?:[上下]が?[るル]|[東西]入[るル]?)+/;
+const KYOTO_CITY = "261";
+
 export const cityName = (c: CityResult) => c.pref + (c.county ?? "") + c.city + (c.ward ?? "");
 
 /**
@@ -209,7 +216,15 @@ export const withoutCity = async (
   const all = townNameOf(input);
   const rest = townNameOf(prefCode === undefined ? all : all.replace(PREF, ""));
   if (rest.length < 2 || (prefCode !== undefined && rest === all)) return [r];
-  const inPref = cities.filter((c) => prefCode === undefined || c.lgCode.startsWith(prefCode));
+  // 京都の通り名から書いた住所 (「大宮通今出川上る観世町117」) は、通り名の後ろの町名で京都市の区を探す。
+  // 当て直しには通り名も付けたまま送る (市区町村があれば上流が通り名を読む)
+  const street = KYOTO_STREET.exec(rest)?.[0];
+  const town = street === undefined ? rest : rest.slice(street.length);
+  const inPref = cities.filter(
+    (c) =>
+      (prefCode === undefined || c.lgCode.startsWith(prefCode)) &&
+      (street === undefined || c.lgCode.startsWith(KYOTO_CITY)),
+  );
   // 政令市の市名を省いて区から書いた住所 (「北海道西区西野6条」)。その区名を持つ市が都道府県に 1 つだけなら補う
   const wards = inPref.filter((c) => c.ward !== null && c.ward !== "" && rest.startsWith(c.ward));
   if (prefCode !== undefined && new Set(wards.map((c) => c.city)).size === 1) {
@@ -219,8 +234,8 @@ export const withoutCity = async (
     if (found !== undefined && compareResultStrength(found, r) < 0) return [found];
   }
   const byCode = new Map(inPref.map((c) => [c.lgCode, c]));
-  const head = numeralsOf(rest);
-  const rows = (await Promise.all(keysOf(rest).map(names)))
+  const head = numeralsOf(town);
+  const rows = (await Promise.all(keysOf(town).map(names)))
     .flat()
     .filter((n) => byCode.has(n.lg_code) && head.startsWith(numeralsOf(n.name)));
   // 「前田8条」は「前田」でなく「前田八条」を持つ市区町村だけを候補にする
@@ -242,7 +257,7 @@ export const withoutCity = async (
     await Promise.all(candidates.slice(0, MAX_LIMIT).map((c) => retry(c, rest, match)))
   ).flat();
   if (tried.length === 0) return [r];
-  const found = byCity(tried, rest, (code) => byCode.get(code)?.population ?? 0);
+  const found = byCity(tried, town, (code) => byCode.get(code)?.population ?? 0);
   // 上限で当て直さなかった市区町村も候補の数に含める (当て直して当たらなかった市区町村は数えない)
   const count = found.length + Math.max(0, candidates.length - MAX_LIMIT);
   return count > 1 ? found.map((x) => ({ ...x, candidates: count })) : found;
