@@ -4,7 +4,7 @@
 
 - API の説明: https://geocoder.queria.io/docs
 - API 仕様（OpenAPI）: https://geocoder.queria.io/openapi.json
-- 精度の比較と照合の規則: 日本の住所 1,418 件でほかの無料のジオコーダーと比較した結果と、Queria Geocoder の照合の規則（[BENCHMARK.md](BENCHMARK.md)）
+- 精度の比較と照合の規則: 日本の住所 1,420 件でほかの無料のジオコーダーと比較した結果と、Queria Geocoder の照合の規則（[BENCHMARK.md](BENCHMARK.md)）
 - 設計方針: 改修で守る 5 つの観点（精度・処理速度・メモリ使用量・データモデル・説明可能性）（[DESIGN.md](DESIGN.md)）
 
 ```bash
