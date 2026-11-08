@@ -115,10 +115,9 @@ const toResult = async (
   const level = DetermineMatchLevel(ids);
   const rest = (town === null ? whole : found.rest).replace(/^-+|-+$/g, "");
   const point = found.number;
-  const located = locateSteps(found).filter((x) => !(r.steps ?? []).includes(x));
   return {
     ...r,
-    steps: [...(r.steps ?? []), ...located],
+    steps: [...(r.steps ?? []), ...locateSteps(found)],
     evidence_point: pointOf(found, lgCode, town === null ? null : found.machiazaId),
     evidence_matched: {
       area: areaName,

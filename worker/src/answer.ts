@@ -145,20 +145,18 @@ const NULLABLE_SHAPES: Record<string, Record<string, unknown>> = {
   },
 };
 
+/** 配列の項目をつなぐ文字。照合の段 (evidence.steps) は名前を「,」でつなぐ。ほか (unmatched_address) は文字列をつなぐ */
+const ARRAY_SEPARATORS: Record<string, string> = { "evidence.steps": "," };
+
 const flatten = (o: Record<string, unknown>, prefix = ""): [string, unknown][] =>
-  Object.entries(o).flatMap(([k, v]) =>
-    v === null && NULLABLE_SHAPES[`${prefix}${k}`] !== undefined
-      ? flatten(NULLABLE_SHAPES[`${prefix}${k}`], `${prefix}${k}.`)
-      : v !== null && typeof v === "object" && !Array.isArray(v)
-        ? flatten(v as Record<string, unknown>, `${prefix}${k}.`)
-        : [
-            [
-              `${prefix}${k}`,
-              // 照合の段 (evidence.steps) は名前を「,」でつなぐ。ほかの配列 (unmatched_address) は文字列をつなぐ
-              Array.isArray(v) ? v.join(`${prefix}${k}` === "evidence.steps" ? "," : "") : v,
-            ] as [string, unknown],
-          ],
-  );
+  Object.entries(o).flatMap(([k, v]) => {
+    const key = `${prefix}${k}`;
+    if (v === null && NULLABLE_SHAPES[key] !== undefined)
+      return flatten(NULLABLE_SHAPES[key], `${key}.`);
+    if (v !== null && typeof v === "object" && !Array.isArray(v))
+      return flatten(v as Record<string, unknown>, `${key}.`);
+    return [[key, Array.isArray(v) ? v.join(ARRAY_SEPARATORS[key] ?? "") : v] as [string, unknown]];
+  });
 
 const cell = (v: unknown): string => {
   const s = v === null || v === undefined ? "" : String(v);
