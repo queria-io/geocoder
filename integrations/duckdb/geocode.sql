@@ -1,5 +1,5 @@
 -- DuckDB から Queria Geocoder を呼ぶマクロ。住所の一覧を渡すと、住所ごとに 1 行返す
--- 例: SELECT * FROM geocode(['東京都千代田区紀尾井町1-3', 'つくば市学園南3丁目28番10']);
+-- 例: SELECT * FROM geocode(['東京都千代田区紀尾井町1-3', '東京都千代田区千代田1-1']);
 -- 表の列から渡すときは: SET VARIABLE a = (SELECT list(address) FROM 表); SELECT * FROM geocode(getvariable('a'));
 -- 10 件ずつ GET の /v1/forward/batch で送る (URL が長くなりすぎないよう 25 件より少なくする)。
 -- 1 分 300 回の上限なので、1 回に渡すのは 3,000 件まで

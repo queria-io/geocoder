@@ -46,7 +46,7 @@ cd worker
 pnpm install
 pnpm build:web
 npx wrangler dev -c wrangler.self-host.jsonc
-curl "http://localhost:8787/v1/forward?address=茨城県つくば市学園南3-28-10"
+curl "http://localhost:8787/v1/forward?address=東京都千代田区千代田1-1"
 ```
 
 ## セルフホスト
