@@ -65,7 +65,10 @@ import {
 import { type LocateDeps, withLocated } from "./locate/result";
 
 export type ForwardEnv = {
-  /** Worker の静的アセット。pnpm build:data で表を置いていれば、R2 ではなくここから読む */
+  /**
+   * Worker の静的アセット。pnpm build:data で表を置いていて、そのバージョンが R2 で今読むバージョンと
+   * 同じなら、R2 ではなくここから読む
+   */
   ASSETS?: Fetcher;
   DATA: R2Bucket;
   /**
@@ -334,9 +337,13 @@ type Source = { resolved: Resolved; open: Opener; inAssets: boolean };
 
 const sourceOf = async (env: ForwardEnv): Promise<Source> => {
   const assets = env.ASSETS ? await resolveAssets(env.ASSETS).catch(() => null) : null;
-  if (env.ASSETS && assets)
+  const tables = resolveTables(env.DATA, env.DATA_SOURCE, env.DATA_PIN);
+  // R2 の読む先を読めないときは、静的アセットに置いたデータで答える
+  const resolved = assets ? await tables.catch(() => assets) : await tables;
+  // 静的アセットは、R2 で今読むバージョン (refs/heads/main か DATA_PIN) と同じときだけ使う。
+  // Sync で main が進んだときや DATA_PIN で固定したときは、デプロイし直すまで R2 から読む
+  if (env.ASSETS && assets?.version === resolved.version)
     return { resolved: assets, open: assetsOpener(env.ASSETS, assets.sizes), inAssets: true };
-  const resolved = await resolveTables(env.DATA, env.DATA_SOURCE, env.DATA_PIN);
   return { resolved, open: r2Opener(env.DATA, resolved.sizes), inAssets: false };
 };
 

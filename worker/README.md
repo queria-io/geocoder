@@ -85,8 +85,9 @@ Cloudflare の Workers Builds で、production ブランチへのマージで本
 data.queria.io の geocoder の refs/heads/main が指すバージョンのファイル (全部で約 2.5 GB) を取り、静的アセットとして
 Worker と一緒にデプロイする。Worker は静的アセットに表があればそこからファイルを丸ごと読み (1 回 10 ミリ秒前後)、
 無ければ R2 から Range で読む (1 回 100 ミリ秒前後)。静的アセットは 1 ファイル 25 MiB までなので、それを超える
-ファイルのあるバージョンでは何も置かず、R2 から読む。データを作り直しても、デプロイし直すまでは前のバージョンを
-静的アセットから読む。production 以外のブランチのビルドは止めてある (確認用のビルドは `wrangler preview` と
+ファイルのあるバージョンでは何も置かず、R2 から読む。静的アセットを読むのは、そのバージョンが R2 で今読むバージョン
+(refs/heads/main か DATA_PIN) と同じときだけで、Sync で main が進んだときや DATA_PIN で固定したときは、デプロイし
+直すまで R2 から読む。production 以外のブランチのビルドは止めてある (確認用のビルドは `wrangler preview` と
 設定の二重持ちが要るため)。PR では `.github/workflows/worker.yml` が試験・型・整形を見る。
 
 main へのマージでは本番に出ない。main に入ったのに本番に出ていない変更は、`.github/workflows/release-pr.yml` が

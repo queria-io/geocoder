@@ -81,6 +81,11 @@ describe("filesFor", () => {
     expect(filesFor(byCity, { pref_code: "13" })).toEqual([]);
   });
 
+  it("知らない列の「列=値/」では選ばない", () => {
+    const other = ["x=1/main/parcel/a.parquet", "d/main/parcel/year=2026/b.parquet"];
+    expect(filesFor(other, { pref_code: "13" })).toEqual(other);
+  });
+
   it("分けていない表は、どの都道府県でも全部", () => {
     expect(filesFor(["town.parquet", "x/town-2.parquet"], { pref_code: "13" })).toHaveLength(2);
   });

@@ -10,16 +10,21 @@ import tables from "./tables.json";
 export const TABLES = tables as Readonly<Record<keyof typeof tables, string>>;
 export type TableName = keyof typeof TABLES;
 
+/** ファイルを分ける列。パスの「列=値/」のうち、この列だけを読むファイルの選択に使う */
+const PARTITION_COLUMNS = ["pref_code", "lg_code", "name_bucket"] as const;
+const PARTITION_SEGMENT = new RegExp(`(?:^|/)(${PARTITION_COLUMNS.join("|")})=([^/]+)/`, "g");
+
 /** 分けたファイルのパスにある「列=値/」。読むファイルを列の値で選ぶ */
-export type Partition = Partial<Record<"pref_code" | "lg_code" | "name_bucket", string>>;
+export type Partition = Partial<Record<(typeof PARTITION_COLUMNS)[number], string>>;
 
 /**
  * 表のファイルのうち、want の値の行が入るもの。分けた表のファイルはパスに「pref_code=13/」「lg_code=131016/」
- * 「name_bucket=41/」を持つ。パスの列がすべて want と同じ値のファイルを返す。分けていない表のファイルは全部返す
+ * 「name_bucket=41/」を持つ。パスの列がすべて want と同じ値のファイルを返す。分けていない表のファイルは全部返す。
+ * ほかの「列=値/」(置き場のパスや、Worker の知らない列) では選ばない (読む量は増えても、行を落とさない)
  */
 export const filesFor = (keys: readonly string[], want: Partition): string[] =>
   keys.filter((k) =>
-    [...k.matchAll(/(?:^|\/)(\w+)=([^/]+)\//g)].every(
+    [...k.matchAll(PARTITION_SEGMENT)].every(
       ([, col, value]) => want[col as keyof Partition] === value,
     ),
   );
