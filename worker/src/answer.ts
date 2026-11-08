@@ -1,6 +1,7 @@
 // API の答えの形。当て方 (matching/) は上流の写しのままにして、外向けの形はここで作る。
 // 項目名と段の値は abr-geocoder の答え (GeoJSON) にそろえる
 import type { CoordinateLevel, MatchedResult } from "./model/model";
+import { evidenceOf, NO_KEYS } from "./evidence";
 
 /** 全国地方公共団体コードの検査数字。頭 5 桁から 6 桁目を出す */
 export const checkDigit = (code5: string): string => {
@@ -44,7 +45,14 @@ export const ISJ_ATTRIBUTION = "「街区レベル位置参照情報」（国土
 export const SMALL_AREA_ATTRIBUTION =
   "「国勢調査 境界データ（小地域）」（総務省統計局、e-Stat）を加工して作成";
 
-export const INCLUDES = ["match", "structured_address", "ids", "codes", "small_area"] as const;
+export const INCLUDES = [
+  "match",
+  "structured_address",
+  "ids",
+  "codes",
+  "small_area",
+  "evidence",
+] as const;
 export type Include = (typeof INCLUDES)[number];
 
 /** 当てたあとに足す項目。郵便番号は町字の表、小地域は境界タイルから引く */
@@ -83,6 +91,7 @@ export const forwardAnswer = (r: MatchedResult, include: ReadonlySet<Include>, x
   ...(include.has("ids") ? { ids: r.ids } : {}),
   ...(include.has("codes") ? { codes: codes(r, x) } : {}),
   ...(include.has("small_area") ? { estat_small_area_code: x.estat_small_area_code } : {}),
+  ...(include.has("evidence") ? { evidence: evidenceOf(r) } : {}),
 });
 
 /** abr-geocoder と同じ FeatureCollection。abr-geocoder の項目は全部入れ、Queria の項目は頼まれたときだけ */
@@ -100,6 +109,7 @@ export const forwardFeature = (r: MatchedResult, include: ReadonlySet<Include>, 
     ...candidatesOf(r),
     ...(include.has("codes") ? { codes: codes(r, x) } : {}),
     ...(include.has("small_area") ? { estat_small_area_code: x.estat_small_area_code } : {}),
+    ...(include.has("evidence") ? { evidence: evidenceOf(r) } : {}),
   },
 });
 
@@ -123,12 +133,30 @@ export const parseInclude = (s: string | undefined): Set<Include> | null => pars
 export const versionOf = (file: string): string =>
   file.slice(file.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "");
 
+/**
+ * 値が null でも列を持つ入れ子の項目 (evidence.point)。どの行も同じ列になるよう、null は中身が空の形でほどく
+ */
+const NULLABLE_SHAPES: Record<string, Record<string, unknown>> = {
+  "evidence.point": {
+    dataset: null,
+    point_type: null,
+    rank: null,
+    keys: NO_KEYS,
+  },
+};
+
+/** 配列の項目をつなぐ文字。照合の段 (evidence.steps) は名前を「,」でつなぐ。ほか (unmatched_address) は文字列をつなぐ */
+const ARRAY_SEPARATORS: Record<string, string> = { "evidence.steps": "," };
+
 const flatten = (o: Record<string, unknown>, prefix = ""): [string, unknown][] =>
-  Object.entries(o).flatMap(([k, v]) =>
-    v !== null && typeof v === "object" && !Array.isArray(v)
-      ? flatten(v as Record<string, unknown>, `${prefix}${k}.`)
-      : [[`${prefix}${k}`, Array.isArray(v) ? v.join("") : v] as [string, unknown]],
-  );
+  Object.entries(o).flatMap(([k, v]) => {
+    const key = `${prefix}${k}`;
+    if (v === null && NULLABLE_SHAPES[key] !== undefined)
+      return flatten(NULLABLE_SHAPES[key], `${key}.`);
+    if (v !== null && typeof v === "object" && !Array.isArray(v))
+      return flatten(v as Record<string, unknown>, `${key}.`);
+    return [[key, Array.isArray(v) ? v.join(ARRAY_SEPARATORS[key] ?? "") : v] as [string, unknown]];
+  });
 
 const cell = (v: unknown): string => {
   const s = v === null || v === undefined ? "" : String(v);

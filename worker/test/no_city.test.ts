@@ -203,6 +203,7 @@ describe("withoutCity", () => {
     );
     expect(asked).toEqual(["京都府京都市上京区大宮通今出川上る観世町117"]);
     expect(r.ids.lg_code).toBe("261025");
+    expect(r.steps).toEqual(["kyoto_street_skipped", "city_inferred"]);
   });
 
   it("京都の通り名から書いた住所も、通り名の後ろの町名で長く当たった区だけを採る", async () => {
@@ -228,6 +229,17 @@ describe("withoutCity", () => {
       async (a) => [a.includes("上京区") ? at("261025", "観世町") : at("261033", "観世")],
     );
     expect(got.map((x) => [x.ids.lg_code, x.candidates])).toEqual([["261025", undefined]]);
+  });
+
+  it("市区町村を推定した結果に city_inferred の段を残す", async () => {
+    const [r] = await withoutCity(
+      unmatched(),
+      "松川町字市坂３－１",
+      names([row("松川町", "072010")]),
+      Object.values(cities),
+      async () => [hit("072010", "parcel")],
+    );
+    expect(r.steps).toEqual(["city_inferred"]);
   });
 
   it("町名を持つ市区町村が 1 つなら、市区町村名を補って当て直す", async () => {
