@@ -1,6 +1,7 @@
 // 合併などで無くなった市区町村の名前で書いた住所 (「三重県員弁郡員弁町笠田新田」)。上流は都道府県止まりか、何も返さない。
 // 旧市区町村名の索引 (town.former_city) から範囲を引き継いだ今の市区町村を引き、今の名前に読み替えて照合し直す。
-// 旧町村名は今の町字名の頭に残ることが多い (いなべ市員弁町笠田新田) ので、残した形と外した形の両方を試す。上流には無い段。
+// 旧町村名は今の町字名の頭に残ることが多い (いなべ市員弁町笠田新田) ので、残した形と外した形の両方を試す。
+// 町字まで当たらなくても、引き継いだ市区町村が 1 つなら市区町村止まりの結果を使う。上流には無い段。
 // 上流の市区町村名のあいまい一致は、旧市区町村名を名前の近い今の市区町村に読むことがある (員弁郡員弁町を員弁郡東員町に)。
 // 上流が当てた市区町村の名前が住所に書かれていなければ、市区町村まで当たっていても旧市区町村名から読み直す
 import { Detail, type MatchedResult } from "./model/model";
@@ -102,13 +103,18 @@ export const withFormerCity = async (
       );
       return found
         .flat()
-        .filter((x) => x.ids.lg_code === c.lgCode && Detail(x.match_level) >= Detail("machiaza"));
+        .filter(
+          (x) => sameCity(c.lgCode, x.ids.lg_code, city) && Detail(x.match_level) >= Detail("city"),
+        );
     }),
   );
   const found = tried.flat();
   const best = strongestResult(found);
   // 上流が読み違えた市区町村の結果とは強さを比べない
   if (best === undefined || (!misread && compareResultStrength(best, r) >= 0)) return r;
+  // 町字まで当たらず市区町村止まりなら、引き継いだ市区町村が 1 つのときだけ使う
+  if (Detail(best.match_level) < Detail("machiaza") && new Set(used.map((f) => f.lg_code)).size > 1)
+    return r;
   // 引き継いだ市区町村の 2 つで同じ強さに当たれば、どちらか決められないので読み替えない
   const ties = found.filter((x) => compareResultStrength(x, best) === 0);
   if (new Set(ties.map((x) => x.ids.lg_code)).size > 1) return r;
