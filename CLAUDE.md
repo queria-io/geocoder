@@ -27,12 +27,11 @@ README・BENCHMARK.md・DESIGN.md・PR 本文・コメントは、技術文書�
 - 使わない: 比べ、比べ方、答えあり、当て直し、物差し、関門、出どころ、つなぎ方、確かめ方、速さ、データの形、まだ届いていないところ、次に直すところ
 - PR 本文には変更内容と検証方法を書く
 
-## queria-web との境目
+## API
 
-- このリポジトリが出すのは API (geocoder.queria.io/v1) と仕様書 (/docs・/openapi.json) だけ。`/` は /docs へ転送する。queria-web へは転送しない (このリポジトリだけで成り立つようにする)
-- queria-web (エリア分析など) はこの API をふつうの利用者と同じ形で呼ぶ。ログインと API キーは queria.io 側
-- つながりは公開の API 仕様 (OpenAPI) と、API キーの確認の 2 本だけ。queria-web の D1 の表や画面の部品をこれ以上読まない
-- API の形を変えるときは OpenAPI の差分として PR に出す。アカウントと利用規約は Queria のものを使う
+- このリポジトリが提供するのは API (geocoder.queria.io/v1) と仕様書 (/docs・/openapi.json) だけ。`/` は /docs へ転送する
+- API キーとアカウントは queria.io のものを使う
+- API のレスポンスの項目や形式を変えるときは、OpenAPI の差分として PR に出す
 
 ## コマンド
 
