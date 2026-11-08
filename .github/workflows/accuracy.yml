@@ -4,8 +4,8 @@ name: Accuracy
 # 照合し、本番の結果より悪くなっていれば失敗にする。本番の結果は、本番が変わったときに Bench (bench.yml) が
 # 残したものを使い、PR ごとには本番に送らない。
 #
-# データは、PR で変えたモデルとその下流だけを作り直し (dbt の state:modified+)、ほかの表は本番のファイルを読む。
-# 作り直した表はランナーの中に置くだけで、どこにも上げない。Worker はランナーの中で動かす (bench/local/)
+# データは、PR でモデルを変えたときだけ全部のモデルを作り直し、変えていなければ本番のファイルを読む。
+# 作り直したテーブルはランナーの中に置くだけで、どこにも上げない。Worker はランナーの中で動かす (bench/local/)
 on:
   pull_request:
     paths:
@@ -90,7 +90,12 @@ jobs:
           git -C ../base submodule update -q --init
           (cd ../base && uv run --project "$GITHUB_WORKSPACE" dbt deps -q && uv run --project "$GITHUB_WORKSPACE" dbt parse -q)
           uv run dbt deps -q
-          uv run dbt run -s state:modified+ --state ../base/target
+          # モデルを変えた PR では、Sync と同じく全部のモデルを作り直す。変えたモデルとその下流だけを作ると、
+          # 上流のテーブルを data.queria.io から読む。市区町村ごとに分けるテーブルは 1 スレッドで作るので、
+          # 遠くから読むと遅く (rsdtdsp は Sync の 29 秒が 817 秒)、parcel と rsdtdsp が DuckDB のエラーで落ちた
+          if [ -n "$(uv run dbt -q ls -s state:modified --state ../base/target --resource-type model)" ]; then
+            uv run dbt run
+          fi
           uv run python scripts/local-version.py .fdl/work.sqlite "$FDL_DATA_PATH"
       - name: PR の Worker とデータで住所を照合して評価する
         env:
