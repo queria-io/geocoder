@@ -174,6 +174,20 @@ describe("withFormerCity", () => {
     expect(got.match_level).toBe("city");
   });
 
+  it("都道府県名の無い住所は、町字まで当たらなければ読み替えない", async () => {
+    const r = pref({ match_level: "unknown", ids: emptyIDs(), matched_address: "" });
+    const cityOnly = async () => [
+      pref({
+        matched_address: "三重県いなべ市",
+        match_level: "city",
+        ids: { ...emptyIDs(), lg_code: "242144" },
+      }),
+    ];
+    expect(
+      await withFormerCity(r, "員弁町字新舘添49-4", formers, (c) => CITIES.get(c), cityOnly),
+    ).toBe(r);
+  });
+
   it("引き継いだ市区町村が複数で町字まで当たらなければ、読み替えない", async () => {
     const r = pref({ unmatched_address: ["多度村1"] });
     const got = await withFormerCity(
