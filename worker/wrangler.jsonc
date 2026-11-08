@@ -7,7 +7,7 @@
   "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/data/*"] },
   "compatibility_date": "2025-12-01",
   "account_id": "57c6a116efc637fc3f21d0affea15508",
-  // 無料のベータとして geocoder.queria.io で出す。workers.dev は計測用に残す
+  // 無料で geocoder.queria.io で出す。workers.dev は計測用に残す
   "workers_dev": true,
   "routes": [{ "pattern": "geocoder.queria.io", "custom_domain": true }],
   "preview_urls": true,

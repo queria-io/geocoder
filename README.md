@@ -47,7 +47,7 @@ WHERE key_code = '131010100'
 
 ## API の互換性
 
-API のバージョンは、仕様書の `info.version` と GeoJSON の `result_info.api_version` に出している（今は `0.2.0-beta`）。1.0.0 からは、`/v1` で次を守る。ベータ（0.x）の間も、下の「変えないもの」を変えるときは変更履歴に書く。
+API のバージョンは、仕様書の `info.version` と GeoJSON の `result_info.api_version` に出している（今は `0.2.0`）。バージョンはセマンティックバージョニングで付け、1.0.0 からは、`/v1` で次を守る。1.0.0 より前は互換性を約束しないが、下の「変えないもの」を変えるときは変更履歴に書く。
 
 - 変えないもの: パスとパラメーターの名前と意味、応答の項目の名前と型、列挙の値（`match_level`・`coordinates_level`・`evidence.point.point_type`・`evidence.steps` など）の意味、エラーの形（HTTP のステータスと `error`）
 - 足すことがあるもの: 応答の項目、`include` の名前、列挙の値。使う側は、知らない項目と値を無視する

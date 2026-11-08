@@ -539,7 +539,7 @@ const GeocodeFeatureCollection = z
     description: "format=geojson のとき。abr-geocoder の /geocode と同じ形",
   });
 
-const API_VERSION = "0.2.0-beta";
+const API_VERSION = "0.2.0";
 
 // 1 件ごとに市区町村の町字を読むので、市区町村がばらばらだと 100 件で CPU の上限 (30 秒) を超えた。町字の表の行グループを小さくするまでは 25 件にする
 const BATCH_MAX = 25;
@@ -853,7 +853,7 @@ app.doc31("/openapi.json", {
       ].join("\n"),
       "結果に含める項目は `include` で選ぶ（例: `include=ids,codes,small_area`）。既定は座標と照合の結果だけ。",
       "1 つの IP アドレスから 1 分に 300 回まで（一括は 1 回の呼び出しで 1 回と数える）。結果を公開するときは `source.attribution` の出典も表示する。",
-      "今はベータ (`info.version` が 0.x)。1.0.0 からは、応答の項目と列挙の値を消さず、意味を変えない (足すことはある。知らない項目と値は無視する)。ベータの間に変えるときは変更履歴に書く。照合の結果は、データの更新と照合の改善で変わる。互換性の約束と変更履歴は [GitHub](https://github.com/queria-io/geocoder#api-の互換性) にある。",
+      "`info.version` はセマンティックバージョニングで付ける。1.0.0 より前は互換性を約束しない。1.0.0 からは、応答の項目と列挙の値を消さず、意味を変えない (足すことはある。知らない項目と値は無視する)。1.0.0 より前に変えるときも変更履歴に書く。照合の結果は、データの更新と照合の改善で変わる。互換性の約束と変更履歴は [GitHub](https://github.com/queria-io/geocoder#api-の互換性) にある。",
       "概要と精度は [queria.io/geocoder](https://queria.io/geocoder)、ソースコードとセルフホストの手順は [GitHub](https://github.com/queria-io/geocoder) を参照。",
     ].join("\n\n"),
   },
