@@ -6,7 +6,9 @@
 -- 位置参照情報の街区・地番の番号。ジオコーダーは、住所に書かれた小字・丁目・番号のうち実在するものが最も多い
 -- 市区町村を候補にする。
 -- ジオコーダーは住所の頭 2 文字 (name_key) で行グループを絞って読むので、その順に並べる。1 文字の町名 (「栄」) は
--- name_key もその 1 文字になる
+-- name_key もその 1 文字になる。
+-- ファイルは name_bucket (name_key の 1 文字目の文字コードを 64 で割った余り) ごとに分ける。Worker も同じ式で
+-- 読むファイルを決める
 WITH town AS (
     SELECT
         lg_code,
@@ -35,6 +37,7 @@ numbers AS (
 )
 SELECT
     left(t.name, 2) AS name_key,
+    unicode(t.name) % 64 AS name_bucket,
     t.name,
     t.lg_code,
     t.chome,
