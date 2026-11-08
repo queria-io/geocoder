@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { filesFor, fromManifest, fromVersion } from "../src/data/source";
+import { filesFor, fromManifest, fromVersion, nameBucket } from "../src/data/source";
 
 describe("fromManifest", () => {
   it("目録からの相対パスにし、無い表は空にする", () => {
@@ -61,13 +61,32 @@ describe("filesFor", () => {
     "geocoder/data/main/parcel/pref_code=13/b.parquet",
     "geocoder/data/main/parcel/pref_code=13/c.parquet",
   ];
+  const byCity = [
+    "d/main/parcel/lg_code=131016/a.parquet",
+    "d/main/parcel/lg_code=131024/b.parquet",
+  ];
 
   it("都道府県ごとに分けた表は、その都道府県のファイルだけ", () => {
-    expect(filesFor(keys, "13")).toEqual(keys.slice(1));
-    expect(filesFor(keys, "47")).toEqual([]);
+    expect(filesFor(keys, { pref_code: "13" })).toEqual(keys.slice(1));
+    expect(filesFor(keys, { pref_code: "47" })).toEqual([]);
+  });
+
+  it("市区町村ごとに分けた表は、その市区町村のファイルだけ", () => {
+    expect(filesFor(byCity, { pref_code: "13", lg_code: "131016" })).toEqual(byCity.slice(0, 1));
+    // 都道府県ごとの表も同じ指定で選べる
+    expect(filesFor(keys, { pref_code: "13", lg_code: "131016" })).toEqual(keys.slice(1));
+  });
+
+  it("分けた列を指定しなければ選ばない", () => {
+    expect(filesFor(byCity, { pref_code: "13" })).toEqual([]);
   });
 
   it("分けていない表は、どの都道府県でも全部", () => {
-    expect(filesFor(["town.parquet", "x/town-2.parquet"], "13")).toHaveLength(2);
+    expect(filesFor(["town.parquet", "x/town-2.parquet"], { pref_code: "13" })).toHaveLength(2);
+  });
+
+  it("町名の索引の区分は、1 文字目の文字コードを 64 で割った余り", () => {
+    // 「天」は U+5929 (22825)
+    expect(nameBucket("天神")).toBe("41");
   });
 });

@@ -37,6 +37,18 @@ FROM e_stat.boundary.small_area
 WHERE key_code = '131010100'
 ```
 
+## 手元で動かす
+
+Node.js と pnpm があれば、手元で API を動かせる。データは Queria が公開している `https://data.queria.io/geocoder/` から HTTP の Range で読む。
+
+```bash
+cd worker
+pnpm install
+pnpm build:web
+npx wrangler dev -c wrangler.self-host.jsonc
+curl "http://localhost:8787/v1/forward?address=茨城県つくば市学園南3-28-10"
+```
+
 ## セルフホスト
 
 自分の Cloudflare アカウントの Worker として動かせる。Node.js と pnpm があれば、次のコマンドでデプロイできる。

@@ -1,4 +1,5 @@
-// 直下のデータセットの Parquet を R2 から Range で読む。表は都道府県ごとのファイルに分かれ、ファイルの中は
+// 直下のデータセットの Parquet を、Worker の静的アセット (丸ごと) か R2 (Range) から読む。表は都道府県・市区町村
+// ごとのファイルに分かれ、ファイルの中は
 // lg_code などの列の順に並べてある。フッターの行グループごとのその列の最小・最大を見て、値が入る行グループだけを読む。
 // DuckDB もカタログも使わない
 import { decompress } from "fzstd";
@@ -37,6 +38,46 @@ export const r2Buffer = (
     return body;
   },
 });
+
+/**
+ * 静的アセットのファイルを、hyparquet が読める形にする。静的アセットは Range を受けないので、
+ * 最初の読みでファイルを丸ごと取り、あとはその中から切り出す。取ったファイルは keep に置き、
+ * 問い合わせが終われば手放す (isolate には残さない)
+ */
+export const assetsBuffer = (
+  assets: Fetcher,
+  key: string,
+  byteLength: number,
+  keep: () => Map<string, Promise<ArrayBuffer>>,
+  onRead?: (bytes: number, ms: number) => void,
+): AsyncBuffer => {
+  const whole = () => {
+    const kept = keep();
+    const hit = kept.get(key);
+    if (hit) return hit;
+    const t0 = Date.now();
+    const p = assets.fetch(new Request(`https://assets.local/${key}`)).then(async (r) => {
+      if (!r.ok) throw new Error(`not found: ${key}`);
+      const body = await r.arrayBuffer();
+      onRead?.(body.byteLength, Date.now() - t0);
+      return body;
+    });
+    kept.set(key, p);
+    p.catch(() => kept.delete(key));
+    return p;
+  };
+  return { byteLength, slice: async (start, end) => (await whole()).slice(start, end) };
+};
+
+/** ファイルを開く。大きさとフッターの長さ (size) が分かっているときの形 */
+export const openSized = async (
+  file: AsyncBuffer,
+  size: { bytes: number; footer: number },
+  keep?: Keep,
+): Promise<Table> => {
+  const footer = await file.slice(size.bytes - size.footer - 8, size.bytes);
+  return { file, metadata: compact(parquetMetadata(footer), keep) };
+};
 
 export type RowRange = { rowStart: number; rowEnd: number };
 
@@ -161,11 +202,7 @@ export const openR2Table = async (
   keep?: Keep,
   size?: { bytes: number; footer: number },
 ): Promise<Table> => {
-  if (size) {
-    const file = r2Buffer(bucket, key, size.bytes, onRead);
-    const footer = await file.slice(size.bytes - size.footer - 8, size.bytes);
-    return { file, metadata: compact(parquetMetadata(footer), keep) };
-  }
+  if (size) return openSized(r2Buffer(bucket, key, size.bytes, onRead), size, keep);
   const head = await retryOnce(() => bucket.head(key));
   if (!head) throw new Error(`not found: ${key}`);
   return openTable(r2Buffer(bucket, key, head.size, onRead), keep);

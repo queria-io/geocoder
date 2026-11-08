@@ -4,30 +4,28 @@
 //   - 「…/」: FDL のリポジトリ。refs/heads/main が指すバージョンの files.json (表ごとのファイル一覧) から引く。
 //     Sync で main が進めば、デプロイなしで読む先が切り替わる
 import { retryOnce } from "./parquet";
+import tables from "./tables.json";
 
-/** ジオコーダーが読む表。FDL では右の名前 (スキーマ.表) で引く */
-export const TABLES = {
-  town: "town.town",
-  city: "main.city",
-  pref: "main.pref",
-  rsdtdsp: "main.rsdtdsp",
-  parcel: "main.parcel",
-  town_name: "town.town_name",
-  former_city: "town.former_city",
-  match_area: "town.match_area",
-  match_number: "main.match_number",
-} as const;
+/** ジオコーダーが読む表。FDL では右の名前 (スキーマ.表) で引く。scripts/build-data.mjs も同じ一覧を読む */
+export const TABLES = tables as Readonly<Record<keyof typeof tables, string>>;
 export type TableName = keyof typeof TABLES;
 
+/** 分けたファイルのパスにある「列=値/」。読むファイルを列の値で選ぶ */
+export type Partition = Partial<Record<"pref_code" | "lg_code" | "name_bucket", string>>;
+
 /**
- * 表のファイルのうち、都道府県 prefCode (2 桁) の行が入るもの。都道府県ごとに分けた表はパスに
- * 「pref_code=13/」を持つ。分けていない表 (パスに無い) のファイルは、どの都道府県でも全部を読む
+ * 表のファイルのうち、want の値の行が入るもの。分けた表のファイルはパスに「pref_code=13/」「lg_code=131016/」
+ * 「name_bucket=41/」を持つ。パスの列がすべて want と同じ値のファイルを返す。分けていない表のファイルは全部返す
  */
-export const filesFor = (keys: readonly string[], prefCode: string): string[] =>
-  keys.filter((k) => {
-    const m = /(?:^|\/)pref_code=([^/]+)\//.exec(k);
-    return m === null || m[1] === prefCode;
-  });
+export const filesFor = (keys: readonly string[], want: Partition): string[] =>
+  keys.filter((k) =>
+    [...k.matchAll(/(?:^|\/)(\w+)=([^/]+)\//g)].every(
+      ([, col, value]) => want[col as keyof Partition] === value,
+    ),
+  );
+
+/** 町名の索引のファイルの区分。dbt の town_name と同じ式 (名前の 1 文字目の文字コードを 64 で割った余り) */
+export const nameBucket = (nameKey: string): string => String((nameKey.codePointAt(0) ?? 0) % 64);
 
 /** ファイルの大きさとフッター (メタデータ) の長さ。分かればフッターを 1 回の読みで取れる */
 export type FileSize = { bytes: number; footer: number };
@@ -152,4 +150,21 @@ export const resolveTables = (
   cached = { source: key, at: now, value: guarded };
   guarded.catch(() => (cached = null));
   return guarded;
+};
+
+/** Worker と一緒に置いたデータの目録 (pnpm build:data が public/data/ に書く)。キーは静的アセットのパス */
+export const ASSETS_MANIFEST = "data/geocoder.json";
+
+let assetsResolved: Promise<Resolved | null> | null = null;
+
+/**
+ * 静的アセットに置いたデータを読む先。データはデプロイと一緒に変わるので、isolate の中で 1 回だけ読む。
+ * 置いていなければ null (R2 から読む)
+ */
+export const resolveAssets = (assets: Fetcher): Promise<Resolved | null> => {
+  assetsResolved ??= assets
+    .fetch(new Request(`https://assets.local/${ASSETS_MANIFEST}`))
+    .then(async (r) => (r.ok ? ((await r.json()) as Resolved) : null));
+  assetsResolved.catch(() => (assetsResolved = null));
+  return assetsResolved;
 };

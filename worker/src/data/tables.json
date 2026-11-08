@@ -1,0 +1,11 @@
+{
+  "town": "town.town",
+  "city": "main.city",
+  "pref": "main.pref",
+  "rsdtdsp": "main.rsdtdsp",
+  "parcel": "main.parcel",
+  "town_name": "town.town_name",
+  "former_city": "town.former_city",
+  "match_area": "town.match_area",
+  "match_number": "main.match_number"
+}
