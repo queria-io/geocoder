@@ -94,7 +94,7 @@ pnpm self-host
 | `match_area` | 住所の照合に使う区域の索引。大字・町、丁目、小字を連結した名前を、ABR と位置参照情報（過去の版を含む）の表記のまま持つ |
 | `match_number` | 住所の照合に使う番号の索引のうち、町字の表に無い番号の点（番号を振る区域で引く地番、地番の親番、位置参照情報の街区・地番）。区域・番号・出典ごとに 1 行 |
 
-町字・住居表示・地番の表と照合の索引（`town`・`rsdtdsp`・`parcel`・`match_area`・`match_number`）は、都道府県（`pref_code`）ごとにファイルを分けてある。ファイルの中は、町字の表と `match_area` は `lg_code` の順、住居表示・地番の表は町字ごとのキーの順、`match_number` は `area_id` の順に並べてある。市区町村や町字で絞って読むと、Parquet のフッターの統計から当たる行グループだけを読めばよい。行グループの大きさは `dbt_project.yml` で決めている。座標は `geometry` ではなく `lng` / `lat` の数値の列で持つ。
+住居表示・地番の表と番号の索引（`rsdtdsp`・`parcel`・`match_number`）は市区町村（`lg_code`）ごと、町字の表と照合の区域（`town`・`match_area`）は都道府県（`pref_code`）ごと、町名の索引（`town_name`）は名前の 1 文字目の文字コードを 64 で割った余り（`name_bucket`）ごとにファイルを分けてある。ファイルの中は、町字の表と `match_area` は `lg_code` の順、住居表示・地番の表は町字ごとのキーの順、`match_number` は `area_id` の順、`town_name` は `name_key` の順に並べてある。市区町村や町字で絞って読むと、Parquet のフッターの統計から当たる行グループだけを読めばよい。行グループの大きさは `dbt_project.yml` で決めている。座標は `geometry` ではなく `lng` / `lat` の数値の列で持つ。
 
 `town` の列のうち、照合の規則にかかわるものは次のとおり。
 
