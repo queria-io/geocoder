@@ -4,7 +4,7 @@
 
 ```sql
 .read geocode.sql
-SELECT * FROM geocode(['東京都千代田区紀尾井町1-3', 'つくば市学園南3丁目28番10']);
+SELECT * FROM geocode(['東京都千代田区紀尾井町1-3', '東京都千代田区千代田1-1']);
 ```
 
 表の列から渡すときは、一覧を変数に入れてから渡す。
@@ -28,7 +28,7 @@ LOAD ducklake;
 ATTACH 'ducklake:https://data.queria.io/e_stat/ducklake.duckdb' AS e_stat (READ_ONLY);
 
 SELECT g.address, g.small_area_code, s.area_name, s.jinko AS population, s.setai AS households
-FROM geocode(['東京都千代田区丸の内1-9-1', 'つくば市学園南3丁目28番10']) g
+FROM geocode(['東京都千代田区丸の内1-9-1', '東京都千代田区千代田1-1']) g
 LEFT JOIN e_stat.boundary.small_area s ON s.key_code = g.small_area_code;
 ```
 

@@ -4,7 +4,8 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "geocoder",
   "main": "src/self-host.ts",
-  "assets": { "directory": "./public" },
+  // pnpm build:data で public/data/ に住所の表を置いていても、外からは返さない
+  "assets": { "directory": "./public", "run_worker_first": ["/data/*"] },
   "compatibility_date": "2025-12-01",
   "workers_dev": true,
   "rules": [{ "type": "Text", "globs": ["**/*.tsv"], "fallthrough": true }],
