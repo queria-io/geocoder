@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { type FormerCityRow, withFormerCity } from "../src/former_city";
+import { type FormerCityRow, formerOrTown, withFormerCity } from "../src/former_city";
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "../src/model/model";
 import type { CityResult } from "../src/repository/types";
 
@@ -241,5 +241,29 @@ describe("withFormerCity", () => {
       async () => [town("242144", "三重県いなべ市員弁町")],
     );
     expect(got).toBe(r);
+  });
+});
+
+describe("formerOrTown", () => {
+  const r = pref({ unmatched_address: ["員弁町大通北"] });
+  const cityLevel = pref({ match_level: "city", ids: { ...emptyIDs(), lg_code: "242144" } });
+
+  it("市区町村止まりの読み直しより、町名から町字まで当たった結果を使う", async () => {
+    const byTown = [town("242055", "三重県桑名市員弁町大通北")];
+    expect(await formerOrTown(r, cityLevel, async () => byTown)).toEqual({ n: r, byTown });
+  });
+
+  it("町名から町字まで当たらなければ、市区町村止まりの読み直しを使う", async () => {
+    expect(await formerOrTown(r, cityLevel, async () => [])).toEqual({ n: cityLevel });
+  });
+
+  it("町字まで読み直せたときと、上流が市区町村を決めていたときは、町名を試さない", async () => {
+    const never = async (): Promise<MatchedResult[]> => {
+      throw new Error("町名を試さない");
+    };
+    const hit = town("242144", "三重県いなべ市員弁町笠田新田");
+    expect(await formerOrTown(r, hit, never)).toEqual({ n: hit });
+    const misread = pref({ match_level: "city", ids: { ...emptyIDs(), lg_code: "243248" } });
+    expect(await formerOrTown(misread, cityLevel, never)).toEqual({ n: cityLevel });
   });
 });

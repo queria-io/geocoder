@@ -125,3 +125,25 @@ export const withFormerCity = async (
   if (new Set(ties.map((x) => x.ids.lg_code)).size > 1) return r;
   return best;
 };
+
+/**
+ * 旧市区町村名から市区町村止まりにしか当たらず、上流が市区町村を決めていなければ、町名から市区町村を推定する段
+ * (byTown) を先に試す。町名から町字まで当たれば、読み直しを捨てて町名の結果を使う。町名の頭が同じ都道府県の
+ * 旧市区町村名と同じ住所を、旧市区町村の後継の市区町村に決めてしまわないため
+ */
+export const formerOrTown = async (
+  r: MatchedResult,
+  reread: MatchedResult,
+  byTown: () => Promise<MatchedResult[]>,
+): Promise<{ n: MatchedResult; byTown?: MatchedResult[] }> => {
+  if (
+    reread === r ||
+    Detail(reread.match_level) >= Detail("machiaza") ||
+    Detail(r.match_level) >= Detail("city")
+  )
+    return { n: reread };
+  const found = await byTown();
+  return found.some((x) => Detail(x.match_level) >= Detail("machiaza"))
+    ? { n: r, byTown: found }
+    : { n: reread };
+};
