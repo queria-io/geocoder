@@ -122,7 +122,8 @@ const toResult = async (
     evidence_point: pointOf(found, lgCode, town === null ? null : found.machiazaId),
     evidence_matched: {
       area: areaName,
-      number: n === null ? null : n.parts.join("-"),
+      // 座標は町字が決まらなくても番号の点から取るので、照合した番号は point の鍵とそろえる
+      number: found.number === null ? null : found.number.parts.join("-"),
       skipped: found.via.skipped === "" ? null : found.via.skipped,
     },
     matched_address: FormatAddress(sa),

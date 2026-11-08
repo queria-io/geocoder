@@ -1,7 +1,7 @@
 // API の答えの形。当て方 (matching/) は上流の写しのままにして、外向けの形はここで作る。
 // 項目名と段の値は abr-geocoder の答え (GeoJSON) にそろえる
 import type { CoordinateLevel, MatchedResult } from "./model/model";
-import { evidenceOf } from "./evidence";
+import { evidenceOf, NO_KEYS } from "./evidence";
 
 /** 全国地方公共団体コードの検査数字。頭 5 桁から 6 桁目を出す */
 export const checkDigit = (code5: string): string => {
@@ -141,15 +141,7 @@ const NULLABLE_SHAPES: Record<string, Record<string, unknown>> = {
     dataset: null,
     point_type: null,
     rank: null,
-    keys: {
-      lg_code: null,
-      machiaza_id: null,
-      blk_id: null,
-      rsdt_id: null,
-      rsdt2_id: null,
-      prc_id: null,
-      number: null,
-    },
+    keys: NO_KEYS,
   },
 };
 

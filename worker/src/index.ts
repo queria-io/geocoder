@@ -385,9 +385,9 @@ const smallArea = z
 
 const EvidencePoint = z
   .object({
-    dataset: z.enum(["address_br", "nlftp"]).openapi({
+    dataset: z.enum(["address_br", "nlftp"]).nullable().openapi({
       description:
-        "点を取った Queria のデータセット。address_br はアドレス・ベース・レジストリ (デジタル庁)、nlftp は国土数値情報の街区レベル位置参照情報 (国土交通省)",
+        "点を取った Queria のデータセット。address_br はアドレス・ベース・レジストリ (デジタル庁)、nlftp は国土数値情報の街区レベル位置参照情報 (国土交通省)。ほかの点から求めた町字の代表点 (machiaza_derived) は null",
     }),
     point_type: z
       .enum([
@@ -397,12 +397,12 @@ const EvidencePoint = z
         "parcel_parent",
         "history",
         "machiaza",
-        "machiaza_average",
+        "machiaza_derived",
         "city",
       ])
       .openapi({
         description:
-          "点の種類。rsdt は住居表示の住居、block は住居表示の街区、parcel は地番、parcel_parent は地番の親番、history は位置参照情報の過去のバージョンの点、machiaza は町字の代表点、machiaza_average は下の町字の点の平均、city は市区町村の代表点",
+          "点の種類。rsdt は住居表示の住居、block は住居表示の街区、parcel は地番、parcel_parent は地番の親番、history は位置参照情報の過去のバージョンの点、machiaza は町字の代表点、machiaza_derived は町字に自前の代表点が無く、上位の町字の点や下の点の平均などから求めた点 (dataset は null)、city は市区町村の代表点",
       }),
     rank: z.number().int().nullable().openapi({
       description:
@@ -414,7 +414,8 @@ const EvidencePoint = z
         number: z.string().nullable().openapi({ description: "照合した番号 (「3-1」)" }),
       })
       .openapi({
-        description: "点の行の鍵。ID は ABR の ID、位置参照情報の点は lg_code・machiaza_id と番号",
+        description:
+          "点の行の鍵。ID は ABR の ID。blk_id・rsdt_id・prc_id は ABR の住居表示・地番の表から引いた点だけに入り、照合の索引の番号の点 (位置参照情報の点、ABR の親番の平均、起番でない小字の地番) は lg_code・machiaza_id と number で引く",
       }),
   })
   .openapi("EvidencePoint");
@@ -422,7 +423,8 @@ const EvidencePoint = z
 const Evidence = z
   .object({
     point: EvidencePoint.nullable().openapi({
-      description: "座標を取った点。座標が無いときと、照合の索引の無いデータでは null",
+      description:
+        "座標を取った点。座標が無いとき、市区町村まで照合できなかったとき、照合の索引の無いデータでは null",
     }),
     matched: z
       .object({

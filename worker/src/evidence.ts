@@ -26,7 +26,7 @@ export type Step = keyof typeof STEPS;
 /** 座標を取った点の出典と、その行の鍵 */
 export type EvidencePoint = {
   /** Queria のデータセット。address_br はアドレス・ベース・レジストリ、nlftp は国土数値情報・位置参照情報 */
-  dataset: "address_br" | "nlftp";
+  dataset: "address_br" | "nlftp" | null;
   /** 点の種類 */
   point_type:
     | "rsdt"
@@ -35,7 +35,7 @@ export type EvidencePoint = {
     | "parcel_parent"
     | "history"
     | "machiaza"
-    | "machiaza_average"
+    | "machiaza_derived"
     | "city";
   /** 同じ住所に点が複数あるときの優先順位 (小さいほど先)。町字・市区町村の代表点は null */
   rank: number | null;
@@ -49,6 +49,17 @@ export type EvidencePoint = {
     /** 照合した番号 (「3-1」) */
     number: string | null;
   };
+};
+
+/** 点の行の鍵がすべて null の形 */
+export const NO_KEYS: EvidencePoint["keys"] = {
+  lg_code: null,
+  machiaza_id: null,
+  blk_id: null,
+  rsdt_id: null,
+  rsdt2_id: null,
+  prc_id: null,
+  number: null,
 };
 
 /** 住所のどこをどの区域・番号に照合したか */
@@ -97,8 +108,9 @@ export const pointOf = (
   };
   if (n === null)
     return {
-      dataset: "address_br",
-      point_type: found.via.own === false ? "machiaza_average" : "machiaza",
+      // 町字に自前の代表点が無いときは、上位の町字の点や下の点の平均などから求めた点で、出典は 1 つに決まらない
+      dataset: found.via.own === false ? null : "address_br",
+      point_type: found.via.own === false ? "machiaza_derived" : "machiaza",
       rank: null,
       keys,
     };
@@ -115,15 +127,7 @@ export const cityPoint = (lgCode: string): EvidencePoint => ({
   dataset: "address_br",
   point_type: "city",
   rank: null,
-  keys: {
-    lg_code: lgCode,
-    machiaza_id: null,
-    blk_id: null,
-    rsdt_id: null,
-    rsdt2_id: null,
-    prc_id: null,
-    number: null,
-  },
+  keys: { ...NO_KEYS, lg_code: lgCode },
 });
 
 export const evidenceOf = (r: MatchedResult): Evidence => ({
