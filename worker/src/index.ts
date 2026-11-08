@@ -35,6 +35,7 @@ import {
   versionOf,
 } from "./answer";
 import { dataVersion, geocode, nearby, type ForwardEnv } from "./forward";
+import { STEPS, type Step } from "./evidence";
 import { ErrAddressTooLong, ErrEmptyAddress } from "./normalize/input";
 import { type Level, resolveAreas, type TilePoint } from "./lookup";
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "./model/model";
@@ -382,6 +383,68 @@ const smallArea = z
   .nullable()
   .openapi({ description: "座標が入る国勢調査の小地域コード。include=small_area のときだけ" });
 
+const EvidencePoint = z
+  .object({
+    dataset: z.enum(["address_br", "nlftp"]).openapi({
+      description:
+        "点を取った Queria のデータセット。address_br はアドレス・ベース・レジストリ (デジタル庁)、nlftp は国土数値情報の街区レベル位置参照情報 (国土交通省)",
+    }),
+    point_type: z
+      .enum([
+        "rsdt",
+        "block",
+        "parcel",
+        "parcel_parent",
+        "history",
+        "machiaza",
+        "machiaza_average",
+        "city",
+      ])
+      .openapi({
+        description:
+          "点の種類。rsdt は住居表示の住居、block は住居表示の街区、parcel は地番、parcel_parent は地番の親番、history は位置参照情報の過去のバージョンの点、machiaza は町字の代表点、machiaza_average は下の町字の点の平均、city は市区町村の代表点",
+      }),
+    rank: z.number().int().nullable().openapi({
+      description:
+        "同じ住所に点が複数あるときの優先順位 (小さいほど先)。町字・市区町村の代表点は null",
+    }),
+    keys: z
+      .object({
+        ...nullableStrings(["lg_code", "machiaza_id", "blk_id", "rsdt_id", "rsdt2_id", "prc_id"]),
+        number: z.string().nullable().openapi({ description: "照合した番号 (「3-1」)" }),
+      })
+      .openapi({
+        description: "点の行の鍵。ID は ABR の ID、位置参照情報の点は lg_code・machiaza_id と番号",
+      }),
+  })
+  .openapi("EvidencePoint");
+
+const Evidence = z
+  .object({
+    point: EvidencePoint.nullable().openapi({
+      description: "座標を取った点。座標が無いときと、照合の索引の無いデータでは null",
+    }),
+    matched: z
+      .object({
+        area: z
+          .string()
+          .nullable()
+          .openapi({ description: "照合した区域の名前 (照合の索引の表記)" }),
+        number: z.string().nullable().openapi({ description: "照合した番号 (「3-1」)" }),
+        skipped: z.string().nullable().openapi({
+          description:
+            "区域と番号の間で読み飛ばした文字 (正規化した表記。数字は算用数字、区切りは「-」)。無ければ null",
+        }),
+      })
+      .openapi({ description: "住所のどこをどの区域・番号に照合したか" }),
+    steps: z.array(z.enum(Object.keys(STEPS) as [Step, ...Step[]])).openapi({
+      description: `上流 (abr-geocoder) の照合の後に使った段 (使った順)。${Object.entries(STEPS)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join("。")}`,
+    }),
+  })
+  .openapi("Evidence");
+
 const GeocodeResult = z
   .object({
     matched_address: z.string().openapi({ description: "照合できた住所の表記" }),
@@ -419,6 +482,7 @@ const GeocodeResult = z
     ids: optional(Ids, "ids"),
     codes: optional(ForwardCodes, "codes"),
     estat_small_area_code: smallArea.optional(),
+    evidence: optional(Evidence, "evidence"),
   })
   .openapi("GeocodeResult");
 
@@ -463,6 +527,7 @@ const GeocodeFeatureCollection = z
           candidates: z.number().int(),
           codes: optional(ForwardCodes, "codes"),
           estat_small_area_code: smallArea.optional(),
+          evidence: optional(Evidence, "evidence"),
         }),
       }),
     ),
@@ -484,6 +549,8 @@ const INCLUDE_DOCS: Record<(typeof INCLUDES)[number], string> = {
   ids: "アドレス・ベース・レジストリの町字 ID などの ID (ids)",
   codes: "都道府県コード・市区町村コード・郵便番号・地域メッシュ (codes)",
   small_area: "座標が入る国勢調査の小地域コード (estat_small_area_code)",
+  evidence:
+    "照合の根拠 (evidence)。座標を取った点の出典と行の鍵、住所のどこをどの区域・番号に照合したか、上流の照合の後に使った段",
 };
 
 const prefectureCodeParam = z

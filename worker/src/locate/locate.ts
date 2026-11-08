@@ -31,6 +31,8 @@ export type NumberPoint = {
 export type Numbers = { has: boolean; points: ReadonlyMap<string, NumberPoint> };
 
 export type Area = {
+  /** 索引に載っている区域の名前 (出典の表記のまま) */
+  name: string;
   point: Point | null;
   /** 区域そのものの点か (false は下の町字の点の平均など) */
   own: boolean;
@@ -49,6 +51,21 @@ export type Located = {
   rest: string;
   /** 住所の書き方からは決められない、ほかの候補 (甲乙丙丁の違いだけの番号) */
   others?: Located[];
+  /** 照合の根拠。住所の何文字目から区域を読んだか、区域と番号の間で読み飛ばした文字、番号の甲乙丙丁の扱い */
+  via: Via;
+};
+
+export type Via = {
+  /** 区域を読み始めた位置 (住所の残りの何文字目か。0 なら頭から) */
+  start: number;
+  /** 区域と番号の間で読み飛ばした文字。無ければ "" */
+  skipped: string;
+  /** 番号の頭の甲乙丙丁を外して引いたか */
+  dropped: boolean;
+  /** 番号に甲乙丙丁を付けて引いたか */
+  added: boolean;
+  /** 区域の点が区域そのものの点か (false は下の町字の点の平均など)。番号の点なら null */
+  own: boolean | null;
 };
 
 const NUM = /^-?([甲乙丙丁]?[0-9]+[甲乙丙丁]?)(?:-([甲乙丙丁]?[0-9]+))?(?:-([0-9]+))?/;
@@ -139,6 +156,13 @@ const options = (
             machiazaId: hit.machiazaId ?? areas.get(kk)?.machiazaId ?? null,
             number: hit,
             rest: dropped + t.slice(skipped + (m[0].startsWith("-") ? 1 : 0) + found.key.length),
+            via: {
+              start: s,
+              skipped: t.slice(0, skipped),
+              dropped: stage.drop,
+              added: stage.add,
+              own: null,
+            },
           }));
         const first = all[0] as Located;
         hits.push({
@@ -167,6 +191,7 @@ const options = (
           machiazaId: a.machiazaId,
           number: null,
           rest: t,
+          via: { start: s, skipped: "", dropped: false, added: false, own: a.own },
         },
       });
     }

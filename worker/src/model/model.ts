@@ -1,5 +1,6 @@
 // abrg/internal/model と matchlevel の写し (upstream/UPSTREAM のコミット)。当て方が使う分だけ
 import { IsASCIIDigit } from "../char/char";
+import type { EvidenceMatched, EvidencePoint, Step } from "../evidence";
 
 export type MatchLevel =
   | "unknown"
@@ -75,6 +76,12 @@ export type MatchedResult = {
   candidates?: number;
   /** 旧市区町村名 (「員弁郡員弁町」) を今の市区町村に読み替えて照合したとき true。上流には無い */
   former_city?: boolean;
+  /** 上流の照合の後に使った段 (include=evidence)。上流には無い */
+  steps?: Step[];
+  /** 座標を取った点の出典と行の鍵 (include=evidence)。照合の索引で座標を引いたときだけ入れる */
+  evidence_point?: EvidencePoint | null;
+  /** 住所のどこをどの区域・番号に照合したか (include=evidence) */
+  evidence_matched?: EvidenceMatched;
   machiaza: MachiazaData;
 };
 

@@ -91,6 +91,48 @@ describe("forwardAnswer", () => {
   });
 });
 
+describe("evidence", () => {
+  it("include=evidence のときだけ、点の出典・照合した区域と番号・使った段を返す", () => {
+    const point = {
+      dataset: "address_br" as const,
+      point_type: "parcel" as const,
+      rank: 1,
+      keys: {
+        lg_code: "082201",
+        machiaza_id: "0001000",
+        blk_id: null,
+        rsdt_id: null,
+        rsdt2_id: null,
+        prc_id: "000280001000000",
+        number: "28-10",
+      },
+    };
+    const r = result({
+      evidence_point: point,
+      evidence_matched: { area: "千代田", number: "28-10", skipped: null },
+      steps: ["city_inferred"],
+    });
+    expect(forwardAnswer(r, new Set(), none)).not.toHaveProperty("evidence");
+    expect(forwardAnswer(r, new Set(["evidence"]), none).evidence).toEqual({
+      point,
+      matched: { area: "千代田", number: "28-10", skipped: null },
+      steps: ["city_inferred"],
+    });
+  });
+
+  it("根拠の無い結果は point を null、段を空にする", () => {
+    expect(forwardAnswer(result({}), new Set(["evidence"]), none).evidence).toEqual({
+      point: null,
+      matched: { area: null, number: null, skipped: null },
+      steps: [],
+    });
+  });
+
+  it("include に evidence を渡せる", () => {
+    expect(parseInclude("ids,evidence")).toEqual(new Set(["ids", "evidence"]));
+  });
+});
+
 describe("meshCodes", () => {
   it("東京駅は 1km メッシュ 53394611", () => {
     expect(meshCodes(35.6812, 139.7671)).toEqual({
