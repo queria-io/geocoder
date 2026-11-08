@@ -190,6 +190,7 @@ describe("withFormerCity", () => {
 
   it("引き継いだ市区町村が複数で町字まで当たらなければ、読み替えない", async () => {
     const r = pref({ unmatched_address: ["多度村1"] });
+    // 桑名市の方を強くして、同じ強さの候補で読み替えない段ではなく、引き継いだ市区町村の数で止まることを確かめる
     const got = await withFormerCity(
       r,
       "三重県多度村1",
@@ -199,11 +200,26 @@ describe("withFormerCity", () => {
         pref({
           matched_address: a.startsWith("三重県桑名市") ? "三重県桑名市" : "三重県いなべ市",
           match_level: "city",
+          score: a.startsWith("三重県桑名市") ? 0.5 : 0.3,
           ids: { ...emptyIDs(), lg_code: a.startsWith("三重県桑名市") ? "242055" : "242144" },
         }),
       ],
     );
     expect(got).toBe(r);
+  });
+
+  it("都道府県名が書かれていても上流が都道府県を決めなければ、町字まで当たらないと読み替えない", async () => {
+    const r = pref({ match_level: "unknown", ids: emptyIDs(), matched_address: "" });
+    const cityOnly = async () => [
+      pref({
+        matched_address: "三重県いなべ市",
+        match_level: "city",
+        ids: { ...emptyIDs(), lg_code: "242144" },
+      }),
+    ];
+    expect(
+      await withFormerCity(r, "三重県員弁町大通北", formers, (c) => CITIES.get(c), cityOnly),
+    ).toBe(r);
   });
 
   it("上流が当てた市区町村の名前が住所に書かれていれば、旧町名を読まない", async () => {
