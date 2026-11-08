@@ -12,7 +12,6 @@ SELECT
     {{ full_width_katakana('p.prc_num2') }} AS prc_num2,
     {{ full_width_katakana('p.prc_num3') }} AS prc_num3,
     ST_X(p.geometry) AS lng,
-    ST_Y(p.geometry) AS lat,
-    left(p.lg_code, 2) AS pref_code
+    ST_Y(p.geometry) AS lat
 FROM address_br.main.mart_parcel p
 ORDER BY machiaza_key, p.prc_id

@@ -9,6 +9,8 @@ models:
     columns:
       - name: name_key
         data_type: varchar
+      - name: name_bucket
+        data_type: integer
       - name: name
         data_type: varchar
       - name: lg_code

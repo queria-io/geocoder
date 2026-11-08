@@ -8,7 +8,7 @@ WITH town AS (
     FROM address_br.main.mart_town
     WHERE status_flg <> '3' AND rsdt_addr_flg = '1'
 )
-SELECT *, left(lg_code, 2) AS pref_code FROM (
+SELECT * FROM (
     SELECT
         b.lg_code || b.machiaza_id AS machiaza_key,
         b.lg_code,

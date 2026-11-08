@@ -26,60 +26,36 @@ models:
         - "CALL geocoder.set_option('parquet_compression', 'zstd', schema => 'main')"
       mart:
         +materialized: table
-        # Worker は住所の都道府県のファイルだけを開く。住居表示・地番・町字と照合の索引は
-        # pref_code ごとにファイルを分け (data/…/pref_code=13/…)、ファイルの中は Worker が引く列の順に並べる。
-        # DuckDB は分けて書くとき、並列に書くと並びが崩れ、1 つの値の行が多くの行グループに散る。
-        # 分ける表だけ 1 スレッドで書き、書き出しの区切りを行グループ (30,720 行と 4,096 行) の倍数にして並びを保つ
-        parcel: &by_prefecture
-          +partitioned_by: pref_code
-          +pre-hook:
-            - "SET threads = 1"
-            - "SET partitioned_write_flush_threshold = 491520"
-          +post-hook:
-            - "RESET threads"
-            - "RESET partitioned_write_flush_threshold"
-        rsdtdsp: *by_prefecture
-        match_number: *by_prefecture
+        # Worker はファイルを丸ごと読む (Workers の静的アセットは Range を受けない)。1 ファイルを数 MB に収めるよう、
+        # 住居表示・地番・番号の索引は市区町村 (lg_code=…/)、町字と照合の区域は都道府県 (pref_code=…/)、
+        # 町名の索引は頭の文字 (name_bucket=…/) ごとにファイルを分ける。
+        # 並列に書くと 1 ファイルの中の並びが少し崩れるが、Worker は行グループごとに最小・最大を見て読むので
+        # 結果は変わらない (余分に読む行グループが少し増えるだけ)
+        parcel: &by_city
+          +partitioned_by: lg_code
+        rsdtdsp: *by_city
+        match_number: *by_city
         # 町字の表は市区町村ごとに 1 回ずつ読む (1 市区町村は平均 384 行)。30,720 行の行グループだと
         # 1 市区町村のたびに 3 万行を展開し、ばらばらの市区町村の一括変換で CPU の上限を超えた。
-        # 町字の表だけ別のスキーマに置き、行グループを 4,096 行にする。住居表示・地番の表は行が多く、
-        # 小さくするとフッターが数 MB になって最初の 1 回が遅くなるので 30,720 のまま
+        # 町字の表だけ別のスキーマに置き、行グループを 4,096 行にする
         town:
           +schema: town
           +partitioned_by: pref_code
-          +pre-hook:
+          +pre-hook: &town_schema
             - "CREATE SCHEMA IF NOT EXISTS geocoder.town"
             - "CALL geocoder.set_option('parquet_row_group_size', 4096, schema => 'town')"
             - "CALL geocoder.set_option('parquet_compression', 'zstd', schema => 'town')"
-            - "SET threads = 1"
-            - "SET partitioned_write_flush_threshold = 491520"
-          +post-hook:
-            - "RESET threads"
-            - "RESET partitioned_write_flush_threshold"
-        # 町名の索引も頭 2 文字で 1 つの行グループだけを読むので、町字の表と同じ置き場にする
+        # 町名の索引も頭 2 文字で行グループを絞って読むので、町字の表と同じ置き場にする
         town_name:
           +schema: town
-          +pre-hook:
-            - "CREATE SCHEMA IF NOT EXISTS geocoder.town"
-            - "CALL geocoder.set_option('parquet_row_group_size', 4096, schema => 'town')"
-            - "CALL geocoder.set_option('parquet_compression', 'zstd', schema => 'town')"
+          +partitioned_by: name_bucket
+          +pre-hook: *town_schema
         # 照合の区域も市区町村ごとに 1 回ずつ読むので、町字の表と同じ置き場にする
         match_area:
           +schema: town
           +partitioned_by: pref_code
-          +pre-hook:
-            - "CREATE SCHEMA IF NOT EXISTS geocoder.town"
-            - "CALL geocoder.set_option('parquet_row_group_size', 4096, schema => 'town')"
-            - "CALL geocoder.set_option('parquet_compression', 'zstd', schema => 'town')"
-            - "SET threads = 1"
-            - "SET partitioned_write_flush_threshold = 491520"
-          +post-hook:
-            - "RESET threads"
-            - "RESET partitioned_write_flush_threshold"
+          +pre-hook: *town_schema
         # 旧市区町村名の索引も、頭 2 文字で 1 つの行グループだけを読む
         former_city:
           +schema: town
-          +pre-hook:
-            - "CREATE SCHEMA IF NOT EXISTS geocoder.town"
-            - "CALL geocoder.set_option('parquet_row_group_size', 4096, schema => 'town')"
-            - "CALL geocoder.set_option('parquet_compression', 'zstd', schema => 'town')"
+          +pre-hook: *town_schema
