@@ -26,6 +26,14 @@ curl -s -G https://geocoder.queria.io/v1/forward --data-urlencode "address=東�
 - 市区町村名のある住所でも、甲乙丙丁を書かない番号が甲乙丙丁だけ違う複数の地番に当たるとき（「甲288」と「乙288」があって「288」と書いた住所）は、すべてを候補として返し、`ambiguous` を `true` にする
 - 市区町村名のない住所で `ambiguous` が `true` の結果は、市区町村を推定している。住所の地域がわかっている場合は、`prefecture_code`（都道府県コード 2 桁）か `city_code`（全国地方公共団体コード 5 桁か 6 桁）を付けると、その地域の結果だけを返す
 
+## 照合が苦手な住所
+
+- 誤記は直さない。町名・番号の書き損じや、市区町村名を 2 度書いた住所は、照合できた階層までの結果になる。市区町村名だけは、上流の abr-geocoder と同じく、近い名前の市区町村を探す
+- 合併などで無くなった市区町村の名前で書いた住所は、範囲を引き継いだ今の市区町村に読み替えて照合する。町字まで照合できないものは、市区町村か都道府県までの結果になる
+- 建物名・部屋番号は照合しない。番号より後ろの文字は `unmatched_address` に残す
+- 座標は住所の代表点（号・街区・地番・町字の点）で、建物の位置ではない。番号の点がデータに無い町字は、町字の代表点になる（`coordinates_level` で分かる）
+- 照合の根拠（座標を取った点の出典と行、使った段）は `include=evidence` で確かめられる
+
 ## 統計データとの結合
 
 `include=small_area` を付けると、国勢調査の小地域コード（`estat_small_area_code`）を返す。[Queria](https://queria.io) の公開データセットは同じコードで国勢調査の表を持っているので、SQL で結合できる。
@@ -36,6 +44,19 @@ SELECT key_code, city_name, area_name, jinko, setai
 FROM e_stat.boundary.small_area
 WHERE key_code = '131010100'
 ```
+
+## API の互換性
+
+API のバージョンは、仕様書の `info.version` と GeoJSON の `result_info.api_version` に出している（今は `0.2.0-beta`）。1.0.0 からは、`/v1` で次を守る。ベータ（0.x）の間も、下の「変えないもの」を変えるときは変更履歴に書く。
+
+- 変えないもの: パスとパラメーターの名前と意味、応答の項目の名前と型、列挙の値（`match_level`・`coordinates_level`・`evidence.point.point_type`・`evidence.steps` など）の意味、エラーの形（HTTP のステータスと `error`）
+- 足すことがあるもの: 応答の項目、`include` の名前、列挙の値。使う側は、知らない項目と値を無視する
+- 変わりうるもの: 照合の結果（座標、`match_level`、候補とその順）。データの毎月の更新と照合の改善で変わる。結果に使ったデータのバージョンは `source.version` に出す
+- 変えないものを変えるときは `/v2` を作り、`/v1` は告知してから止める
+
+## 変更履歴
+
+本番に出した変更（API の追加、照合の結果の変化、データのバージョン）は [GitHub Releases](https://github.com/queria-io/geocoder/releases) に書く。
 
 ## 手元で動かす
 

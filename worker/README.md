@@ -95,6 +95,8 @@ Worker と一緒にデプロイする。Worker は静的アセットに表があ
 main へのマージでは本番に出ない。main に入ったのに本番に出ていない変更は、`.github/workflows/release-pr.yml` が
 main → production のリリース PR に並べる。この PR を「Create a merge commit」でマージすると本番に出る。
 Squash でマージすると production に main に無いコミットができ、次のリリース PR が衝突する。
+マージしたら、リリース PR に並んだ変更のうち、使う側に見えるもの (API の追加、照合の結果の変化) を GitHub Releases に書く。
+タグは本番に出した日 (`2026-11-09` の形)。
 
 ## 精度
 

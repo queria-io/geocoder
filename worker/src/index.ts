@@ -853,6 +853,7 @@ app.doc31("/openapi.json", {
       ].join("\n"),
       "結果に含める項目は `include` で選ぶ（例: `include=ids,codes,small_area`）。既定は座標と照合の結果だけ。",
       "1 つの IP アドレスから 1 分に 300 回まで（一括は 1 回の呼び出しで 1 回と数える）。結果を公開するときは `source.attribution` の出典も表示する。",
+      "応答の項目と列挙の値は消さず、意味を変えない (足すことはある。知らない項目と値は無視する)。照合の結果は、データの更新と照合の改善で変わる。互換性の約束と変更履歴は [GitHub](https://github.com/queria-io/geocoder#api-の互換性) にある。",
       "概要と精度は [queria.io/geocoder](https://queria.io/geocoder)、ソースコードとセルフホストの手順は [GitHub](https://github.com/queria-io/geocoder) を参照。",
     ].join("\n\n"),
   },
