@@ -12,6 +12,9 @@ sources:
 fields:
   - name: name_key
     title: 名前の頭 2 文字
+  - name: name_bucket
+    title: ファイルの区分
+    description: "名前の 1 文字目の文字コードを 64 で割った余り。ファイルはこの値ごとに分かれる"
   - name: name
     title: 大字・町名
     description: "頭の「大字」を外し、「ヶ」「ヵ」を「ケ」にそろえた名前"
