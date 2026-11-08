@@ -59,3 +59,4 @@ pnpm check                  # oxlint + oxfmt --check
 ## 変更の出し方
 
 `main` への直接コミットはしない。PR にして出し、マージは人間が行う。コミットメッセージは Conventional Commits。
+本番 (geocoder.queria.io) に出るのは production ブランチへのマージ。main → production のリリース PR は merge commit でマージする (`worker/README.md` のデプロイ)。
