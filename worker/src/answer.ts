@@ -133,17 +133,39 @@ export const parseInclude = (s: string | undefined): Set<Include> | null => pars
 export const versionOf = (file: string): string =>
   file.slice(file.lastIndexOf("/") + 1).replace(/\.[^.]+$/, "");
 
+/**
+ * 値が null でも列を持つ入れ子の項目 (evidence.point)。どの行も同じ列になるよう、null は中身が空の形でほどく
+ */
+const NULLABLE_SHAPES: Record<string, Record<string, unknown>> = {
+  "evidence.point": {
+    dataset: null,
+    point_type: null,
+    rank: null,
+    keys: {
+      lg_code: null,
+      machiaza_id: null,
+      blk_id: null,
+      rsdt_id: null,
+      rsdt2_id: null,
+      prc_id: null,
+      number: null,
+    },
+  },
+};
+
 const flatten = (o: Record<string, unknown>, prefix = ""): [string, unknown][] =>
   Object.entries(o).flatMap(([k, v]) =>
-    v !== null && typeof v === "object" && !Array.isArray(v)
-      ? flatten(v as Record<string, unknown>, `${prefix}${k}.`)
-      : [
-          [
-            `${prefix}${k}`,
-            // 照合の段 (evidence.steps) は名前を「,」でつなぐ。ほかの配列 (unmatched_address) は文字列をつなぐ
-            Array.isArray(v) ? v.join(`${prefix}${k}` === "evidence.steps" ? "," : "") : v,
-          ] as [string, unknown],
-        ],
+    v === null && NULLABLE_SHAPES[`${prefix}${k}`] !== undefined
+      ? flatten(NULLABLE_SHAPES[`${prefix}${k}`], `${prefix}${k}.`)
+      : v !== null && typeof v === "object" && !Array.isArray(v)
+        ? flatten(v as Record<string, unknown>, `${prefix}${k}.`)
+        : [
+            [
+              `${prefix}${k}`,
+              // 照合の段 (evidence.steps) は名前を「,」でつなぐ。ほかの配列 (unmatched_address) は文字列をつなぐ
+              Array.isArray(v) ? v.join(`${prefix}${k}` === "evidence.steps" ? "," : "") : v,
+            ] as [string, unknown],
+          ],
   );
 
 const cell = (v: unknown): string => {

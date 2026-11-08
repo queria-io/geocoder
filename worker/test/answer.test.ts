@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   checkDigit,
   coordinatesLevel,
+  csvColumns,
+  toCsv,
   forwardAnswer,
   meshCodes,
   parseInclude,
@@ -126,6 +128,42 @@ describe("evidence", () => {
       matched: { area: null, number: null, skipped: null },
       steps: [],
     });
+  });
+
+  it("CSV では、point が null の行も同じ列を持ち、点の出典と鍵を列にほどく", () => {
+    const empty = forwardAnswer(result({}), new Set(["evidence"]), none);
+    const full = forwardAnswer(
+      result({
+        evidence_point: {
+          dataset: "nlftp",
+          point_type: "parcel_parent",
+          rank: 3,
+          keys: {
+            lg_code: "131016",
+            machiaza_id: "0001000",
+            blk_id: null,
+            rsdt_id: null,
+            rsdt2_id: null,
+            prc_id: null,
+            number: "28",
+          },
+        },
+        steps: ["partway", "text_skipped"],
+      }),
+      new Set(["evidence"]),
+      none,
+    );
+    const columns = csvColumns(empty);
+    expect(columns).toContain("evidence.point.dataset");
+    expect(columns).toContain("evidence.point.keys.number");
+    const [header, , row] = toCsv(columns, [empty, full])
+      .replace(/^\uFEFF/, "")
+      .split("\r\n");
+    const at = (name: string) =>
+      row.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)[header.split(",").indexOf(name)];
+    expect(at("evidence.point.dataset")).toBe("nlftp");
+    expect(at("evidence.point.keys.number")).toBe("28");
+    expect(at("evidence.steps")).toBe('"partway,text_skipped"');
   });
 
   it("include に evidence を渡せる", () => {
