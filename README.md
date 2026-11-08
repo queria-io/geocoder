@@ -115,4 +115,4 @@ uv sync
 scripts/build.sh   # fdl checkout → dbt → fdl commit で公開まで行う
 ```
 
-address_br の更新（毎月）の翌日に、`.github/workflows/sync.yml` が作り直す。
+address_br の更新（毎月）の翌日に、`.github/workflows/sync.yml` が作り直し、作り直したデータを置き直すために本番のビルドを流す。
