@@ -1,0 +1,64 @@
+name: Release PR
+
+# main に入って、まだ本番 (production ブランチ) に出ていない変更を main → production の
+# リリース PR に並べる。PR が無ければ作り、あれば本文を今の差分で書き直す。
+# 本番へ出すのは、この PR を人がマージしたとき (Workers Builds が production から本番へ出す)。
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-pr
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  release-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create or update the release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin production
+
+          changes=$(git log --no-merges --reverse --format='- %s' origin/production..origin/main)
+          existing=$(gh pr list --repo "$REPO" --base production --head main --state open \
+            --json number --jq '.[0].number // empty')
+
+          if [ -z "$changes" ]; then
+            echo "production は main に追いついている"
+            exit 0
+          fi
+
+          body=$(cat <<BODY
+          main に入って、まだ本番に出ていない変更。この PR をマージすると、Workers Builds が production ブランチから本番 (geocoder.queria.io) へ出す。
+
+          ## 含まれる変更
+
+          ${changes}
+
+          マージは「Create a merge commit」で行う。Squash にすると production に main に無いコミットができ、次のリリース PR で差分が食い違う。
+
+          この本文は main への push のたびに .github/workflows/release-pr.yml が書き直す。
+          BODY
+          )
+
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --repo "$REPO" --body "$body"
+          else
+            gh pr create --repo "$REPO" --base production --head main \
+              --title "release: main を本番に出す" --body "$body"
+          fi

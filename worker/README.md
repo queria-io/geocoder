@@ -78,9 +78,13 @@ GET /v1/reverse?lat=35.6812&lng=139.7671
 
 ## デプロイ
 
-Cloudflare の Workers Builds で、main へのマージで本番に出る (ルート `worker`、ビルド `pnpm build:web`、
-デプロイ `npx wrangler deploy`)。main 以外のブランチのビルドは止めてある (確認用のビルドは `wrangler preview` と
+Cloudflare の Workers Builds で、production ブランチへのマージで本番に出る (ルート `worker`、ビルド `pnpm build:web`、
+デプロイ `npx wrangler deploy`)。production 以外のブランチのビルドは止めてある (確認用のビルドは `wrangler preview` と
 設定の二重持ちが要るため)。PR では `.github/workflows/worker.yml` が試験・型・整形を見る。
+
+main へのマージでは本番に出ない。main に入ったのに本番に出ていない変更は、`.github/workflows/release-pr.yml` が
+main → production のリリース PR に並べる。この PR を「Create a merge commit」でマージすると本番に出る。
+Squash でマージすると production に main に無いコミットができ、次のリリース PR が衝突する。
 
 ## 精度
 
