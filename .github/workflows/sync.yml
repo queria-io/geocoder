@@ -23,3 +23,19 @@ jobs:
       # parcel の作成で DuckDB の一時ファイルが 11GB を超え、ランナーのディスクが足りなくなる
       free_disk: true
     secrets: inherit
+
+  # 本番の Worker は、デプロイのときの最新バージョンのデータを静的アセットに置いて読む (worker/scripts/build-data.mjs)。
+  # データを作り直したら、production ブランチの本番のビルドを流して新しいバージョンを置き直す
+  deploy:
+    needs: sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: 本番のビルドを流す
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.GEOCODER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "::warning::GEOCODER_DEPLOY_HOOK_URL が無いので、本番のビルドを流さない"
+            exit 0
+          fi
+          curl -fsS -X POST "$DEPLOY_HOOK_URL" > /dev/null
