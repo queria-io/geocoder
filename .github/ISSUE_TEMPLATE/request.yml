@@ -1,0 +1,20 @@
+name: 要望
+description: 欲しい機能・応答の項目・対応してほしい住所の書き方を送る
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        この Issue は公開されます。自宅や取引先など、個人に結び付く住所は書かないでください。
+  - type: textarea
+    id: request
+    attributes:
+      label: 要望
+      description: 何ができるようになると良いか
+    validations:
+      required: true
+  - type: textarea
+    id: use
+    attributes:
+      label: 使い方
+      description: どんな場面で、どんな住所やデータに使うか。今の代わりの手段があれば一緒に

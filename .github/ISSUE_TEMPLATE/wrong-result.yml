@@ -1,0 +1,38 @@
+name: 照合の誤りの報告
+description: 住所の照合結果 (座標・市区町村・町字・番号) が正しくないときに報告する
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        この Issue は公開されます。自宅や取引先など、個人に結び付く住所は書かないでください。同じ誤りが起きる別の住所 (公共施設などの住所) に置き換えるか、番号を伏せて書いてください。
+        個人の住所でしか起きない誤りは、[queria.io/geocoder](https://queria.io/geocoder) のフォームから送ってください (公開されません)。
+  - type: input
+    id: address
+    attributes:
+      label: 照合した住所
+      description: API に渡した住所をそのまま書く
+      placeholder: 東京都千代田区千代田1-1
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 返ってきた結果
+      description: matched_address・match_level・coordinates_level・lat/lng。`include=evidence` を付けた結果があれば evidence も
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 正しい結果
+      description: 正しい市区町村・町字・番号、または正しい位置 (根拠になる資料があれば一緒に)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: データのバージョン
+      description: 応答の source.version (GeoJSON は result_info.db_version)
+      placeholder: geocoder-20261108-01a1badf
