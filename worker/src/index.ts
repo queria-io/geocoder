@@ -424,7 +424,7 @@ const Evidence = z
   .object({
     point: EvidencePoint.nullable().openapi({
       description:
-        "座標を取った点。座標が無いとき、市区町村まで照合できなかったとき、照合の索引の無いデータでは null",
+        "座標を取った点。座標が無いとき、市区町村まで照合できなかったとき、照合の索引の無いデータ、点の種類か出典がこの一覧に無いときは null",
     }),
     matched: z
       .object({
@@ -786,7 +786,7 @@ const forwardItems = async (
       attribution: attributionFor(
         groups,
         flat.some(([r]) => usesIsj(r)),
-        flat.some(([r]) => r.former_city === true),
+        flat.some(([r]) => r.steps?.includes("former_city") === true),
       ),
     },
   } as const;

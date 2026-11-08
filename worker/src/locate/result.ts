@@ -11,7 +11,7 @@ import type { BasicResult, CityResult } from "../repository/types";
 import { type CityIndex, numbersOf } from "./index";
 import { candidates, EMPTY_NUMBERS, locate, type Located, type Numbers, remainder } from "./locate";
 import { CHOME } from "./norm";
-import { cityPoint, locateSteps, pointOf } from "../evidence";
+import { cityPoint, keptSteps, locateSteps, pointOf } from "../evidence";
 import type { ParcelRow } from "../repository/parcel";
 import type { RsdtdspRow } from "../repository/rsdtdsp";
 import type { MatchNumberRow } from "./index";
@@ -117,7 +117,7 @@ const toResult = async (
   const point = found.number;
   return {
     ...r,
-    steps: [...(r.steps ?? []), ...locateSteps(found)],
+    steps: [...keptSteps(r.steps), ...locateSteps(found)],
     evidence_point: pointOf(found, lgCode, town === null ? null : found.machiazaId),
     evidence_matched: {
       area: areaName,
@@ -168,6 +168,7 @@ const atCity = (r: MatchedResult, city: CityResult | undefined, rest: string): M
     coordinates: city?.lon != null && city.lat != null ? [city.lon, city.lat] : null,
     coordinate_level: "city",
     coordinate_source: undefined,
+    steps: keptSteps(r.steps),
     evidence_point: city?.lon != null && city.lat != null ? cityPoint(city.lgCode) : null,
     evidence_matched: { area: null, number: null, skipped: null },
   };

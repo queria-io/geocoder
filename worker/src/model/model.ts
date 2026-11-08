@@ -74,8 +74,11 @@ export type MatchedResult = {
    * 推定しており、候補を人口の多い順に並べて返す
    */
   candidates?: number;
-  /** 旧市区町村名 (「員弁郡員弁町」) を今の市区町村に読み替えて照合したとき true。上流には無い */
-  former_city?: boolean;
+  /**
+   * 旧市区町村名 (「員弁郡員弁町」) を今の市区町村名に読み替えたときの、読み替えた後の住所。上流には無い。
+   * この後の段と照合の索引での引き直しは、元の住所ではなくこの住所から読む
+   */
+  former_address?: string;
   /** 上流の照合の後に使った段 (include=evidence)。上流には無い */
   steps?: Step[];
   /** 座標を取った点の出典と行の鍵 (include=evidence)。照合の索引で座標を引いたときだけ入れる */

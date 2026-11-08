@@ -428,28 +428,27 @@ export const geocode = async (
       );
       // 市区町村まで決まった地域の外の結果は、この後の段で地域の中に移らない
       if (Detail(n.match_level) >= Detail("city") && !inArea(n.ids.lg_code)) return [];
+      // 旧市区町村名を読み替えたら、この後の段は読み替えた後の住所から読む
+      const read = n.former_address ?? address;
       // 候補は座標を引いてから並べ直すので、limit ではなく上限まで残す
-      const candidates = (await withoutCity(n, address, s.names, cities, match)).slice(
-        0,
-        MAX_LIMIT,
-      );
+      const candidates = (await withoutCity(n, read, s.names, cities, match)).slice(0, MAX_LIMIT);
       const retried = await Promise.all(
         candidates.map(async (c) => {
           // 段ごとに、結果が変わったら使った段として steps に足す (include=evidence)
-          const ward = stepIf(c, await withRenamedWard(c, address, match), "renamed_ward");
-          const oaza = stepIf(ward, await withOazaChome(ward, address, match), "oaza_omitted");
+          const ward = stepIf(c, await withRenamedWard(c, read, match), "renamed_ward");
+          const oaza = stepIf(ward, await withOazaChome(ward, read, match), "oaza_omitted");
           const skipped = stepIf(oaza, await withAzaSkipped(oaza, match), "aza_skipped");
           // 市区町村を推定した候補は、番号まで再照合すると並びが変わり別の市区町村が勝つので、再照合しない
           const out =
             (c.candidates ?? 1) > 1
               ? skipped
-              : stepIf(skipped, await withNumberTail(skipped, address, match), "number_tail");
-          // 当て直した結果に、市区町村を推定した候補の数と、旧市区町村名を読み替えた印を引き継ぐ
+              : stepIf(skipped, await withNumberTail(skipped, read, match), "number_tail");
+          // 当て直した結果に、市区町村を推定した候補の数と、読み替えた後の住所を引き継ぐ
           if (out === c) return out;
           return {
             ...out,
             ...(c.candidates === undefined ? {} : { candidates: c.candidates }),
-            ...(c.former_city === true ? { former_city: true } : {}),
+            ...(c.former_address === undefined ? {} : { former_address: c.former_address }),
           };
         }),
       );
@@ -461,7 +460,7 @@ export const geocode = async (
   console.log(JSON.stringify({ geocode: true, cold, ...stats }));
   // 照合の索引の無い目録では、引き直すと町字の答えがすべて市区町村に落ちるので、上流の答えのまま返す
   const withPoint = built.hasIndex
-    ? (r: MatchedResult) => withLocated(r, address, s.locate)
+    ? (r: MatchedResult) => withLocated(r, r.former_address ?? address, s.locate)
     : async (r: MatchedResult) => [r];
   // 市区町村を推定した組は、座標を引いてから点の細かい順に並べる。ほかの結果は頭の limit 件だけ座標を引く
   const ordered: MatchedResult[] = [];

@@ -58,12 +58,15 @@ export const withFormerCity = async (
       const c = city(f.lg_code);
       if (c === undefined) return [];
       const tail = rest.slice(f.name.length);
-      const found = (
-        await Promise.all([match(cityName(c) + f.town_prefix + tail), match(cityName(c) + tail)])
-      ).flat();
-      return found.filter(
-        (x) => x.ids.lg_code === c.lgCode && Detail(x.match_level) >= Detail("machiaza"),
+      // 結果ごとに、読み替えた後の住所を持たせる。この後の段はその住所から読む
+      const found = await Promise.all(
+        [cityName(c) + f.town_prefix + tail, cityName(c) + tail].map(async (a) =>
+          (await match(a)).map((x) => ({ ...x, former_address: a })),
+        ),
       );
+      return found
+        .flat()
+        .filter((x) => x.ids.lg_code === c.lgCode && Detail(x.match_level) >= Detail("machiaza"));
     }),
   );
   const found = tried.flat();
@@ -72,5 +75,5 @@ export const withFormerCity = async (
   // 引き継いだ市区町村の 2 つで同じ強さに当たれば、どちらか決められないので読み替えない
   const ties = found.filter((x) => compareResultStrength(x, best) === 0);
   if (new Set(ties.map((x) => x.ids.lg_code)).size > 1) return r;
-  return { ...best, former_city: true };
+  return best;
 };

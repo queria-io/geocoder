@@ -71,7 +71,7 @@ describe("withFormerCity", () => {
     );
     expect(asked).toEqual(["三重県いなべ市員弁町笠田新田100", "三重県いなべ市笠田新田100"]);
     expect(got.ids.lg_code).toBe("242144");
-    expect(got.former_city).toBe(true);
+    expect(got.former_address).toBe("三重県いなべ市員弁町笠田新田100");
   });
 
   it("旧村名が町字名に残っていなければ、外した形で当たる", async () => {

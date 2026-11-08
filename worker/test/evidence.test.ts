@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cityPoint, locateSteps, pointOf, stepIf, withStep } from "../src/evidence";
+import { cityPoint, keptSteps, locateSteps, pointOf, stepIf, withStep } from "../src/evidence";
 import type { Located } from "../src/locate/locate";
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "../src/model/model";
 
@@ -67,6 +67,24 @@ describe("pointOf", () => {
     });
   });
 
+  it("知らない種類・出典の点は、出典を示さない", () => {
+    const of = (pointType: string, source: string) =>
+      pointOf(
+        {
+          point: [140, 40],
+          area: "本町",
+          machiazaId: null,
+          number: { rank: 9, point: [140, 40], machiazaId: null, pointType, source, parts: ["1"] },
+          rest: "",
+          via,
+        } as Located,
+        "011011",
+        null,
+      );
+    expect(of("survey", "abr")).toBeNull();
+    expect(of("parcel", "other")).toBeNull();
+  });
+
   it("番号の無い区域の点は、区域そのものの点か下の町字の点の平均か", () => {
     const area = (own: boolean) =>
       ({
@@ -77,7 +95,17 @@ describe("pointOf", () => {
         rest: "",
         via: { ...via, own },
       }) as Located;
-    expect(pointOf(area(true), "011011", "0001000").point_type).toBe("machiaza");
-    expect(pointOf(area(false), "011011", "0001000").point_type).toBe("machiaza_derived");
+    expect(pointOf(area(true), "011011", "0001000")?.point_type).toBe("machiaza");
+    expect(pointOf(area(false), "011011", "0001000")?.point_type).toBe("machiaza_derived");
+  });
+});
+
+describe("keptSteps", () => {
+  it("区域と番号を当て直す段は、索引で引き直したら外す", () => {
+    expect(keptSteps(["former_city", "aza_skipped", "city_inferred", "number_tail"])).toEqual([
+      "former_city",
+      "city_inferred",
+    ]);
+    expect(keptSteps(undefined)).toEqual([]);
   });
 });
