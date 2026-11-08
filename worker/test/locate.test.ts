@@ -188,6 +188,17 @@ describe("locate", () => {
     expect(marked("本町ソデ山10")?.number?.parts).toEqual(["10"]);
     expect(marked("本町ハケノ山10")?.number?.parts).toEqual(["10"]);
   });
+  it("照合の根拠に、読み始めた位置・読み飛ばした文字・甲乙丙丁の扱いを残す", () => {
+    expect(at("本町字上野10")?.via).toMatchObject({
+      start: 0,
+      skipped: "",
+      dropped: false,
+      added: false,
+    });
+    expect(marked("本町字三丁目10番")?.via).toMatchObject({ start: 0, skipped: "3-" });
+    expect(at("上る本町10")?.via.start).toBeGreaterThan(0);
+    expect(at("本町一丁目")?.via).toMatchObject({ own: true });
+  });
   it("「町目」も丁目と同じに扱う", () => expect(norm("松戸三町目1791", true)).toBe("松戸3=1791"));
   it("番号まで最も長く当たる点", () => {
     expect(at("本町一丁目2番3号")?.point).toEqual([140.1, 40.1]);

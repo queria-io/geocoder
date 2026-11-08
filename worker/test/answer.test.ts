@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   checkDigit,
   coordinatesLevel,
+  csvColumns,
+  toCsv,
   forwardAnswer,
   meshCodes,
   parseInclude,
@@ -88,6 +90,84 @@ describe("forwardAnswer", () => {
       postal_code: "1000005",
       mesh_1km: null,
     });
+  });
+});
+
+describe("evidence", () => {
+  it("include=evidence のときだけ、点の出典・照合した区域と番号・使った段を返す", () => {
+    const point = {
+      dataset: "address_br" as const,
+      point_type: "parcel" as const,
+      rank: 1,
+      keys: {
+        lg_code: "082201",
+        machiaza_id: "0001000",
+        blk_id: null,
+        rsdt_id: null,
+        rsdt2_id: null,
+        prc_id: "000280001000000",
+        number: "28-10",
+      },
+    };
+    const r = result({
+      evidence_point: point,
+      evidence_matched: { area: "千代田", number: "28-10", skipped: null },
+      steps: ["city_inferred"],
+    });
+    expect(forwardAnswer(r, new Set(), none)).not.toHaveProperty("evidence");
+    expect(forwardAnswer(r, new Set(["evidence"]), none).evidence).toEqual({
+      point,
+      matched: { area: "千代田", number: "28-10", skipped: null },
+      steps: ["city_inferred"],
+    });
+  });
+
+  it("根拠の無い結果は point を null、段を空にする", () => {
+    expect(forwardAnswer(result({}), new Set(["evidence"]), none).evidence).toEqual({
+      point: null,
+      matched: { area: null, number: null, skipped: null },
+      steps: [],
+    });
+  });
+
+  it("CSV では、point が null の行も同じ列を持ち、点の出典と鍵を列にほどく", () => {
+    const empty = forwardAnswer(result({}), new Set(["evidence"]), none);
+    const full = forwardAnswer(
+      result({
+        evidence_point: {
+          dataset: "nlftp",
+          point_type: "parcel_parent",
+          rank: 3,
+          keys: {
+            lg_code: "131016",
+            machiaza_id: "0001000",
+            blk_id: null,
+            rsdt_id: null,
+            rsdt2_id: null,
+            prc_id: null,
+            number: "28",
+          },
+        },
+        steps: ["partway", "text_skipped"],
+      }),
+      new Set(["evidence"]),
+      none,
+    );
+    const columns = csvColumns(empty);
+    expect(columns).toContain("evidence.point.dataset");
+    expect(columns).toContain("evidence.point.keys.number");
+    const [header, , row] = toCsv(columns, [empty, full])
+      .replace(/^\uFEFF/, "")
+      .split("\r\n");
+    const at = (name: string) =>
+      row.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)[header.split(",").indexOf(name)];
+    expect(at("evidence.point.dataset")).toBe("nlftp");
+    expect(at("evidence.point.keys.number")).toBe("28");
+    expect(at("evidence.steps")).toBe('"partway,text_skipped"');
+  });
+
+  it("include に evidence を渡せる", () => {
+    expect(parseInclude("ids,evidence")).toEqual(new Set(["ids", "evidence"]));
   });
 });
 

@@ -77,6 +77,7 @@ export const cityIndex = (rows: readonly MatchAreaRow[]): CityIndex => {
     const numbering = nb !== null && nb !== k ? nb : null;
     if (prev === undefined || (kind === 0 && r.own_point && !prev.own))
       areas.set(k, {
+        name: r.name,
         point: point(r.lng, r.lat),
         own: r.own_point,
         machiazaId: r.machiaza_id,

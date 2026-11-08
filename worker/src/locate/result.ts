@@ -11,6 +11,7 @@ import type { BasicResult, CityResult } from "../repository/types";
 import { type CityIndex, numbersOf } from "./index";
 import { candidates, EMPTY_NUMBERS, locate, type Located, type Numbers, remainder } from "./locate";
 import { CHOME } from "./norm";
+import { cityPoint, keptSteps, locateSteps, pointOf } from "../evidence";
 import type { ParcelRow } from "../repository/parcel";
 import type { RsdtdspRow } from "../repository/rsdtdsp";
 import type { MatchNumberRow } from "./index";
@@ -77,6 +78,8 @@ const toResult = async (
   deps: LocateDeps,
   lgCode: string,
   whole: string,
+  /** 照合した区域の名前 (照合の索引の表記) */
+  areaName: string | null,
 ): Promise<MatchedResult> => {
   const town = found.machiazaId === null ? null : await deps.town(lgCode, found.machiazaId);
   // 町字が決まらなければ (位置参照情報にだけある区域など)、住所の表記は市区町村までにし、
@@ -114,6 +117,14 @@ const toResult = async (
   const point = found.number;
   return {
     ...r,
+    steps: [...keptSteps(r.steps), ...locateSteps(found)],
+    evidence_point: pointOf(found, lgCode, town === null ? null : found.machiazaId),
+    evidence_matched: {
+      area: areaName,
+      // 座標は町字が決まらなくても番号の点から取るので、照合した番号は point の鍵とそろえる
+      number: found.number === null ? null : found.number.parts.join("-"),
+      skipped: found.via.skipped === "" ? null : found.via.skipped,
+    },
     matched_address: FormatAddress(sa),
     unmatched_address: rest === "" ? null : [rest],
     match_level: level,
@@ -157,6 +168,9 @@ const atCity = (r: MatchedResult, city: CityResult | undefined, rest: string): M
     coordinates: city?.lon != null && city.lat != null ? [city.lon, city.lat] : null,
     coordinate_level: "city",
     coordinate_source: undefined,
+    steps: keptSteps(r.steps),
+    evidence_point: city?.lon != null && city.lat != null ? cityPoint(city.lgCode) : null,
+    evidence_matched: { area: null, number: null, skipped: null },
   };
 };
 
@@ -183,7 +197,9 @@ export const withLocated = async (
   const plain = rest.replaceAll(CHOME, "-");
   if (found === null) return [atCity(r, city, plain.replace(/^-+|-+$/g, ""))];
   const all = [found, ...(found.others ?? [])];
-  const results = await Promise.all(all.map((f) => toResult(r, f, deps, lgCode, plain)));
+  const results = await Promise.all(
+    all.map((f) => toResult(r, f, deps, lgCode, plain, index.areas.get(f.area)?.name ?? null)),
+  );
   return all.length > 1
     ? results.map((x) => ({ ...x, candidates: (r.candidates ?? 1) * all.length }))
     : results;

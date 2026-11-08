@@ -4,6 +4,7 @@
 import { type CoordinateLevel, Detail, type MatchedResult } from "./model/model";
 import { compareResultStrength, strongestResult } from "./matching/search";
 import type { CityResult } from "./repository/types";
+import { withStep, type Step } from "./evidence";
 
 /**
  * 町名の索引の 1 行 (町字ごとに 1 行)。name は頭の「大字」を外した大字・町の名前、name_key はその頭 2 文字
@@ -231,7 +232,8 @@ export const withoutCity = async (
     const [w] = wards;
     const tail = rest.slice((w.ward ?? "").length);
     const found = uniqueStrongest(await retry(w, tail, match), tail);
-    if (found !== undefined && compareResultStrength(found, r) < 0) return [found];
+    if (found !== undefined && compareResultStrength(found, r) < 0)
+      return [withStep({ ...found, steps: r.steps }, "ward_inferred")];
   }
   const byCode = new Map(inPref.map((c) => [c.lgCode, c]));
   const head = numeralsOf(town);
@@ -260,5 +262,10 @@ export const withoutCity = async (
   const found = byCity(tried, town, (code) => byCode.get(code)?.population ?? 0);
   // 上限で当て直さなかった市区町村も候補の数に含める (当て直して当たらなかった市区町村は数えない)
   const count = found.length + Math.max(0, candidates.length - MAX_LIMIT);
-  return count > 1 ? found.map((x) => ({ ...x, candidates: count })) : found;
+  const steps: Step[] = [
+    ...(r.steps ?? []),
+    ...(street === undefined ? [] : (["kyoto_street_skipped"] as const)),
+    "city_inferred",
+  ];
+  return found.map((x) => ({ ...x, steps, ...(count > 1 ? { candidates: count } : {}) }));
 };
