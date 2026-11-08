@@ -2,6 +2,8 @@ import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import {
+  assetsBuffer,
+  openSized,
   openTable,
   r2Buffer,
   readCity,
@@ -93,5 +95,37 @@ describe("readCity", () => {
     expect(rows).toHaveLength(3000);
     // 131024 は 2 つ目、132012 は 2 つ目と 3 つ目の行グループに入る。2 つ目は 1 回だけ読む
     expect(reads - before).toBe((separate * 2) / 3);
+  });
+});
+
+describe("assetsBuffer", () => {
+  // 静的アセットは Range を受けず、いつもファイル全体を返す
+  const fetches: string[] = [];
+  const assets = {
+    fetch: async (req: Request) => {
+      fetches.push(new URL(req.url).pathname);
+      return new Response(fixture);
+    },
+  } as unknown as Fetcher;
+
+  it("ファイルを 1 回だけ丸ごと取り、問い合わせの中ではそこから切り出す", async () => {
+    fetches.length = 0;
+    const kept = new Map<string, Promise<ArrayBuffer>>();
+    const file = assetsBuffer(assets, "data/town.parquet", fixture.byteLength, () => kept);
+    const footer = new Uint8Array(fixture.slice(-8, -4)).reduce((n, b, i) => n + b * 256 ** i, 0);
+    const t = await openSized(file, { bytes: fixture.byteLength, footer }, { sortKey: "lg_code" });
+    const rows = await readCity<Town>(t, "131024", cols);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(fetches).toEqual(["/data/town.parquet"]);
+  });
+
+  it("問い合わせが変われば取り直す", async () => {
+    fetches.length = 0;
+    let kept = new Map<string, Promise<ArrayBuffer>>();
+    const file = assetsBuffer(assets, "data/town.parquet", fixture.byteLength, () => kept);
+    await file.slice(0, 4);
+    kept = new Map();
+    await file.slice(0, 4);
+    expect(fetches).toHaveLength(2);
   });
 });

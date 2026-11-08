@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "deploy": "pnpm build:web && wrangler deploy",
+    "deploy": "pnpm build && wrangler deploy",
     "dev": "pnpm build:web && wrangler dev",
     "self-host": "pnpm build:web && wrangler deploy -c wrangler.self-host.jsonc",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check": "oxlint && oxfmt --check .",
     "fix": "oxlint --fix && oxfmt .",
+    "build": "pnpm build:web && pnpm build:data",
+    "build:data": "node scripts/build-data.mjs",
     "build:web": "mkdir -p public && cp site/brand/favicon.ico site/brand/apple-touch-icon.png site/brand/icon-512.png site/brand/og.png public/ && cp site/brand/mark.svg public/favicon.svg"
   },
   "dependencies": {

@@ -3,7 +3,7 @@
 日本の住所と座標・地域コードを相互に引く API。無料のベータとして geocoder.queria.io で出している。ベータの間は答えの形を変えることがある。IP ごとに 1 分 300 回までで、超えると 429。
 
 DuckDB もデータベースも使わない。地図用に R2 (`queria-assets`) へ置いた境界の PMTiles
-(queria-web の `scripts/build-boundary-tiles.sh`) から、点の入るタイルを Range で 1 枚だけ読み、点を含む多角形を
+から、点の入るタイルを Range で 1 枚だけ読み、点を含む多角形を
 JS で探す。町丁目が当たれば、そのコードの頭 5 桁が市区町村、頭 2 桁が都道府県になる。
 海沿いなどで町丁目に入らない点だけ、市区町村・都道府県のタイルを読みに行く。
 
@@ -78,9 +78,21 @@ GET /v1/reverse?lat=35.6812&lng=139.7671
 
 ## デプロイ
 
-Cloudflare の Workers Builds で、main へのマージで本番に出る (ルート `worker`、ビルド `pnpm build:web`、
-デプロイ `npx wrangler deploy`)。main 以外のブランチのビルドは止めてある (確認用のビルドは `wrangler preview` と
+Cloudflare の Workers Builds で、production ブランチへのマージで本番に出る (ルート `worker`、ビルド `pnpm build`、
+デプロイ `npx wrangler deploy`)。
+
+`pnpm build` は、アイコン (`pnpm build:web`) に加えて、住所の表を `public/data/` に置く (`pnpm build:data`)。
+data.queria.io の geocoder の refs/heads/main が指すバージョンのファイル (全部で約 2.5 GB) を取り、静的アセットとして
+Worker と一緒にデプロイする。Worker は静的アセットに表があればそこからファイルを丸ごと読み (1 回 10 ミリ秒前後)、
+無ければ R2 から Range で読む (1 回 100 ミリ秒前後)。静的アセットは 1 ファイル 25 MiB までなので、それを超える
+ファイルのあるバージョンでは何も置かず、R2 から読む。静的アセットを読むのは、そのバージョンが R2 で今読むバージョン
+(refs/heads/main か DATA_PIN) と同じときだけで、Sync で main が進んだときや DATA_PIN で固定したときは、デプロイし
+直すまで R2 から読む。production 以外のブランチのビルドは止めてある (確認用のビルドは `wrangler preview` と
 設定の二重持ちが要るため)。PR では `.github/workflows/worker.yml` が試験・型・整形を見る。
+
+main へのマージでは本番に出ない。main に入ったのに本番に出ていない変更は、`.github/workflows/release-pr.yml` が
+main → production のリリース PR に並べる。この PR を「Create a merge commit」でマージすると本番に出る。
+Squash でマージすると production に main に無いコミットができ、次のリリース PR が衝突する。
 
 ## 精度
 

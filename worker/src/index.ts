@@ -42,13 +42,13 @@ import { tryCatchAsync } from "./result";
 
 export interface Env extends ForwardEnv, RequestLogEnv {
   BUCKET: R2Bucket;
-  /** R2 の boundaries/ に置いた境界タイルのファイル名 (queria-web の src/lib/gis/boundary-tiles.ts と同じ) */
+  /** R2 の boundaries/ に置いた境界タイルのファイル名 */
   BOUNDARY_TILES_FILE: string;
   /** IP ごとの回数の上限。費用を守るためのもので、ふつうの使い方では当たらない高さにする */
   LIMITER?: RateLimit;
 }
 
-/** R2 のオブジェクトを PMTiles の Source として読む (queria-web の workers/basemap と同じ) */
+/** R2 のオブジェクトを PMTiles の Source として読む */
 class R2Source implements Source {
   constructor(
     private readonly bucket: R2Bucket,
@@ -84,7 +84,7 @@ const archive = (env: Env): PMTiles => {
   return found;
 };
 
-// 境界タイルの元データ (queria-web の scripts/build-boundary-tiles.sh)。町丁目が当たったときは上の階層のコードも
+// 境界タイルの元データ。町丁目が当たったときは上の階層のコードも
 // 町丁目のコードから取るので、出典は当たった階層の 1 つだけ
 const ATTRIBUTION: Record<Level, string> = {
   small_area: "「国勢調査 境界データ（小地域）」（総務省統計局、e-Stat）を加工して作成",

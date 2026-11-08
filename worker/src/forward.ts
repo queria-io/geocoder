@@ -1,13 +1,17 @@
-// 住所 → 町字の正引き。R2 に置いた geocoder の表の Parquet を読み、abr-geocoder から写した当て方 (matching/) に渡す。
-// 住居表示・地番・町字と照合の索引は都道府県ごとのファイルに分かれていて、住所の都道府県のファイルだけを開く。
-// 開いたファイル (フッター) は isolate の中で使い回し、読んだ行は問い合わせが終われば手放す
+// 住所 → 町字の正引き。geocoder の表の Parquet を読み、abr-geocoder から写した当て方 (matching/) に渡す。
+// 表は Worker の静的アセットにあればそこから丸ごと、無ければ R2 から Range で読む。
+// 町字と照合の区域は都道府県ごと、住居表示・地番・番号は市区町村ごと、町名の索引は頭の文字ごとのファイルに
+// 分かれていて、要るファイルだけを開く。開いたファイル (フッター) は isolate の中で使い回し、読んだ行と
+// 静的アセットから取ったファイルの中身は問い合わせが終われば手放す
 import { preNormalize } from "./matching/pre_normalize";
 import { parquetReadObjects } from "hyparquet";
 
 import {
+  assetsBuffer,
   compressors,
   type Keep,
   openR2Table,
+  openSized,
   readWhere,
   type Table,
   valueOf,
@@ -26,7 +30,15 @@ import {
   type TownRow,
 } from "./repository/town";
 import { PARCEL_COLUMNS, type ParcelRow } from "./repository/parcel";
-import { filesFor, resolveTables, type Resolved, type TableName } from "./data/source";
+import {
+  filesFor,
+  nameBucket,
+  type Partition,
+  resolveAssets,
+  resolveTables,
+  type Resolved,
+  type TableName,
+} from "./data/source";
 import { machiazaKey, RSDTDSP_COLUMNS, type RsdtdspRow } from "./repository/rsdtdsp";
 import type { BasicResult, CityResult } from "./repository/types";
 import type { CityRow, PrefRow } from "./repository/memory";
@@ -53,6 +65,11 @@ import {
 import { type LocateDeps, withLocated } from "./locate/result";
 
 export type ForwardEnv = {
+  /**
+   * Worker の静的アセット。pnpm build:data で表を置いていて、そのバージョンが R2 で今読むバージョンと
+   * 同じなら、R2 ではなくここから読む
+   */
+  ASSETS?: Fetcher;
   DATA: R2Bucket;
   /**
    * 表の置き場 (DATA の中のキー)。「…/」なら FDL のリポジトリで、refs/heads/main が指すバージョンを読む。
@@ -67,7 +84,7 @@ export type ForwardEnv = {
 export type ForwardStats = {
   reads: number;
   bytes: number;
-  /** R2 を待った時間の合計 (読みが並ぶと重なる) */
+  /** 読み込みを待った時間の合計 (読みが並ぶと重なる) */
   r2_ms: number;
   cities: string[];
   rows: number;
@@ -80,6 +97,12 @@ const countRead = (bytes: number, ms: number) => {
   stats.r2_ms += ms;
 };
 const countRows = (n: number) => (stats.rows += n);
+const startRequest = () => {
+  stats = emptyStats();
+};
+
+/** 静的アセットから取ったファイルの中身。1 件の問い合わせ (Session) ごとに持ち、終われば手放す */
+type Files = Map<string, Promise<ArrayBuffer>>;
 
 /** 行を絞って読む表 (市区町村と都道府県の表は丸ごと読む) */
 type KeyedTable = Exclude<TableName, "city" | "pref">;
@@ -95,8 +118,14 @@ const KEEP: Record<KeyedTable, Keep & { sortKey: string; columns: string[] }> = 
   former_city: { sortKey: "name_key", columns: FORMER_CITY_COLUMNS },
 };
 
-/** 町字が決まった後に読む表 (都道府県ごとのファイル) */
+/** 町字が決まった後に読む表 (市区町村ごとのファイル) */
 const AFTER_TOWN: readonly KeyedTable[] = ["match_area", "match_number", "rsdtdsp", "parcel"];
+
+/** 市区町村 lgCode の行が入るファイル。市区町村ごとの表と、都道府県ごとの表のどちらでも選べる */
+const cityPart = (lgCode: string): Partition => ({
+  pref_code: lgCode.slice(0, 2),
+  lg_code: lgCode,
+});
 
 /** 丸ごと読む表 (市区町村・都道府県) は全部の列を残す */
 const keepOf = (name: TableName): Keep | undefined =>
@@ -107,6 +136,32 @@ const readAll = async <T>(t: Table): Promise<T[]> =>
 
 const prefOf = (lgCode: string) => lgCode.slice(0, 2);
 
+/**
+ * 表のファイルを開く口。静的アセットか R2 か。open で開いた表 (フッター) は isolate の中で使い回し、
+ * 読むときは bind で問い合わせの files に結び直す (静的アセットの中身を問い合わせごとに持つため)
+ */
+type Opener = {
+  open: (key: string, keep: Keep | undefined, files: Files) => Promise<Table>;
+  bind: (key: string, table: Table, files: Files) => Table;
+};
+
+const r2Opener = (bucket: R2Bucket, sizes: Resolved["sizes"]): Opener => ({
+  open: (key, keep) => openR2Table(bucket, key, countRead, keep, sizes[key]),
+  bind: (_key, table) => table,
+});
+
+const assetsOpener = (assets: Fetcher, sizes: Resolved["sizes"]): Opener => {
+  const buffer = (key: string, bytes: number, files: Files) =>
+    assetsBuffer(assets, key, bytes, () => files, countRead);
+  return {
+    open: (key, keep, files) => {
+      const size = sizes[key];
+      if (!size) return Promise.reject(new Error(`no size: ${key}`));
+      return openSized(buffer(key, size.bytes, files), size, keep);
+    },
+    bind: (key, table, files) => ({ ...table, file: buffer(key, table.file.byteLength, files) }),
+  };
+};
 /** isolate の中で使い回すもの。表のファイルが変われば作り直す */
 type Built = {
   /** 当て方の辞書 (市区町村の表から作る)。町字を読む口は問い合わせごとに差し替える */
@@ -114,29 +169,37 @@ type Built = {
   cities: CityRow[];
   prefs: PrefRow[];
   city: (lgCode: string) => CityResult | undefined;
-  /** 表 name の、都道府県 prefCode の行が入るファイルを開く (一度開いたファイルは使い回す) */
-  open: (name: TableName, prefCode: string) => Promise<Table[]>;
+  /** 表 name の、want の行が入るファイルを開き、問い合わせの files に結ぶ (一度開いたファイルは使い回す) */
+  open: (name: TableName, want: Partition, files: Files) => Promise<Table[]>;
+  /** 町字を読むときに、町字から先で読む表のファイルも開いておくか。R2 では開くのはフッターだけなので読みを
+   * 並べられる。静的アセットでは開くとファイルを丸ごと取るので、要るときまで開かない */
+  prefetch: boolean;
   /** 照合の索引 (match_area・match_number) があるか。無い目録では町字から先を引き直さない */
   hasIndex: boolean;
 };
 
 let cached: { key: string; built: Promise<Built> } | null = null;
 
-const build = async (bucket: R2Bucket, { tables, sizes }: Resolved): Promise<Built> => {
-  // 分けていない表のファイルはどの都道府県からも開くので、ファイルごとに 1 回だけ開く
+const build = async (openKey: Opener, { tables }: Resolved, prefetch: boolean): Promise<Built> => {
+  // 分けていない表のファイルはどの住所からも開くので、ファイルごとに 1 回だけ開く
   const opened = new Map<string, Promise<Table>>();
-  const openFile = (name: TableName, key: string) => {
+  const openFile = (name: TableName, key: string, files: Files) => {
     const hit = opened.get(key);
     if (hit) return hit;
-    const p = openR2Table(bucket, key, countRead, keepOf(name), sizes[key]);
+    const p = openKey.open(key, keepOf(name), files);
     opened.set(key, p);
     // 開けなかったファイルは覚えずに、次の問い合わせで開き直す
     p.catch(() => opened.delete(key));
     return p;
   };
-  const open = (name: TableName, prefCode: string) =>
-    Promise.all(filesFor(tables[name], prefCode).map((k) => openFile(name, k)));
-  const [city, pref] = await Promise.all([open("city", ""), open("pref", "")]);
+  const open = (name: TableName, want: Partition, files: Files) =>
+    Promise.all(
+      filesFor(tables[name], want).map(async (k) =>
+        openKey.bind(k, await openFile(name, k, files), files),
+      ),
+    );
+  const first: Files = new Map();
+  const [city, pref] = await Promise.all([open("city", {}, first), open("pref", {}, first)]);
   const cities = (await Promise.all(city.map((t) => readAll<CityTableRow>(t)))).flat().map(toCity);
   const prefs = (await Promise.all(pref.map((t) => readAll<PrefTableRow>(t)))).flat().map(toPref);
   const cityByCode = new Map(cities.map((c) => [c.lgCode, c]));
@@ -149,6 +212,7 @@ const build = async (bucket: R2Bucket, { tables, sizes }: Resolved): Promise<Bui
     prefs,
     city: (lgCode) => cityByCode.get(lgCode),
     open,
+    prefetch,
     hasIndex: tables.match_area.length > 0 && tables.match_number.length > 0,
   };
 };
@@ -166,22 +230,23 @@ const once = <K, V>(load: (k: K) => Promise<V>): ((k: K) => Promise<V>) => {
 };
 
 /**
- * 表 name の、並べた列が values のどれかである行を読む口。都道府県 prefCode のファイルだけを読む。
+ * 表 name の、並べた列が values のどれかである行を読む口。want の行が入るファイルだけを読む。
  * 同じ値は問い合わせの中で 1 回だけ読み、まとめて渡された値は行グループを 1 回だけ読む
  */
 const rowsOf = <T extends Record<string, unknown>, V extends string | number>(
   built: Built,
   name: KeyedTable,
+  files: Files,
 ) => {
   const { sortKey, columns } = KEEP[name];
   const kept = new Map<V, Promise<T[]>>();
-  return async (prefCode: string, values: readonly V[]): Promise<T[]> => {
+  return async (want: Partition, values: readonly V[]): Promise<T[]> => {
     const unique = [...new Set(values)];
     const missing = unique.filter((v) => !kept.has(v));
     if (missing.length > 0) {
       // 読んだ行は値ごとに 1 回で分ける (値ごとに全部の行を見直さない)
       const read = built
-        .open(name, prefCode)
+        .open(name, want, files)
         .then((ts) =>
           Promise.all(ts.map((t) => readWhere<T>(t, sortKey, missing, columns, countRows))),
         )
@@ -208,17 +273,20 @@ type Session = {
 };
 
 const session = (built: Built): Session => {
-  const townRows = rowsOf<TownRow, string>(built, "town");
+  const files: Files = new Map();
+  const townRows = rowsOf<TownRow, string>(built, "town", files);
   /** 市区町村ごとの町字。まだ読んでいない市区町村は、都道府県ごとに 1 回の読みでまとめて読む */
   const kept = new Map<string, Promise<BasicResult[]>>();
   const townsOf = async (lgCodes: readonly string[]): Promise<BasicResult[]> => {
     const missing = [...new Set(lgCodes)].filter((c) => !kept.has(c));
     stats.cities.push(...missing);
+    // 町字から先で読む表のファイルも、この市区町村のものを今のうちに開いておく (読みを並べる)。
+    // 開けなくても、使うときに開き直す
+    if (built.prefetch)
+      for (const c of missing)
+        for (const name of AFTER_TOWN) built.open(name, cityPart(c), files).catch(() => []);
     for (const [prefCode, codes] of Map.groupBy(missing, prefOf)) {
-      // 町字から先で読む表のファイルも、この都道府県のものを今のうちに開いておく (フッターの読みを並べる)。
-      // 開けなくても、使うときに開き直す
-      for (const name of AFTER_TOWN) built.open(name, prefCode).catch(() => []);
-      const read = townRows(prefCode, codes);
+      const read = townRows({ pref_code: prefCode }, codes);
       for (const c of codes)
         kept.set(
           c,
@@ -231,21 +299,23 @@ const session = (built: Built): Session => {
   const town = async (lgCode: string, machiazaId: string) =>
     (await towns(lgCode)).find((b) => b.machiazaId === machiazaId) ?? null;
   const byMachiaza = <T extends Record<string, unknown>>(name: KeyedTable) => {
-    const read = rowsOf<T, string>(built, name);
+    const read = rowsOf<T, string>(built, name, files);
     return (lgCode: string, machiazaIds: readonly string[]) =>
       read(
-        prefOf(lgCode),
+        cityPart(lgCode),
         machiazaIds.map((m) => machiazaKey(lgCode, m)),
       );
   };
   const rsdt = byMachiaza<RsdtdspRow>("rsdtdsp");
   const parcels = byMachiaza<ParcelRow>("parcel");
-  const numbers = rowsOf<MatchNumberRow, number>(built, "match_number");
-  const areaRows = rowsOf<MatchAreaRow, string>(built, "match_area");
-  const areas = once(async (lgCode: string) => cityIndex(await areaRows(prefOf(lgCode), [lgCode])));
+  const numbers = rowsOf<MatchNumberRow, number>(built, "match_number", files);
+  const areaRows = rowsOf<MatchAreaRow, string>(built, "match_area", files);
+  const areas = once(async (lgCode: string) =>
+    cityIndex(await areaRows(cityPart(lgCode), [lgCode])),
+  );
   const byName = <T extends Record<string, unknown>>(name: KeyedTable) => {
-    const read = rowsOf<T, string>(built, name);
-    return (key: string) => read("", [key]);
+    const read = rowsOf<T, string>(built, name, files);
+    return (key: string) => read({ name_bucket: nameBucket(key) }, [key]);
   };
   const one =
     <T>(read: (lgCode: string, ids: readonly string[]) => Promise<T[]>) =>
@@ -263,7 +333,7 @@ const session = (built: Built): Session => {
     formers: byName<FormerCityRow>("former_city"),
     locate: {
       index: areas,
-      numbers: (lgCode, ids) => numbers(prefOf(lgCode), ids),
+      numbers: (lgCode, ids) => numbers(cityPart(lgCode), ids),
       rsdt,
       parcels,
       town,
@@ -274,13 +344,28 @@ const session = (built: Built): Session => {
 
 /** 今読む表のバージョン。答えに付け、キャッシュの鍵にも使う */
 export const dataVersion = async (env: ForwardEnv): Promise<string> =>
-  (await resolveTables(env.DATA, env.DATA_SOURCE, env.DATA_PIN)).version;
+  (await sourceOf(env)).resolved.version;
+
+/** 表を読む先。静的アセットに置いてあればそこ、無ければ R2 */
+type Source = { resolved: Resolved; open: Opener; inAssets: boolean };
+
+const sourceOf = async (env: ForwardEnv): Promise<Source> => {
+  const assets = env.ASSETS ? await resolveAssets(env.ASSETS).catch(() => null) : null;
+  const tables = resolveTables(env.DATA, env.DATA_SOURCE, env.DATA_PIN);
+  // R2 の読む先を読めないときは、静的アセットに置いたデータで答える
+  const resolved = assets ? await tables.catch(() => assets) : await tables;
+  // 静的アセットは、R2 で今読むバージョン (refs/heads/main か DATA_PIN) と同じときだけ使う。
+  // Sync で main が進んだときや DATA_PIN で固定したときは、デプロイし直すまで R2 から読む
+  if (env.ASSETS && assets?.version === resolved.version)
+    return { resolved: assets, open: assetsOpener(env.ASSETS, assets.sizes), inAssets: true };
+  return { resolved, open: r2Opener(env.DATA, resolved.sizes), inAssets: false };
+};
 
 const builtFor = async (env: ForwardEnv): Promise<Built> => {
-  const resolved = await resolveTables(env.DATA, env.DATA_SOURCE, env.DATA_PIN);
+  const { resolved, open, inAssets } = await sourceOf(env);
   const key = JSON.stringify(resolved.tables);
   if (cached?.key !== key) {
-    const built = build(env.DATA, resolved);
+    const built = build(open, resolved, !inAssets);
     built.catch(() => (cached = null));
     cached = { key, built };
   }
@@ -322,7 +407,7 @@ export const geocode = async (
   results: MatchedResult[];
   postalCode: (r: MatchedResult) => Promise<string | null>;
 }> => {
-  stats = emptyStats();
+  startRequest();
   const cold = cached === null;
   const built = await builtFor(env);
   const s = session(built);
@@ -397,6 +482,7 @@ export const nearby = async (
   lat: number,
   lng: number,
 ): Promise<Nearby | null> => {
+  startRequest();
   const s = session(await builtFor(env));
   return nearestAddress(await s.towns(lgCode), s.rows, lat, lng);
 };
