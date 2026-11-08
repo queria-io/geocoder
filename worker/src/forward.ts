@@ -47,7 +47,12 @@ import { withNumberTail } from "./number_tail";
 import { withAzaSkipped } from "./skip_aza";
 import { withOazaChome } from "./oaza_chome";
 import { withRenamedWard } from "./renamed_ward";
-import { FORMER_CITY_COLUMNS, type FormerCityRow, withFormerCity } from "./former_city";
+import {
+  FORMER_CITY_COLUMNS,
+  type FormerCityRow,
+  formerOrTown,
+  withFormerCity,
+} from "./former_city";
 import {
   MAX_LIMIT,
   orderCandidates,
@@ -430,17 +435,23 @@ export const geocode = async (
   // 上流の結果ごとに、市区町村を補った候補の組を作る
   const all = await Promise.all(
     upstream.map(async (r) => {
-      const n = stepIf(
+      const reread = stepIf(
         r,
         await withFormerCity(r, address, s.formers, built.city, rematch),
         "former_city",
+      );
+      const { n, byTown } = await formerOrTown(r, reread, () =>
+        withoutCity(r, address, s.names, cities, match),
       );
       // 市区町村まで決まった地域の外の結果は、この後の段で地域の中に移らない
       if (Detail(n.match_level) >= Detail("city") && !inArea(n.ids.lg_code)) return [];
       // 旧市区町村名を読み替えたら、この後の段は読み替えた後の住所から読む
       const read = n.former_address ?? address;
       // 候補は座標を引いてから並べ直すので、limit ではなく上限まで残す
-      const candidates = (await withoutCity(n, read, s.names, cities, match)).slice(0, MAX_LIMIT);
+      const candidates = (byTown ?? (await withoutCity(n, read, s.names, cities, match))).slice(
+        0,
+        MAX_LIMIT,
+      );
       const retried = await Promise.all(
         candidates.map(async (c) => {
           // 段ごとに、結果が変わったら使った段として steps に足す (include=evidence)
