@@ -1,6 +1,8 @@
 // 合併などで無くなった市区町村の名前で書いた住所 (「三重県員弁郡員弁町笠田新田」)。上流は都道府県止まりか、何も返さない。
 // 旧市区町村名の索引 (town.former_city) から範囲を引き継いだ今の市区町村を引き、今の名前に読み替えて照合し直す。
-// 旧町村名は今の町字名の頭に残ることが多い (いなべ市員弁町笠田新田) ので、残した形と外した形の両方を試す。上流には無い段
+// 旧町村名は今の町字名の頭に残ることが多い (いなべ市員弁町笠田新田) ので、残した形と外した形の両方を試す。上流には無い段。
+// 上流の市区町村名のあいまい一致は、旧市区町村名を名前の近い今の市区町村に読むことがある (員弁郡員弁町を員弁郡東員町に)。
+// 上流が当てた市区町村の名前が住所に書かれていなければ、市区町村まで当たっていても旧市区町村名から読み直す
 import { Detail, type MatchedResult } from "./model/model";
 import { compareResultStrength, strongestResult } from "./matching/search";
 import type { CityResult } from "./repository/types";
@@ -26,6 +28,30 @@ export const FORMER_CITY_COLUMNS = [
   "one_pref",
 ];
 
+/** 上流が当てた市区町村の名前 (郡は省いてよい) が、住所の都道府県名の後 (rest) にそのまま書かれているか */
+const writesCity = (
+  r: MatchedResult,
+  rest: string,
+  city: (lgCode: string) => CityResult | undefined,
+): boolean => {
+  const c = r.ids.lg_code === null ? undefined : city(r.ids.lg_code);
+  if (c === undefined) return true;
+  return [(c.county ?? "") + c.city, c.city].some((n) => rest.startsWith(townNameOf(n)));
+};
+
+/** 同じ市区町村か。政令市は市のコードと区のコードがあるので、市の名前で比べる */
+const sameCity = (
+  a: string,
+  b: string | null,
+  city: (lgCode: string) => CityResult | undefined,
+): boolean => {
+  if (b === null) return false;
+  if (a === b) return true;
+  const x = city(a);
+  const y = city(b);
+  return x !== undefined && y !== undefined && x.pref === y.pref && x.city === y.city;
+};
+
 /** 試す今の市区町村の上限 (範囲の割合の大きい順) */
 const MAX_SUCCESSORS = 6;
 
@@ -36,17 +62,27 @@ export const withFormerCity = async (
   city: (lgCode: string) => CityResult | undefined,
   match: (address: string) => Promise<MatchedResult[]>,
 ): Promise<MatchedResult> => {
-  if (Detail(r.match_level) >= Detail("city")) return r;
-  const prefCode = r.match_level === "pref" ? r.ids.lg_code?.slice(0, 2) : undefined;
   const all = townNameOf(input);
-  const rest = prefCode === undefined ? all : all.replace(PREF, "");
-  if (rest.length < 2 || (prefCode !== undefined && rest === all)) return r;
+  const withoutPref = all.replace(PREF, "");
+  const atCity = Detail(r.match_level) >= Detail("city");
+  const misread = atCity && !writesCity(r, withoutPref, city);
+  if (atCity && !misread) return r;
+  const hasPref = withoutPref !== all;
+  // 都道府県は、上流が都道府県まで当てたときと、読み違えた市区町村の住所に都道府県名が書かれているときに決める
+  const prefCode =
+    r.ids.lg_code !== null && (r.match_level === "pref" || (misread && hasPref))
+      ? r.ids.lg_code.slice(0, 2)
+      : undefined;
+  const rest = hasPref ? withoutPref : all;
+  if (rest.length < 2 || (prefCode !== undefined && !hasPref)) return r;
   // 都道府県名の無い住所では、1 つの都道府県にしか無い名前 (one_pref) だけを使う
   const rows = (await formers(rest.slice(0, 2))).filter(
     (f) =>
       rest.startsWith(f.name) && (prefCode === undefined ? f.one_pref : f.pref_code === prefCode),
   );
   if (rows.length === 0) return r;
+  // 上流が当てた市区町村が旧市区町村の範囲を引き継いだ市区町村なら、読み違えではないのでそのまま
+  if (misread && rows.some((f) => sameCity(f.lg_code, r.ids.lg_code, city))) return r;
   // 「員弁郡員弁町」と「員弁町」の両方に当たれば、長い方 (郡まで書いたもの) だけを使う
   const longest = Math.max(...rows.map((f) => f.name.length));
   const used = rows
@@ -71,7 +107,8 @@ export const withFormerCity = async (
   );
   const found = tried.flat();
   const best = strongestResult(found);
-  if (best === undefined || compareResultStrength(best, r) >= 0) return r;
+  // 上流が読み違えた市区町村の結果とは強さを比べない
+  if (best === undefined || (!misread && compareResultStrength(best, r) >= 0)) return r;
   // 引き継いだ市区町村の 2 つで同じ強さに当たれば、どちらか決められないので読み替えない
   const ties = found.filter((x) => compareResultStrength(x, best) === 0);
   if (new Set(ties.map((x) => x.ids.lg_code)).size > 1) return r;

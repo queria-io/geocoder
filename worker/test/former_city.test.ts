@@ -35,6 +35,9 @@ const city = (lgCode: string, name: string): CityResult => ({
 const CITIES = new Map([
   ["242144", city("242144", "いなべ市")],
   ["242055", city("242055", "桑名市")],
+  ["243248", { ...city("243248", "東員町"), county: "員弁郡" }],
+  ["221309", { ...city("221309", "浜松市"), pref: "静岡県" }],
+  ["221384", { ...city("221384", "浜松市"), pref: "静岡県", ward: "浜名区" }],
 ]);
 const row = (name: string, town_prefix: string, lg_code: string, share = 1): FormerCityRow => ({
   name_key: name.slice(0, 2),
@@ -51,6 +54,7 @@ const ROWS = [
   row("桑名郡七和村", "七和村", "242055", 0.99),
   { ...row("大安町", "大安町", "242144"), one_pref: false },
   { ...row("大安町", "大安町", "112038"), pref_code: "11", one_pref: false },
+  { ...row("浜北市", "浜北市", "221309"), pref_code: "22" },
 ];
 const formers = async (key: string) => ROWS.filter((r) => r.name_key === key);
 
@@ -106,6 +110,55 @@ describe("withFormerCity", () => {
       "242144",
     );
     expect(await withFormerCity(r, "大安町石榑東", formers, lookup, hit)).toBe(r);
+  });
+
+  it("上流が名前の近い今の町に読み違えたら、旧町名から読み直す", async () => {
+    const tobu = town("243248", "三重県員弁郡東員町", 0.5);
+    const got = await withFormerCity(
+      { ...tobu, match_level: "city", ids: { ...emptyIDs(), lg_code: "243248" } },
+      "三重県員弁郡員弁町笠田新田100",
+      formers,
+      (c) => CITIES.get(c),
+      async (a) =>
+        a === "三重県いなべ市員弁町笠田新田100"
+          ? [town("242144", "三重県いなべ市員弁町笠田新田", 0.4)]
+          : [],
+    );
+    expect(got.ids.lg_code).toBe("242144");
+  });
+
+  it("都道府県名の無い住所でも、読み違えた町を旧町名から読み直す", async () => {
+    const r = pref({ match_level: "city", ids: { ...emptyIDs(), lg_code: "243248" } });
+    const got = await withFormerCity(
+      r,
+      "員弁郡員弁町笠田新田100",
+      formers,
+      (c) => CITIES.get(c),
+      async (a) =>
+        a === "三重県いなべ市員弁町笠田新田100"
+          ? [town("242144", "三重県いなべ市員弁町笠田新田")]
+          : [],
+    );
+    expect(got.ids.lg_code).toBe("242144");
+  });
+
+  it("上流が政令市の区に当てていて、旧市の範囲を引き継いだ市なら読み直さない", async () => {
+    const r = pref({ match_level: "city", ids: { ...emptyIDs(), lg_code: "221384" } });
+    const never = async (): Promise<MatchedResult[]> => {
+      throw new Error("照合し直さない");
+    };
+    expect(
+      await withFormerCity(r, "静岡県浜北市貴布祢1", formers, (c) => CITIES.get(c), never),
+    ).toBe(r);
+  });
+
+  it("上流が当てた市区町村の名前が住所に書かれていれば、旧町名を読まない", async () => {
+    const r = pref({ match_level: "city", ids: { ...emptyIDs(), lg_code: "243248" } });
+    const never = async (): Promise<MatchedResult[]> => {
+      throw new Error("照合し直さない");
+    };
+    for (const input of ["三重県員弁郡東員町山田1", "三重県東員町山田1"])
+      expect(await withFormerCity(r, input, formers, (c) => CITIES.get(c), never)).toBe(r);
   });
 
   it("別の都道府県の同じ名前は使わない", async () => {
