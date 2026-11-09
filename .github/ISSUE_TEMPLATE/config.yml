@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 個人の住所を含む報告 (公開されないフォーム)
+    url: https://queria.io/geocoder
+    about: 自宅や取引先の住所でしか起きない誤りは、queria.io/geocoder の「要望・誤りの報告」のフォームから送ってください

@@ -1,6 +1,6 @@
 # geocoder
 
-日本の住所と座標・地域コードを相互に引く API。無料のベータとして geocoder.queria.io で出している。ベータの間は答えの形を変えることがある。IP ごとに 1 分 300 回までで、超えると 429。
+日本の住所と座標・地域コードを相互に引く API。無料で geocoder.queria.io で出している。API のバージョンが 1.0.0 より前は答えの形を変えることがある (変えるときは変更履歴に書く)。IP ごとに 1 分 300 回までで、超えると 429。
 
 DuckDB もデータベースも使わない。地図用に R2 (`queria-assets`) へ置いた境界の PMTiles
 から、点の入るタイルを Range で 1 枚だけ読み、点を含む多角形を
@@ -95,6 +95,8 @@ Worker と一緒にデプロイする。Worker は静的アセットに表があ
 main へのマージでは本番に出ない。main に入ったのに本番に出ていない変更は、`.github/workflows/release-pr.yml` が
 main → production のリリース PR に並べる。この PR を「Create a merge commit」でマージすると本番に出る。
 Squash でマージすると production に main に無いコミットができ、次のリリース PR が衝突する。
+マージしたら、リリース PR に並んだ変更のうち、使う側に見えるもの (API の追加、照合の結果の変化) を GitHub Releases に書く。
+タグは本番に出した日 (`2026-11-09` の形)。
 
 ## 精度
 

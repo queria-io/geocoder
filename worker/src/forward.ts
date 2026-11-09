@@ -47,7 +47,12 @@ import { withNumberTail } from "./number_tail";
 import { withAzaSkipped } from "./skip_aza";
 import { withOazaChome } from "./oaza_chome";
 import { withRenamedWard } from "./renamed_ward";
-import { FORMER_CITY_COLUMNS, type FormerCityRow, withFormerCity } from "./former_city";
+import {
+  FORMER_CITY_COLUMNS,
+  type FormerCityRow,
+  formerOrTown,
+  withFormerCity,
+} from "./former_city";
 import {
   MAX_LIMIT,
   orderCandidates,
@@ -418,20 +423,35 @@ export const geocode = async (
   const cities = built.cities.filter((c) => inArea(c.lgCode));
   // 地域で絞るときは、地域の外の候補で limit が埋まらないよう、上流からは上限まで受け取る
   const upstream = await match(address, area === undefined ? limit : MAX_LIMIT);
+  // 旧市区町村名からの読み直しは、上流の候補ごとに同じ住所を照合し直すことがあるので、住所ごとに 1 回だけ流す
+  const rematched = new Map<string, Promise<MatchedResult[]>>();
+  const rematch = (a: string) => {
+    const hit = rematched.get(a);
+    if (hit !== undefined) return hit;
+    const p = match(a);
+    rematched.set(a, p);
+    return p;
+  };
   // 上流の結果ごとに、市区町村を補った候補の組を作る
-  const groups = await Promise.all(
+  const all = await Promise.all(
     upstream.map(async (r) => {
-      const n = stepIf(
+      const reread = stepIf(
         r,
-        await withFormerCity(r, address, s.formers, built.city, match),
+        await withFormerCity(r, address, s.formers, built.city, rematch),
         "former_city",
+      );
+      const { n, byTown } = await formerOrTown(r, reread, () =>
+        withoutCity(r, address, s.names, cities, match),
       );
       // 市区町村まで決まった地域の外の結果は、この後の段で地域の中に移らない
       if (Detail(n.match_level) >= Detail("city") && !inArea(n.ids.lg_code)) return [];
       // 旧市区町村名を読み替えたら、この後の段は読み替えた後の住所から読む
       const read = n.former_address ?? address;
       // 候補は座標を引いてから並べ直すので、limit ではなく上限まで残す
-      const candidates = (await withoutCity(n, read, s.names, cities, match)).slice(0, MAX_LIMIT);
+      const candidates = (byTown ?? (await withoutCity(n, read, s.names, cities, match))).slice(
+        0,
+        MAX_LIMIT,
+      );
       const retried = await Promise.all(
         candidates.map(async (c) => {
           // 段ごとに、結果が変わったら使った段として steps に足す (include=evidence)
@@ -456,6 +476,16 @@ export const geocode = async (
       return retried.filter((x) => x.match_level !== "unknown" && inArea(x.ids.lg_code));
     }),
   );
+  // 上流の候補のいくつかを同じ旧市区町村名から読み直すと同じ結果が並ぶので、2 つ目からは外す
+  const seen = new Set<string>();
+  const groups = all.filter((g) => {
+    const head = g[0];
+    if (head?.former_address === undefined) return true;
+    const key = `${head.former_address}\t${head.matched_address}\t${head.ids.lg_code}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   // ログには住所を書かない。読んだ量と時間だけ (住所と結果は src/request_log.ts で別に記録する)
   console.log(JSON.stringify({ geocode: true, cold, ...stats }));
   // 照合の索引の無い目録では、引き直すと町字の答えがすべて市区町村に落ちるので、上流の答えのまま返す
