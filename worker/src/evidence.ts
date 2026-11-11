@@ -39,7 +39,8 @@ export type EvidencePoint = {
     | "history"
     | "machiaza"
     | "machiaza_derived"
-    | "city";
+    | "city"
+    | "pref";
   /** 同じ住所に点が複数あるときの優先順位 (小さいほど先)。町字・市区町村の代表点は null */
   rank: number | null;
   keys: {
@@ -147,6 +148,14 @@ export const pointOf = (
 export const cityPoint = (lgCode: string): EvidencePoint => ({
   dataset: "address_br",
   point_type: "city",
+  rank: null,
+  keys: { ...NO_KEYS, lg_code: lgCode },
+});
+
+/** 都道府県の代表点 */
+export const prefPoint = (lgCode: string): EvidencePoint => ({
+  dataset: "address_br",
+  point_type: "pref",
   rank: null,
   keys: { ...NO_KEYS, lg_code: lgCode },
 });

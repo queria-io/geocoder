@@ -77,7 +77,9 @@ describe("住居表示の段", () => {
         ward_name: "北区",
       }),
     ];
-    const prefs = [toPref({ lg_code: "270008", pref_code: "27", pref_name: "大阪府" })];
+    const prefs = [
+      toPref({ lg_code: "270008", pref_code: "27", pref_name: "大阪府", lng: null, lat: null }),
+    ];
     const towns = [town("0035001", "1丁", 1), town("0035005", "5丁", 1)].map(toBasic);
     const rsdtdsp = [at("0035001", "4", null, 1), at("0035005", "1", "4", 5)];
     return NewMatcher(memoryRepository(towns, cities, prefs, rsdtdsp), cities);

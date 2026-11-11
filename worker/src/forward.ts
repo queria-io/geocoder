@@ -67,7 +67,7 @@ import {
   type MatchAreaRow,
   type MatchNumberRow,
 } from "./locate/index";
-import { type LocateDeps, withLocated } from "./locate/result";
+import { atPref, type LocateDeps, withLocated } from "./locate/result";
 import { stepIf } from "./evidence";
 
 export type ForwardEnv = {
@@ -175,6 +175,7 @@ type Built = {
   cities: CityRow[];
   prefs: PrefRow[];
   city: (lgCode: string) => CityResult | undefined;
+  pref: (lgCode: string) => PrefRow | undefined;
   /** 表 name の、want の行が入るファイルを開き、問い合わせの files に結ぶ (一度開いたファイルは使い回す) */
   open: (name: TableName, want: Partition, files: Files) => Promise<Table[]>;
   /** 町字を読むときに、町字から先で読む表のファイルも開いておくか。R2 では開くのはフッターだけなので読みを
@@ -209,6 +210,7 @@ const build = async (openKey: Opener, { tables }: Resolved, prefetch: boolean): 
   const cities = (await Promise.all(city.map((t) => readAll<CityTableRow>(t)))).flat().map(toCity);
   const prefs = (await Promise.all(pref.map((t) => readAll<PrefTableRow>(t)))).flat().map(toPref);
   const cityByCode = new Map(cities.map((c) => [c.lgCode, c]));
+  const prefByCode = new Map(prefs.map((p) => [p.lgCode, p]));
   return {
     base: NewMatcher(
       lazyRepository(async () => [], cities, prefs),
@@ -217,6 +219,7 @@ const build = async (openKey: Opener, { tables }: Resolved, prefetch: boolean): 
     cities,
     prefs,
     city: (lgCode) => cityByCode.get(lgCode),
+    pref: (lgCode) => prefByCode.get(lgCode),
     open,
     prefetch,
     hasIndex: tables.match_area.length > 0 && tables.match_number.length > 0,
@@ -489,9 +492,14 @@ export const geocode = async (
   // ログには住所を書かない。読んだ量と時間だけ (住所と結果は src/request_log.ts で別に記録する)
   console.log(JSON.stringify({ geocode: true, cold, ...stats }));
   // 照合の索引の無い目録では、引き直すと町字の答えがすべて市区町村に落ちるので、上流の答えのまま返す
-  const withPoint = built.hasIndex
+  const located = built.hasIndex
     ? (r: MatchedResult) => withLocated(r, r.former_address ?? address, s.locate)
     : async (r: MatchedResult) => [r];
+  // 都道府県だけ当たった答えは、都道府県の代表点を付ける
+  const withPoint = (r: MatchedResult) =>
+    r.match_level === "pref"
+      ? Promise.resolve([atPref(r, built.pref(r.ids.lg_code ?? ""))])
+      : located(r);
   // 市区町村を推定した組は、座標を引いてから点の細かい順に並べる。ほかの結果は頭の limit 件だけ座標を引く
   const ordered: MatchedResult[] = [];
   for (const g of groups) {
