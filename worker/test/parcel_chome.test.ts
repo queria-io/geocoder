@@ -47,7 +47,9 @@ const matcher = () => {
       ward_name: null,
     }),
   ];
-  const prefs = [toPref({ lg_code: "120006", pref_code: "12", pref_name: "千葉県" })];
+  const prefs = [
+    toPref({ lg_code: "120006", pref_code: "12", pref_name: "千葉県", lng: null, lat: null }),
+  ];
   const towns = [town("0151000", null, 3), town("0151001", "一丁目", 1)].map(toBasic);
   const parcels = [
     parcel("0151000", "1762", "10", 1),

@@ -11,7 +11,8 @@ import type { BasicResult, CityResult } from "../repository/types";
 import { type CityIndex, numbersOf } from "./index";
 import { candidates, EMPTY_NUMBERS, locate, type Located, type Numbers, remainder } from "./locate";
 import { CHOME } from "./norm";
-import { cityPoint, keptSteps, locateSteps, pointOf } from "../evidence";
+import { cityPoint, keptSteps, locateSteps, pointOf, prefPoint } from "../evidence";
+import type { PrefRow } from "../repository/memory";
 import type { ParcelRow } from "../repository/parcel";
 import type { RsdtdspRow } from "../repository/rsdtdsp";
 import type { MatchNumberRow } from "./index";
@@ -173,6 +174,17 @@ const atCity = (r: MatchedResult, city: CityResult | undefined, rest: string): M
     evidence_matched: { area: null, number: null, skipped: null },
   };
 };
+
+/** 都道府県だけ当たった答えに、都道府県の代表点を付ける */
+export const atPref = (r: MatchedResult, pref: PrefRow | undefined): MatchedResult =>
+  r.match_level !== "pref" || r.coordinates !== null || pref?.lon == null || pref.lat == null
+    ? r
+    : {
+        ...r,
+        coordinates: [pref.lon, pref.lat],
+        coordinate_level: "pref",
+        evidence_point: prefPoint(pref.lgCode),
+      };
 
 /**
  * 市区町村まで決まった答え r の、町字から先を住所 address から引き直す。
