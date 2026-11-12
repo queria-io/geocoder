@@ -22,6 +22,23 @@ abr AS (
         lat
     FROM town
 ),
+-- 丁目に分かれた大字・町は、丁目を省いた名前 (「学園南」) も区域にする。町字 ID は大字・町の頭 4 桁に 000 を付けたもの、
+-- 点は丁目の町字の点の平均。ABR に大字・町そのものの行があれば、そちらを使う。
+-- 同じ市区町村に同じ名前の大字・町が 2 つ以上あれば、どちらか決まらないので区域にしない
+oaza AS (
+    SELECT
+        lg_code,
+        min(left(machiaza_id, 4)) || '000' AS machiaza_id,
+        oaza_cho AS name,
+        NULL AS numbering_name,
+        false AS own_point,
+        avg(lng) AS lng,
+        avg(lat) AS lat
+    FROM town
+    WHERE chome IS NOT NULL
+    GROUP BY lg_code, oaza_cho
+    HAVING count(DISTINCT left(machiaza_id, 4)) = 1
+),
 -- ABR に町字の行が無い大字・町（丁目まで）も区域にする。点はその下の町字の点の平均
 parent AS (
     SELECT
@@ -50,11 +67,14 @@ isj AS (
 SELECT dense_rank() OVER (ORDER BY lg_code, name) AS area_id, *, left(lg_code, 2) AS pref_code FROM (
     SELECT * FROM abr
     UNION ALL
-    SELECT p.* FROM parent p ANTI JOIN abr a USING (lg_code, name)
+    SELECT o.* FROM oaza o ANTI JOIN abr a USING (lg_code, name)
+    UNION ALL
+    SELECT p.* FROM parent p ANTI JOIN abr a USING (lg_code, name) ANTI JOIN oaza o USING (lg_code, name)
     UNION ALL
     SELECT i.lg_code, NULL, i.name, NULL, false, NULL, NULL
     FROM isj i
     ANTI JOIN abr a USING (lg_code, name)
     ANTI JOIN parent p USING (lg_code, name)
+    ANTI JOIN oaza o USING (lg_code, name)
 )
 ORDER BY lg_code, name, machiaza_id

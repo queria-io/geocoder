@@ -182,7 +182,7 @@ const options = (
     if (any !== undefined) {
       const a = areas.get(any) as Area;
       hits.push({
-        cover: own === undefined ? 0 : any.length,
+        cover: any.length,
         guessed: 0,
         rank: 9,
         located: {

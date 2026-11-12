@@ -347,6 +347,7 @@ const session = (built: Built): Session => {
       parcels,
       town,
       city: built.city,
+      memo: new Map(),
     },
   };
 };
@@ -422,6 +423,10 @@ export const geocode = async (
   const s = session(built);
   const match = (a: string, n = limit) =>
     Match(s.matcher, { address: preNormalize(a), category: "all", pref: "", limit: n });
+  // 照合の索引の無い目録では、引き直すと町字の答えがすべて市区町村に落ちるので、上流の答えのまま返す
+  const located = built.hasIndex
+    ? (r: MatchedResult, a: string) => withLocated(r, r.former_address ?? a, s.locate)
+    : async (r: MatchedResult) => [r];
   const inArea = areaFilter(built.cities, area);
   const cities = built.cities.filter((c) => inArea(c.lgCode));
   // 地域で絞るときは、地域の外の候補で limit が埋まらないよう、上流からは上限まで受け取る
@@ -444,17 +449,16 @@ export const geocode = async (
         "former_city",
       );
       const { n, byTown } = await formerOrTown(r, reread, () =>
-        withoutCity(r, address, s.names, cities, match),
+        withoutCity(r, address, s.names, cities, match, located),
       );
       // 市区町村まで決まった地域の外の結果は、この後の段で地域の中に移らない
       if (Detail(n.match_level) >= Detail("city") && !inArea(n.ids.lg_code)) return [];
       // 旧市区町村名を読み替えたら、この後の段は読み替えた後の住所から読む
       const read = n.former_address ?? address;
       // 候補は座標を引いてから並べ直すので、limit ではなく上限まで残す
-      const candidates = (byTown ?? (await withoutCity(n, read, s.names, cities, match))).slice(
-        0,
-        MAX_LIMIT,
-      );
+      const candidates = (
+        byTown ?? (await withoutCity(n, read, s.names, cities, match, located))
+      ).slice(0, MAX_LIMIT);
       const retried = await Promise.all(
         candidates.map(async (c) => {
           // 段ごとに、結果が変わったら使った段として steps に足す (include=evidence)
@@ -491,15 +495,11 @@ export const geocode = async (
   });
   // ログには住所を書かない。読んだ量と時間だけ (住所と結果は src/request_log.ts で別に記録する)
   console.log(JSON.stringify({ geocode: true, cold, ...stats }));
-  // 照合の索引の無い目録では、引き直すと町字の答えがすべて市区町村に落ちるので、上流の答えのまま返す
-  const located = built.hasIndex
-    ? (r: MatchedResult) => withLocated(r, r.former_address ?? address, s.locate)
-    : async (r: MatchedResult) => [r];
   // 都道府県だけ当たった答えは、都道府県の代表点を付ける
   const withPoint = (r: MatchedResult) =>
     r.match_level === "pref"
       ? Promise.resolve([atPref(r, built.pref(r.ids.lg_code ?? ""))])
-      : located(r);
+      : located(r, address);
   // 市区町村を推定した組は、座標を引いてから点の細かい順に並べる。ほかの結果は頭の limit 件だけ座標を引く
   const ordered: MatchedResult[] = [];
   for (const g of groups) {
