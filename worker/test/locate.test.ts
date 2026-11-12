@@ -345,9 +345,8 @@ describe("remainder", () => {
 
 describe("丁目を省いた大字・町", () => {
   // 学園南は丁目の町字だけが ABR にあり、丁目を省いた区域は大字・町の頭 4 桁に 000 を付けた町字 ID と
-  // 丁目の点の平均を持つ。位置参照情報にも同じ名前 (点なし) がある
+  // 丁目の点の平均を持つ
   const rows = [
-    area(1, "学園南", null, null),
     area(2, "学園南", "0051000", [140.08, 36.08]),
     area(3, "学園南1丁目", "0051001", [140.07, 36.07]),
     area(4, "学園南3丁目", "0051003", [140.09, 36.09]),
@@ -368,34 +367,34 @@ describe("丁目を省いた大字・町", () => {
       "0051003",
     ));
 
+  const city = {
+    lgCode: "011011",
+    pref: "茨城県",
+    county: null,
+    city: "つくば市",
+    ward: null,
+    lon: 140,
+    lat: 36,
+  };
+  const deps: LocateDeps = {
+    index: async () => index,
+    numbers: async () => [],
+    rsdt: async () => [],
+    parcels: async () => [],
+    town: async () => null,
+    city: () => city,
+  };
+  const r: MatchedResult = {
+    matched_address: "茨城県つくば市",
+    unmatched_address: ["学園南"],
+    match_level: "city",
+    score: 1,
+    ids: { ...emptyIDs(), lg_code: "011011" },
+    structured_address: { ...emptySA(), pref: "茨城県", city: "つくば市" },
+    coordinates: null,
+    machiaza: emptyMachiaza(),
+  };
   it("答えは町字 (machiaza) の段で、大字・町の名前を表記に入れる", async () => {
-    const city = {
-      lgCode: "011011",
-      pref: "茨城県",
-      county: null,
-      city: "つくば市",
-      ward: null,
-      lon: 140,
-      lat: 36,
-    };
-    const deps: LocateDeps = {
-      index: async () => index,
-      numbers: async () => [],
-      rsdt: async () => [],
-      parcels: async () => [],
-      town: async () => null,
-      city: () => city,
-    };
-    const r: MatchedResult = {
-      matched_address: "茨城県つくば市",
-      unmatched_address: ["学園南"],
-      match_level: "city",
-      score: 1,
-      ids: { ...emptyIDs(), lg_code: "011011" },
-      structured_address: { ...emptySA(), pref: "茨城県", city: "つくば市" },
-      coordinates: null,
-      machiaza: emptyMachiaza(),
-    };
     const [got] = await withLocated(r, "つくば市学園南", deps);
     expect([
       got.match_level,
@@ -405,5 +404,10 @@ describe("丁目を省いた大字・町", () => {
       got.unmatched_address,
       got.evidence_point?.point_type,
     ]).toEqual(["machiaza", "茨城県つくば市学園南", "0051000", "学園南", null, "machiaza_derived"]);
+  });
+
+  it("町字の表に行の無い丁目の町字は、大字・町の名前にしない", async () => {
+    const [got] = await withLocated(r, "つくば市学園南3丁目", deps);
+    expect([got.match_level, got.structured_address.oaza_cho]).toEqual(["city", null]);
   });
 });

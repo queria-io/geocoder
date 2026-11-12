@@ -54,7 +54,6 @@ import {
   withFormerCity,
 } from "./former_city";
 import {
-  locatingCity,
   MAX_LIMIT,
   orderCandidates,
   TOWN_NAME_COLUMNS,
@@ -427,8 +426,6 @@ export const geocode = async (
   const located = built.hasIndex
     ? (r: MatchedResult, a: string) => withLocated(r, r.former_address ?? a, s.locate)
     : async (r: MatchedResult) => [r];
-  // 市区町村名を補って当て直すときは、上流が市区町村までしか当てなかった答えも照合の索引で引き直す
-  const matchTown = locatingCity(match, located);
   const inArea = areaFilter(built.cities, area);
   const cities = built.cities.filter((c) => inArea(c.lgCode));
   // 地域で絞るときは、地域の外の候補で limit が埋まらないよう、上流からは上限まで受け取る
@@ -451,17 +448,16 @@ export const geocode = async (
         "former_city",
       );
       const { n, byTown } = await formerOrTown(r, reread, () =>
-        withoutCity(r, address, s.names, cities, matchTown),
+        withoutCity(r, address, s.names, cities, match, located),
       );
       // 市区町村まで決まった地域の外の結果は、この後の段で地域の中に移らない
       if (Detail(n.match_level) >= Detail("city") && !inArea(n.ids.lg_code)) return [];
       // 旧市区町村名を読み替えたら、この後の段は読み替えた後の住所から読む
       const read = n.former_address ?? address;
       // 候補は座標を引いてから並べ直すので、limit ではなく上限まで残す
-      const candidates = (byTown ?? (await withoutCity(n, read, s.names, cities, matchTown))).slice(
-        0,
-        MAX_LIMIT,
-      );
+      const candidates = (
+        byTown ?? (await withoutCity(n, read, s.names, cities, match, located))
+      ).slice(0, MAX_LIMIT);
       const retried = await Promise.all(
         candidates.map(async (c) => {
           // 段ごとに、結果が変わったら使った段として steps に足す (include=evidence)

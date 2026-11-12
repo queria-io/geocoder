@@ -23,12 +23,12 @@ abr AS (
     FROM town
 ),
 -- 丁目に分かれた大字・町は、丁目を省いた名前 (「学園南」) も区域にする。町字 ID は大字・町の頭 4 桁に 000 を付けたもの、
--- 点は丁目の町字の点の平均。ABR に大字・町そのものの行があれば、そちらを使う
+-- 点は丁目の町字の点の平均。ABR に大字・町そのものの行があれば、そちらを使う。
+-- 同じ市区町村に同じ名前の大字・町が 2 つ以上あれば、どちらか決まらないので区域にしない
 oaza AS (
     SELECT
         lg_code,
-        -- 同じ名前の大字・町が 2 つ以上あれば、どちらか決まらないので町字 ID を持たない
-        CASE WHEN count(DISTINCT left(machiaza_id, 4)) = 1 THEN min(left(machiaza_id, 4)) || '000' END AS machiaza_id,
+        min(left(machiaza_id, 4)) || '000' AS machiaza_id,
         oaza_cho AS name,
         NULL AS numbering_name,
         false AS own_point,
@@ -37,6 +37,7 @@ oaza AS (
     FROM town
     WHERE chome IS NOT NULL
     GROUP BY lg_code, oaza_cho
+    HAVING count(DISTINCT left(machiaza_id, 4)) = 1
 ),
 -- ABR に町字の行が無い大字・町（丁目まで）も区域にする。点はその下の町字の点の平均
 parent AS (

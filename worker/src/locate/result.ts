@@ -5,6 +5,7 @@ import {
   Detail,
   emptySA,
   FormatAddress,
+  IsBaseMachiazaID,
   type MatchedResult,
 } from "../model/model";
 import type { BasicResult, CityResult } from "../repository/types";
@@ -99,10 +100,14 @@ const toResult = async (
   areaName: string | null,
 ): Promise<MatchedResult> => {
   const row = found.machiazaId === null ? null : await deps.town(lgCode, found.machiazaId);
-  // 丁目を省いた大字・町の区域 (「学園南」) は ABR に町字の行が無い。区域の名前を大字・町の名前にする
+  // 丁目を省いた大字・町の区域 (「学園南」) は ABR に町字の行が無い。町字 ID が大字・町 (末尾 000) で
+  // 番号を読まなかったときだけ、区域の名前を大字・町の名前にする
   const town: Town | null =
     row ??
-    (found.machiazaId !== null && found.number === null && areaName !== null
+    (found.machiazaId !== null &&
+    IsBaseMachiazaID(found.machiazaId) &&
+    found.number === null &&
+    areaName !== null
       ? oazaOnly(found.machiazaId, areaName)
       : null);
   // 町字が決まらなければ (位置参照情報にだけある区域など)、住所の表記は市区町村までにし、
