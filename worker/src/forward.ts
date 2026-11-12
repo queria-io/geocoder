@@ -347,6 +347,7 @@ const session = (built: Built): Session => {
       parcels,
       town,
       city: built.city,
+      memo: new Map(),
     },
   };
 };

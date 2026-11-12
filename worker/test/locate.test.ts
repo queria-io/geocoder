@@ -406,6 +406,22 @@ describe("丁目を省いた大字・町", () => {
     ]).toEqual(["machiaza", "茨城県つくば市学園南", "0051000", "学園南", null, "machiaza_derived"]);
   });
 
+  it("同じ市区町村と住所の残りは、問い合わせの中で 1 回だけ照合する", async () => {
+    let reads = 0;
+    const counted: LocateDeps = {
+      ...deps,
+      rsdt: async () => {
+        reads += 1;
+        return [];
+      },
+      memo: new Map(),
+    };
+    const first = await withLocated(r, "茨城県つくば市学園南3-5", counted);
+    const second = await withLocated(r, "学園南3-5", counted);
+    expect(reads).toBe(1);
+    expect(second).toEqual(first);
+  });
+
   it("町字の表に行の無い丁目の町字は、大字・町の名前にしない", async () => {
     const [got] = await withLocated(r, "つくば市学園南3丁目", deps);
     expect([got.match_level, got.structured_address.oaza_cho]).toEqual(["city", null]);

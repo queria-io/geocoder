@@ -28,6 +28,11 @@ export type LocateDeps = {
   parcels: (lgCode: string, machiazaIds: readonly string[]) => Promise<ParcelRow[]>;
   town: (lgCode: string, machiazaId: string) => Promise<BasicResult | null>;
   city: (lgCode: string) => CityResult | undefined;
+  /**
+   * 照合した結果を問い合わせの中で使い回す口 (市区町村と住所の残りの組ごと)。市区町村名の無い住所は、
+   * 再照合と座標を引く段で同じ住所を 2 回引くため
+   */
+  memo?: Map<string, Promise<Located | null>>;
 };
 
 /** 点の優先順 (rank) ごとの、座標を取った点の段 */
@@ -229,9 +234,15 @@ export const withLocated = async (
   if (!city) return [r];
   const index = await deps.index(lgCode);
   const rest = remainder(address, city);
-  const keys = candidates(rest, index.areas);
-  const loaded = await loadNumbers(deps, index, lgCode, keys);
-  const found = locate(rest, index.areas, (k) => loaded.get(k) ?? EMPTY_NUMBERS);
+  const run = async () => {
+    const keys = candidates(rest, index.areas);
+    const loaded = await loadNumbers(deps, index, lgCode, keys);
+    return locate(rest, index.areas, (k) => loaded.get(k) ?? EMPTY_NUMBERS);
+  };
+  const key = `${lgCode}\t${rest}`;
+  const kept = deps.memo?.get(key) ?? run();
+  deps.memo?.set(key, kept);
+  const found = await kept;
   // 照合できなかった部分には丁目の印を残さない
   const plain = rest.replaceAll(CHOME, "-");
   if (found === null) return [atCity(r, city, plain.replace(/^-+|-+$/g, ""))];
