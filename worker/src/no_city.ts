@@ -195,6 +195,22 @@ const byCity = (
   return each.length > 1 ? each.map((x) => ({ ...x, candidates: each.length })) : each;
 };
 
+/**
+ * 当て直しに使う照合。上流が市区町村までしか当てなかった答えを、照合の索引 (locate) で町字から先を引き直す。
+ * 上流は丁目を省いた町名 (「学園南」) を丁目に分かれた町字に当てないので、そのままでは候補から落ちる
+ */
+export const locatingCity =
+  (
+    match: (address: string) => Promise<MatchedResult[]>,
+    locate: (r: MatchedResult, address: string) => Promise<MatchedResult[]>,
+  ) =>
+  async (address: string): Promise<MatchedResult[]> =>
+    (
+      await Promise.all(
+        (await match(address)).map((r) => (r.match_level === "city" ? locate(r, address) : [r])),
+      )
+    ).flat();
+
 /** 市区町村を補った住所で当て直し、その市区町村の町字まで当たったものだけを残す */
 const retry = async (
   c: CityResult,

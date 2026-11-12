@@ -73,6 +73,22 @@ const loadNumbers = async (
   );
 };
 
+type Town = Pick<
+  BasicResult,
+  "machiazaId" | "oazaCho" | "chome" | "koaza" | "kyotoSt" | "machiazaDist" | "rsdtAddrFlg"
+>;
+
+/** 丁目を省いた大字・町の町字。ABR に行が無いので、区域の名前と町字 ID だけを持つ */
+const oazaOnly = (machiazaId: string, name: string): Town => ({
+  machiazaId,
+  oazaCho: name,
+  chome: null,
+  koaza: null,
+  kyotoSt: null,
+  machiazaDist: null,
+  rsdtAddrFlg: null,
+});
+
 const toResult = async (
   r: MatchedResult,
   found: Located,
@@ -82,7 +98,13 @@ const toResult = async (
   /** 照合した区域の名前 (照合の索引の表記) */
   areaName: string | null,
 ): Promise<MatchedResult> => {
-  const town = found.machiazaId === null ? null : await deps.town(lgCode, found.machiazaId);
+  const row = found.machiazaId === null ? null : await deps.town(lgCode, found.machiazaId);
+  // 丁目を省いた大字・町の区域 (「学園南」) は ABR に町字の行が無い。区域の名前を大字・町の名前にする
+  const town: Town | null =
+    row ??
+    (found.machiazaId !== null && found.number === null && areaName !== null
+      ? oazaOnly(found.machiazaId, areaName)
+      : null);
   // 町字が決まらなければ (位置参照情報にだけある区域など)、住所の表記は市区町村までにし、
   // 番号も表記と ID に載せない。区域の名前を落として番号だけを市区町村名に続けないため
   const n = town === null ? null : found.number;

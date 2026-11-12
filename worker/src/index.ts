@@ -346,7 +346,7 @@ const Ids = z
   )
   .openapi("Ids", {
     description:
-      "ABR の ID。rsdt_addr_flg は '1' が住居表示、'0' が地番の町字、決まらなければ null",
+      "ABR の ID。rsdt_addr_flg は '1' が住居表示、'0' が地番の町字、決まらなければ null。丁目を省いた町名 (「学園南」) に照合したときの machiaza_id は、丁目の町字 ID の頭 4 桁 (大字・町) に 000 を付けたもので、ABR の町字の表には行が無いことがある",
   });
 
 const MATCH_LEVELS = [

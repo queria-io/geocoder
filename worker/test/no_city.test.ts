@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "../src/model/model";
 import {
+  locatingCity,
   MAX_LIMIT,
   numeralsOf,
   orderCandidates,
@@ -272,6 +273,26 @@ describe("withoutCity", () => {
     ]);
   });
 
+  it("当て直しで上流が市区町村までしか当てなかった市区町村も、町字から先を引き直して候補にする", async () => {
+    const located = async (r: MatchedResult) => [
+      { ...r, match_level: "machiaza" as const, ids: { ...r.ids, machiaza_id: "0051000" } },
+    ];
+    const got = await withoutCity(
+      unmatched(),
+      "学園南",
+      names([row("学園南", "072010"), row("学園南", "202011")]),
+      Object.values(cities),
+      locatingCity(
+        async (a) => [a.startsWith("福島県") ? hit("072010", "machiaza") : hit("202011", "city")],
+        located,
+      ),
+    );
+    expect(got.map((x) => [x.ids.lg_code, x.candidates])).toEqual([
+      ["202011", 2],
+      ["072010", 2],
+    ]);
+  });
+
   it("番号まで照合できても点が町字の代表点なら、親番の点を持つ候補より後ろに並べる", async () => {
     const got = await withoutCity(
       unmatched(),
@@ -466,5 +487,20 @@ describe("orderCandidates", () => {
       at("5", "parcel", "parcel_parent"),
     ]);
     expect(got.map((x) => x.ids.lg_code)).toEqual(["4", "3", "5", "2", "1"]);
+  });
+});
+
+describe("locatingCity", () => {
+  it("市区町村までの答えだけを引き直す", async () => {
+    const asked: string[] = [];
+    const got = await locatingCity(
+      async () => [hit("072010", "city"), hit("202011", "parcel")],
+      async (r, a) => {
+        asked.push(a);
+        return [{ ...r, match_level: "machiaza" }];
+      },
+    )("福島県福島市学園南");
+    expect(asked).toEqual(["福島県福島市学園南"]);
+    expect(got.map((x) => x.match_level)).toEqual(["machiaza", "parcel"]);
   });
 });
