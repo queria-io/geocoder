@@ -28,10 +28,8 @@ jobs:
       actions: read
       contents: read
     env:
-      # data.queria.io の回数の上限を、ランナーの IP ではなくこのトークンで数える
-      QUERIA_TOKEN: ${{ secrets.QUERIA_TOKEN }}
-      # fdl checkout は fdl.json と refs をこのトークンで読む (sync.yml と同じ)
-      FDL_TOKEN: ${{ secrets.QUERIA_TOKEN }}
+      # 公開のデータセットだけを読むので、トークンを渡さず匿名で読む。PR のジョブは
+      # OIDC でトークンに交換できない (Queria が pull_request のきっかけを断る)
       QUERIA_USER_AGENT: queria-build/accuracy
     defaults:
       run:
@@ -101,7 +99,6 @@ jobs:
         env:
           FOUND: ${{ steps.base.outputs.found }}
         run: |
-          printf 'QUERIA_TOKEN=%s\n' "$QUERIA_TOKEN" > bench/local/.dev.vars
           pnpm exec tsx bench/local/serve.ts ../.fdl/work.sqlite.data 8788 &
           pnpm exec wrangler dev -c bench/local/wrangler.jsonc --port 8787 > bench/wrangler.log 2>&1 &
           for _ in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:8787/openapi.json && break; sleep 2; done
