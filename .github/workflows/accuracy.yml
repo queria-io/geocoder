@@ -83,6 +83,9 @@ jobs:
           # 本番のバージョンを作業場に取り出す。作り直さない表は本番のファイルを指したまま残る
           uv run fdl checkout https://data.queria.io/datasets/queria/geocoder/ .fdl/work.sqlite
           export FDL_WORKING="$PWD/.fdl/work.sqlite" FDL_DATA_PATH="$PWD/.fdl/work.sqlite.data/"
+          # 上流のデータセットは、いまのバージョンのカタログを読む。main のカタログを読むと、
+          # 作り直している間に上流が新しいバージョンを出したときに DuckDB が壊れたカタログを読んで落ちる
+          eval "$(scripts/pin-upstream.sh)"
           # 比較の基準は PR の分岐元のモデル (本番のデータは main から Sync が作る)
           git worktree add -q ../base "$BASE_SHA"
           git -C ../base submodule update -q --init
