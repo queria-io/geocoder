@@ -17,12 +17,17 @@ concurrency:
 
 jobs:
   sync:
-    uses: queria-io/dataset-shared/.github/workflows/sync.yml@main
+    # Queria への書き込みは GitHub Actions の OIDC で 1 時間のトークンを取って行う
+    permissions:
+      contents: read
+      id-token: write
+    uses: queria-io/dataset-shared/.github/workflows/sync.yml@47c67df0f7731174b0999ead76873c53b8905ca2
     with:
       dataset_name: geocoder
       # parcel の作成で DuckDB の一時ファイルが 11GB を超え、ランナーのディスクが足りなくなる
       free_disk: true
-    secrets: inherit
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
   # 本番の Worker は、デプロイのときの最新バージョンのデータを静的アセットに置いて読む (worker/scripts/build-data.mjs)。
   # データを作り直したら、production ブランチの本番のビルドを流して新しいバージョンを置き直す

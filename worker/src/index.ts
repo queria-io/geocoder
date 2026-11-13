@@ -346,7 +346,7 @@ const Ids = z
   )
   .openapi("Ids", {
     description:
-      "ABR の ID。rsdt_addr_flg は '1' が住居表示、'0' が地番の町字、決まらなければ null",
+      "ABR の ID。rsdt_addr_flg は '1' が住居表示、'0' が地番の町字、決まらなければ null。丁目を省いた町名 (「学園南」) に照合したときの machiaza_id は、丁目の町字 ID の頭 4 桁 (大字・町) に 000 を付けたもので、ABR の町字の表には行が無いことがある",
   });
 
 const MATCH_LEVELS = [
@@ -399,14 +399,15 @@ const EvidencePoint = z
         "machiaza",
         "machiaza_derived",
         "city",
+        "pref",
       ])
       .openapi({
         description:
-          "点の種類。rsdt は住居表示の住居、block は住居表示の街区、parcel は地番、parcel_parent は地番の親番、history は位置参照情報の過去のバージョンの点、machiaza は町字の代表点、machiaza_derived は町字に自前の代表点が無く、上位の町字の点や下の点の平均などから求めた点 (dataset は null)、city は市区町村の代表点",
+          "点の種類。rsdt は住居表示の住居、block は住居表示の街区、parcel は地番、parcel_parent は地番の親番、history は位置参照情報の過去のバージョンの点、machiaza は町字の代表点、machiaza_derived は町字に自前の代表点が無く、上位の町字の点や下の点の平均などから求めた点 (dataset は null)、city は市区町村の代表点、pref は都道府県の代表点",
       }),
     rank: z.number().int().nullable().openapi({
       description:
-        "同じ住所に点が複数あるときの優先順位 (小さいほど先)。町字・市区町村の代表点は null",
+        "同じ住所に点が複数あるときの優先順位 (小さいほど先)。町字・市区町村・都道府県の代表点は null",
     }),
     keys: z
       .object({
