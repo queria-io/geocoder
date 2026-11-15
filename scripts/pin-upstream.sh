@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# profiles.yml が読む上流のデータセットごとに、いま main が指すバージョンのカタログの URL を
+# profiles.yml が読む上流のデータセットごとに、いま main が指すバージョンのメタデータの URL を
 # UPSTREAM_<エイリアス> として export する文を出す。ビルドの前に eval "$(scripts/pin-upstream.sh)" で使う。
-# バージョンのカタログは後から変わらないので、ビルドの途中で上流が新しいバージョンを出しても同じカタログを読み続ける
+# バージョンのメタデータは後から変わらないので、ビルドの途中で上流が新しいバージョンを出しても同じメタデータを読み続ける
 set -euo pipefail
 
 for name in address_br e_stat nlftp japan_address_code codh; do

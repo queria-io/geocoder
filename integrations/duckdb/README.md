@@ -25,7 +25,7 @@ GET の `/v1/forward/batch` で 10 件ずつまとめて送る。1 分に 300 �
 ```sql
 INSTALL ducklake;
 LOAD ducklake;
-ATTACH 'ducklake:https://data.queria.io/e_stat/ducklake.duckdb' AS e_stat (READ_ONLY);
+ATTACH 'ducklake:https://data.queria.io/datasets/queria/e_stat/metadata.db' AS e_stat (READ_ONLY);
 
 SELECT g.address, g.small_area_code, s.area_name, s.jinko AS population, s.setai AS households
 FROM geocode(['東京都千代田区丸の内1-9-1', '東京都千代田区千代田1-1']) g

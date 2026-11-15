@@ -35,26 +35,26 @@ geocoder:
             # 1 つも生成されない。fdl commit はインライン化された行を断るので、常に切る
             DATA_INLINING_ROW_LIMIT: 0
         # 元にする Queria の公開データセット。読むだけ。
-        # main のカタログ (ducklake.duckdb) は新しいバージョンが出ると同じ URL のまま中身が入れ替わり、
-        # ビルドの途中で入れ替わると DuckDB が古いカタログと新しいカタログのブロックを混ぜて読んで落ちる。
-        # scripts/pin-upstream.sh が UPSTREAM_<エイリアス> に、ビルドを始めたときのバージョンのカタログを入れる
-        - path: "ducklake:{{ env_var('UPSTREAM_ADDRESS_BR', 'https://data.queria.io/datasets/queria/address_br/ducklake.duckdb') }}"
+        # main のメタデータ (metadata.db) は新しいバージョンが出ると同じ URL のまま中身が入れ替わり、
+        # ビルドの途中で入れ替わると DuckDB が古いメタデータと新しいメタデータのブロックを混ぜて読んで落ちる。
+        # scripts/pin-upstream.sh が UPSTREAM_<エイリアス> に、ビルドを始めたときのバージョンのメタデータを入れる
+        - path: "ducklake:{{ env_var('UPSTREAM_ADDRESS_BR', 'https://data.queria.io/datasets/queria/address_br/metadata.db') }}"
           alias: address_br
           is_ducklake: true
           read_only: true
-        - path: "ducklake:{{ env_var('UPSTREAM_E_STAT', 'https://data.queria.io/datasets/queria/e_stat/ducklake.duckdb') }}"
+        - path: "ducklake:{{ env_var('UPSTREAM_E_STAT', 'https://data.queria.io/datasets/queria/e_stat/metadata.db') }}"
           alias: e_stat
           is_ducklake: true
           read_only: true
-        - path: "ducklake:{{ env_var('UPSTREAM_NLFTP', 'https://data.queria.io/datasets/queria/nlftp/ducklake.duckdb') }}"
+        - path: "ducklake:{{ env_var('UPSTREAM_NLFTP', 'https://data.queria.io/datasets/queria/nlftp/metadata.db') }}"
           alias: nlftp
           is_ducklake: true
           read_only: true
-        - path: "ducklake:{{ env_var('UPSTREAM_JAPAN_ADDRESS_CODE', 'https://data.queria.io/datasets/queria/japan_address_code/ducklake.duckdb') }}"
+        - path: "ducklake:{{ env_var('UPSTREAM_JAPAN_ADDRESS_CODE', 'https://data.queria.io/datasets/queria/japan_address_code/metadata.db') }}"
           alias: japan_address_code
           is_ducklake: true
           read_only: true
-        - path: "ducklake:{{ env_var('UPSTREAM_CODH', 'https://data.queria.io/datasets/queria/codh/ducklake.duckdb') }}"
+        - path: "ducklake:{{ env_var('UPSTREAM_CODH', 'https://data.queria.io/datasets/queria/codh/metadata.db') }}"
           alias: codh
           is_ducklake: true
           read_only: true
