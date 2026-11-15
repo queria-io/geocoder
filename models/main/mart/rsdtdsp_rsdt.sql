@@ -12,5 +12,5 @@ SELECT
     rsdt_num2,
     ST_X(geometry) AS lng,
     ST_Y(geometry) AS lat
-FROM address_br.main.mart_rsdtdsp_rsdt
+FROM {{ ref('stg_address_br_rsdtdsp_rsdt') }}
 ORDER BY lg_code, machiaza_id, blk_id, rsdt_id, rsdt2_id

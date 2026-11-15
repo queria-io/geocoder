@@ -56,11 +56,11 @@ parent AS (
 -- 位置参照情報（過去の版を含む）にだけある名前も区域にする。点は持たず、番号の点だけを引く
 isj AS (
     SELECT DISTINCT lg_code, oaza_chome_name || coalesce(koaza_name, '') AS name
-    FROM nlftp.isj.block
+    FROM {{ ref('stg_nlftp_block') }}
     WHERE lg_code IS NOT NULL
     UNION
     SELECT DISTINCT lg_code, oaza_chome_name || coalesce(koaza_name, '') AS name
-    FROM nlftp.isj.block_history
+    FROM {{ ref('stg_nlftp_block_history') }}
     WHERE lg_code IS NOT NULL
 )
 -- area_id は区域の名前ごとの番号。match_number はこの番号で区域を指す (名前の文字列より並べ替えが軽い)

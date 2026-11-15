@@ -7,5 +7,5 @@ SELECT
     pref_name,
     ST_X(geometry) AS lng,
     ST_Y(geometry) AS lat
-FROM address_br.main.mart_pref
+FROM {{ ref('stg_address_br_pref') }}
 ORDER BY lg_code
