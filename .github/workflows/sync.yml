@@ -21,7 +21,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: queria-io/dataset-shared/.github/workflows/sync.yml@47c67df0f7731174b0999ead76873c53b8905ca2
+    uses: queria-io/dataset-shared/.github/workflows/sync.yml@31f8766209fc198967cf2b4cfa186a400434acdd
     with:
       dataset_name: geocoder
       # parcel の作成で DuckDB の一時ファイルが 11GB を超え、ランナーのディスクが足りなくなる
