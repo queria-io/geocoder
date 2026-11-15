@@ -21,7 +21,7 @@ geocoder:
       config_options:
         custom_user_agent: "{{ env_var('QUERIA_USER_AGENT', '') }}"
       attach:
-        # fdl checkout が作った作業場のカタログ (SQLite) に書く。新しいデータファイルは
+        # fdl clone が作った作業場のカタログ (SQLite) に書く。新しいデータファイルは
         # FDL_DATA_PATH (data.queria.io から取り出したときは手元のフォルダ) に書き、
         # fdl commit が上げる (shared/scripts/build-fdl.sh)
         - path: "ducklake:{{ env_var('FDL_WORKING') }}"
