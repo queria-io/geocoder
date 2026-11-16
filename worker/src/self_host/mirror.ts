@@ -56,7 +56,7 @@ export const mirror = async (
   if (latest === current) return { version: latest, copied: 0, deleted: 0 };
 
   const config = await mustText(origin, source + "fdl.json");
-  const dataDir = (JSON.parse(config) as { data_dir?: string }).data_dir ?? "data/";
+  const dataDir = (JSON.parse(config) as { data_dir?: string }).data_dir ?? "tables/";
   const dir = `${source}versions/${latest}/`;
   await copy(origin, store, dir + "version.json");
   await copy(origin, store, dir + "files.json");
