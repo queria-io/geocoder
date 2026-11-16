@@ -1,5 +1,6 @@
-schema: main
-name: pref
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.pref
 title: 都道府県
 description: |-
   都道府県の名前と代表点です。
@@ -22,3 +23,4 @@ fields:
   - name: lat
     title: 緯度
     description: "代表点の緯度"
+---

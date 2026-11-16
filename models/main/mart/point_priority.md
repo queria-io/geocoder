@@ -1,5 +1,6 @@
-schema: main
-name: point_priority
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.point_priority
 title: 住所の点の優先順
 description: |-
   住所の代表点の種類と出典ごとの優先順位と、計測した誤差です。address_point の代表点はこの順で選びます。
@@ -21,3 +22,4 @@ fields:
     description: "地価公示の地点に当てたときの距離の中央値。測っていないものは NULL"
   - name: measured_on
     title: 測った日
+---

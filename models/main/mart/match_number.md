@@ -1,5 +1,6 @@
-schema: main
-name: match_number
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.match_number
 title: 照合の番号
 description: |
   住所の照合に使う番号の索引のうち、町字の表（rsdtdsp・parcel）に無い番号の点。番号を振る区域で引く地番、地番の親番、
@@ -18,7 +19,7 @@ fields:
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）"
-    annotations: { queria: { semantic: { role: entity, name: city } } }
+    semantic: {role: entity, name: city}
   - name: num
     title: 番号
     description: "街区符号・住居番号・地番を「-」で連結したもの（「12-3」）。半角の数字と全角のカナ"
@@ -38,3 +39,4 @@ fields:
     title: 経度
   - name: lat
     title: 緯度
+---
