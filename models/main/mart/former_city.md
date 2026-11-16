@@ -1,5 +1,6 @@
-schema: town
-name: former_city
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: town.former_city
 title: 旧市区町村名の索引
 description: |-
   合併などでなくなった市区町村の名前から、その範囲を引き継いだ現在の市区町村を引く索引です。旧市区町村名で書いた住所の照合に使います。
@@ -26,10 +27,11 @@ fields:
   - name: lg_code
     title: 全国地方公共団体コード
     description: "範囲を引き継いだ今の市区町村。6桁（検査数字あり）。政令市は区"
-    annotations: { queria: { semantic: { role: entity, name: city } } }
+    semantic: {role: entity, name: city}
   - name: share
     title: 範囲の割合
     description: "旧市区町村の面積のうち、今の市区町村に入る割合（0〜1）"
   - name: one_pref
     title: 1 つの都道府県だけの名前
     description: "同じ名前の旧市区町村が 1 つの都道府県だけにあれば true"
+---

@@ -1,5 +1,6 @@
-schema: town
-name: match_area
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: town.match_area
 title: 照合の区域
 description: |
   住所の照合に使う区域の索引。大字・町、丁目、小字を連結した名前を、出典の表記のまま 1 行ずつ持つ。
@@ -18,7 +19,7 @@ fields:
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）。この順に並ぶ"
-    annotations: { queria: { semantic: { role: entity, name: city } } }
+    semantic: {role: entity, name: city}
   - name: machiaza_id
     title: 町字ID
     description: "ABR の町字の行だけ。ABR に行の無い大字・町と、位置参照情報にだけある名前は空"
@@ -39,3 +40,4 @@ fields:
   - name: pref_code
     title: 都道府県コード
     description: "lg_code の頭 2 桁。ファイルはこの値ごとに分かれる"
+---

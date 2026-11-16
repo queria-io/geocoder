@@ -1,11 +1,9 @@
-schema: main
-name: address_point
-title: 住所の点
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.address_point_candidate
+title: 住所の点の候補
 description: |-
-  住所ごとに 1 つ選んだ代表点です。代表点のある住所だけを収録し、出典が複数あれば point_priority の順で選びます。
-
-  - 代表点のない住所は、親の番号の行を使います
-  - 地番は、地番が振られた区域の町字（town.numbering_id）の行も使います
+  住所ごとの代表点の候補です。1 行が 1 つの出典の点で、座標のある行だけを収録しています。
 keywords:
   - 住所
   - ジオコーディング
@@ -13,13 +11,10 @@ sources:
   - path: https://dataset.address-br.digital.go.jp/
   - path: https://nlftp.mlit.go.jp/isj/
 fields:
-  - name: machiaza_key
-    title: 町字キー
-    description: "lg_code と machiaza_id をつないだもの (13桁)。この順に並ぶ"
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）"
-    extensions: { queria: { semantic: { role: entity, name: city } } }
+    semantic: {role: entity, name: city}
   - name: machiaza_id
     title: 町字ID
     description: "town と lg_code・machiaza_id で結合する"
@@ -41,12 +36,10 @@ fields:
   - name: source
     title: 出どころ
     description: "abr はアドレス・ベース・レジストリ、isj は街区レベル位置参照情報"
-  - name: error_m
-    title: 誤差 (m)
-    description: "この種類と出どころの点を地価公示の地点に当てたときの距離の中央値。測っていないものは NULL"
   - name: lng
     title: 経度
-    description: "点の経度"
+    description: "点の座標"
   - name: lat
     title: 緯度
-    description: "点の緯度"
+    description: "点の座標"
+---

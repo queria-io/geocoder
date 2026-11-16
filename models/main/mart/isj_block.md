@@ -1,5 +1,6 @@
-schema: main
-name: isj_block
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.isj_block
 title: 街区・地番の親番の点
 description: |-
   街区符号（住居表示の地域の「○番」）と地番の親番（それ以外の地域の「○番地」）ごとの代表点を、ABR の町字に付けたものです。
@@ -21,7 +22,7 @@ fields:
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）"
-    annotations: { queria: { semantic: { role: entity, name: city } } }
+    semantic: {role: entity, name: city}
   - name: machiaza_id
     title: 町字ID
     description: "town と lg_code・machiaza_id で結合する"
@@ -35,3 +36,4 @@ fields:
     title: 経度
   - name: lat
     title: 緯度
+---

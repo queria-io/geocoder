@@ -1,5 +1,6 @@
-schema: main
-name: parcel
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.parcel
 title: 地番の住所
 description: |-
   地番の住所（「○番地」「○番○」）と代表点です。住居表示でない町字の分を収録しています。
@@ -18,7 +19,7 @@ fields:
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）"
-    annotations: { queria: { semantic: { role: entity, name: city } } }
+    semantic: {role: entity, name: city}
   - name: machiaza_id
     title: 町字ID
     description: "town と lg_code・machiaza_id で結合する"
@@ -39,3 +40,4 @@ fields:
   - name: lat
     title: 緯度
     description: "代表点の緯度。代表点の無い筆は NULL"
+---

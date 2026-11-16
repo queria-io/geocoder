@@ -1,5 +1,6 @@
-schema: main
-name: rsdtdsp
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.rsdtdsp
 title: 住居表示の住所
 description: |-
   住居表示の住所（「○番」「○番○号」）と代表点です。街区だけの行と、街区と住居の行を 1 つのテーブルにまとめています。
@@ -18,7 +19,7 @@ fields:
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）"
-    annotations: { queria: { semantic: { role: entity, name: city } } }
+    semantic: {role: entity, name: city}
   - name: machiaza_id
     title: 町字ID
     description: "town と lg_code・machiaza_id で結合する"
@@ -43,3 +44,4 @@ fields:
   - name: lat
     title: 緯度
     description: "代表点の緯度。代表点の無い行は NULL"
+---

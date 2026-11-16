@@ -1,5 +1,6 @@
-schema: town
-name: town
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: town.town
 title: 町字
 description: |-
   全国の町字の名前・別名・代表点と、代表点が入る国勢調査の小地域です。住所の文字列を町字に当てるのに使います。
@@ -21,7 +22,7 @@ fields:
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）"
-    annotations: { queria: { semantic: { role: entity, name: city } } }
+    semantic: {role: entity, name: city}
   - name: machiaza_id
     title: 町字ID
   - name: machiaza_type
@@ -92,7 +93,8 @@ fields:
   - name: small_area_code
     title: 小地域コード
     description: "代表点が入る国勢調査の小地域（KEY_CODE）"
-    annotations: { queria: { semantic: { role: entity, name: small_area } } }
+    semantic: {role: entity, name: small_area}
   - name: pref_code
     title: 都道府県コード
     description: "lg_code の頭 2 桁。ファイルはこの値ごとに分かれる"
+---
