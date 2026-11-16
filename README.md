@@ -4,8 +4,8 @@
 
 - API の説明: https://geocoder.queria.io/docs
 - API 仕様（OpenAPI）: https://geocoder.queria.io/openapi.json
-- 精度の比較と照合の規則: 日本の住所 1,420 件でほかの無料のジオコーダーと比較した結果と、Queria Geocoder の照合の規則（[BENCHMARK.md](BENCHMARK.md)）
-- 設計方針: 改修で守る 5 つの観点（精度・処理速度・メモリ使用量・データモデル・説明可能性）（[DESIGN.md](DESIGN.md)）
+- 精度の比較と照合の規則: 日本の住所 1,420 件でほかの無料のジオコーダーと比較した結果と、Queria Geocoder の照合の規則（[BENCHMARK.md](https://github.com/queria-io/geocoder/blob/main/BENCHMARK.md)）
+- 設計方針: 改修で守る 5 つの観点（精度・処理速度・メモリ使用量・データモデル・説明可能性）（[DESIGN.md](https://github.com/queria-io/geocoder/blob/main/DESIGN.md)）
 
 ```bash
 curl -s -G https://geocoder.queria.io/v1/forward --data-urlencode "address=東京都千代田区紀尾井町1-3"
@@ -83,7 +83,7 @@ pnpm self-host
 
 `https://geocoder.<アカウントのサブドメイン>.workers.dev` で API が動く。データ (住所の表と境界タイル) は Queria が公開している `https://data.queria.io/geocoder/` と `https://assets.queria.io/boundaries/` から HTTP の Range で読むので、データのコピーもバケットも要らない。住所の表は Queria の毎月の更新にそのまま追従する。境界タイルは設定の `BOUNDARY_TILES_FILE` が指すファイルに固定されるので、新しい境界を使うときはこの値を書き換えてデプロイし直す。入力の住所や座標は Queria に送られない。ただし Queria はファイルのどの範囲が読まれたかを受け取り、そこから問い合わせた市区町村 (正引き) やおおよその位置 (逆引きのタイル) が分かる。これも避けるときは、下の自分の R2 に取り込む形にする。
 
-設定は [`worker/wrangler.self-host.jsonc`](worker/wrangler.self-host.jsonc) にある。
+設定は [`worker/wrangler.self-host.jsonc`](https://github.com/queria-io/geocoder/blob/main/worker/wrangler.self-host.jsonc) にある。
 
 - Queria に依存せずに動かすときは、R2 のバケットを作り (`npx wrangler r2 bucket create geocoder-data`)、設定の `r2_buckets` と `triggers` のコメントを外してデプロイし直す。毎日 1 回、新しいバージョンがあれば自分のバケットに取り込み (約 4GB)、そこから読む。取り込みが終わるまでは公開の URL から読む
 - リクエストのログは記録しない。回数の上限 (IP ごと) も付けていない
@@ -91,10 +91,10 @@ pnpm self-host
 ## このリポジトリ
 
 - 直下: ジオコーダーが読む表を作る Queria のデータセット `geocoder`（このページの以下）
-- [`worker/`](worker/README.md): geocoder.queria.io を出す Cloudflare Worker（API と API の説明のページ）
-- [`examples/addresses.csv`](examples/addresses.csv): `POST /v1/forward/batch` を試すための住所の CSV（役所などの住所と、郡や都道府県を省いたものなど書き方を変えたもの）
+- [`worker/`](https://github.com/queria-io/geocoder/blob/main/worker/README.md): geocoder.queria.io を出す Cloudflare Worker（API と API の説明のページ）
+- [`examples/addresses.csv`](https://github.com/queria-io/geocoder/blob/main/examples/addresses.csv): `POST /v1/forward/batch` を試すための住所の CSV（役所などの住所と、郡や都道府県を省いたものなど書き方を変えたもの）
 
-ライセンスは [MIT](LICENSE)。住所の照合の規則は [abr-geocoder](https://github.com/digital-go-jp/abr-geocoder)（デジタル庁、MIT ライセンス）を元にしている（[`worker/upstream/`](worker/upstream/README.md)）。
+ライセンスは [MIT](https://github.com/queria-io/geocoder/blob/main/LICENSE)。住所の照合の規則は [abr-geocoder](https://github.com/digital-go-jp/abr-geocoder)（デジタル庁、MIT ライセンス）を元にしている（[`worker/upstream/`](https://github.com/queria-io/geocoder/blob/main/worker/upstream/README.md)）。
 
 ## データセット
 
