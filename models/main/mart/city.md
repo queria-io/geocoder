@@ -1,5 +1,6 @@
-schema: main
-name: city
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: main.city
 title: 市区町村
 description: |-
   全国の市区町村（政令市の区を含む）の名前と代表点です。住所の先頭から市区町村を切り出すのに使います。
@@ -16,7 +17,7 @@ fields:
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）"
-    annotations: { queria: { semantic: { role: entity, name: city } } }
+    semantic: {role: entity, name: city}
   - name: pref_code
     title: 都道府県コード
   - name: pref_name
@@ -36,3 +37,4 @@ fields:
   - name: population
     title: 人口
     description: "令和2年国勢調査の総人口。政令市（区を持つ市）と、調査の後にできた区は空"
+---

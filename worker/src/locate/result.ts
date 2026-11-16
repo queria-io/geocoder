@@ -5,13 +5,15 @@ import {
   Detail,
   emptySA,
   FormatAddress,
+  IsBaseMachiazaID,
   type MatchedResult,
 } from "../model/model";
 import type { BasicResult, CityResult } from "../repository/types";
 import { type CityIndex, numbersOf } from "./index";
 import { candidates, EMPTY_NUMBERS, locate, type Located, type Numbers, remainder } from "./locate";
 import { CHOME } from "./norm";
-import { cityPoint, keptSteps, locateSteps, pointOf } from "../evidence";
+import { cityPoint, keptSteps, locateSteps, pointOf, prefPoint } from "../evidence";
+import type { PrefRow } from "../repository/memory";
 import type { ParcelRow } from "../repository/parcel";
 import type { RsdtdspRow } from "../repository/rsdtdsp";
 import type { MatchNumberRow } from "./index";
@@ -26,6 +28,11 @@ export type LocateDeps = {
   parcels: (lgCode: string, machiazaIds: readonly string[]) => Promise<ParcelRow[]>;
   town: (lgCode: string, machiazaId: string) => Promise<BasicResult | null>;
   city: (lgCode: string) => CityResult | undefined;
+  /**
+   * 照合した結果を問い合わせの中で使い回す口 (市区町村と住所の残りの組ごと)。市区町村名の無い住所は、
+   * 再照合と座標を引く段で同じ住所を 2 回引くため
+   */
+  memo?: Map<string, Promise<Located | null>>;
 };
 
 /** 点の優先順 (rank) ごとの、座標を取った点の段 */
@@ -72,6 +79,22 @@ const loadNumbers = async (
   );
 };
 
+type Town = Pick<
+  BasicResult,
+  "machiazaId" | "oazaCho" | "chome" | "koaza" | "kyotoSt" | "machiazaDist" | "rsdtAddrFlg"
+>;
+
+/** 丁目を省いた大字・町の町字。ABR に行が無いので、区域の名前と町字 ID だけを持つ */
+const oazaOnly = (machiazaId: string, name: string): Town => ({
+  machiazaId,
+  oazaCho: name,
+  chome: null,
+  koaza: null,
+  kyotoSt: null,
+  machiazaDist: null,
+  rsdtAddrFlg: null,
+});
+
 const toResult = async (
   r: MatchedResult,
   found: Located,
@@ -81,7 +104,17 @@ const toResult = async (
   /** 照合した区域の名前 (照合の索引の表記) */
   areaName: string | null,
 ): Promise<MatchedResult> => {
-  const town = found.machiazaId === null ? null : await deps.town(lgCode, found.machiazaId);
+  const row = found.machiazaId === null ? null : await deps.town(lgCode, found.machiazaId);
+  // 丁目を省いた大字・町の区域 (「学園南」) は ABR に町字の行が無い。町字 ID が大字・町 (末尾 000) で
+  // 番号を読まなかったときだけ、区域の名前を大字・町の名前にする
+  const town: Town | null =
+    row ??
+    (found.machiazaId !== null &&
+    IsBaseMachiazaID(found.machiazaId) &&
+    found.number === null &&
+    areaName !== null
+      ? oazaOnly(found.machiazaId, areaName)
+      : null);
   // 町字が決まらなければ (位置参照情報にだけある区域など)、住所の表記は市区町村までにし、
   // 番号も表記と ID に載せない。区域の名前を落として番号だけを市区町村名に続けないため
   const n = town === null ? null : found.number;
@@ -174,6 +207,17 @@ const atCity = (r: MatchedResult, city: CityResult | undefined, rest: string): M
   };
 };
 
+/** 都道府県だけ当たった答えに、都道府県の代表点を付ける */
+export const atPref = (r: MatchedResult, pref: PrefRow | undefined): MatchedResult =>
+  r.match_level !== "pref" || r.coordinates !== null || pref?.lon == null || pref.lat == null
+    ? r
+    : {
+        ...r,
+        coordinates: [pref.lon, pref.lat],
+        coordinate_level: "pref",
+        evidence_point: prefPoint(pref.lgCode),
+      };
+
 /**
  * 市区町村まで決まった答え r の、町字から先を住所 address から引き直す。
  * 区域に当たらなければ市区町村の点を返す。住所の書き方から 1 つに決められない番号 (甲乙丙丁の違いだけ) は、
@@ -190,9 +234,15 @@ export const withLocated = async (
   if (!city) return [r];
   const index = await deps.index(lgCode);
   const rest = remainder(address, city);
-  const keys = candidates(rest, index.areas);
-  const loaded = await loadNumbers(deps, index, lgCode, keys);
-  const found = locate(rest, index.areas, (k) => loaded.get(k) ?? EMPTY_NUMBERS);
+  const run = async () => {
+    const keys = candidates(rest, index.areas);
+    const loaded = await loadNumbers(deps, index, lgCode, keys);
+    return locate(rest, index.areas, (k) => loaded.get(k) ?? EMPTY_NUMBERS);
+  };
+  const key = `${lgCode}\t${rest}`;
+  const kept = deps.memo?.get(key) ?? run();
+  deps.memo?.set(key, kept);
+  const found = await kept;
   // 照合できなかった部分には丁目の印を残さない
   const plain = rest.replaceAll(CHOME, "-");
   if (found === null) return [atCity(r, city, plain.replace(/^-+|-+$/g, ""))];

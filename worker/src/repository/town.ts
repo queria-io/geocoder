@@ -66,7 +66,13 @@ export type CityTableRow = {
   population?: number | bigint | null;
 };
 
-export type PrefTableRow = { lg_code: string; pref_code: string; pref_name: string };
+export type PrefTableRow = {
+  lg_code: string;
+  pref_code: string;
+  pref_name: string;
+  lng: number | null;
+  lat: number | null;
+};
 
 /** 町字 1 行を上流の cache_machiaza の 1 行に。京都の通り名は koaza から kyoto_st へ移す */
 export const toBasic = (t: TownRow): BasicResult => {
@@ -116,4 +122,6 @@ export const toPref = (p: PrefTableRow): PrefRow => ({
   lgCode: p.lg_code,
   prefCode: p.pref_code,
   prefName: p.pref_name,
+  lon: p.lng ?? null,
+  lat: p.lat ?? null,
 });

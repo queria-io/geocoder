@@ -3,15 +3,13 @@
 // FDL のメタデータ) は手元のサーバー (serve.ts) から、Range で読む
 import app, { type Env } from "../../src/index";
 
-type LocalEnv = Env & { LOCAL_DATA: string; QUERIA_TOKEN?: string };
+type LocalEnv = Env & { LOCAL_DATA: string };
 type Range = { offset: number; length: number };
 
 const read = async (env: LocalEnv, key: string, range?: Range): Promise<Response | null> => {
   const remote = /^https?:\/\//.test(key);
   const headers = new Headers();
   if (range) headers.set("Range", `bytes=${range.offset}-${range.offset + range.length - 1}`);
-  // data.queria.io の回数の上限は、トークンを付けるとキーごとに数える
-  if (remote && env.QUERIA_TOKEN) headers.set("Authorization", `Bearer ${env.QUERIA_TOKEN}`);
   const res = await fetch(remote ? key : env.LOCAL_DATA + key, { headers });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`${res.status} ${key}`);

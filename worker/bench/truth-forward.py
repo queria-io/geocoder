@@ -72,7 +72,7 @@ pattern = "CASE " + " ".join(f"WHEN {cond} THEN '{name}'" for name, cond in PATT
 c = duckdb.connect()
 c.sql("INSTALL ducklake; INSTALL httpfs; INSTALL spatial; LOAD spatial")
 for name in ["reinfolib", "gsi", "mhlw", "nlftp", "address_br"]:
-    c.sql(f"ATTACH 'ducklake:{data}/{name}/ducklake.duckdb' AS {name} (READ_ONLY)")
+    c.sql(f"ATTACH 'ducklake:{data}/{name}/metadata.db' AS {name} (READ_ONLY)")
 c.sql(f"""
 COPY (
   WITH land AS (

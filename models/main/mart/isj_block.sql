@@ -18,7 +18,7 @@ WITH town AS (
         {{ kanji_numerals("regexp_replace(koaza, '^小?字', '')") }} AS koaza,
         oaza_cho || coalesce({{ chome_kanji('chome') }}, '') AS raw_name,
         koaza AS raw_koaza
-    FROM address_br.main.mart_town
+    FROM {{ ref('stg_address_br_town') }}
     WHERE status_flg <> '3' AND oaza_cho IS NOT NULL
 ),
 block AS (
@@ -33,7 +33,7 @@ block AS (
         is_residential_address,
         lng,
         lat
-    FROM nlftp.isj.block
+    FROM {{ ref('stg_nlftp_block') }}
     -- 同じ番号が離れた地点に分かれて入るものは、代表の 1 行だけ使う
     WHERE is_representative
 ),

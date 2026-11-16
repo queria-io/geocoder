@@ -1,5 +1,6 @@
-schema: town
-name: town_name
+---
+$schema: https://queria.io/schemas/table/v1.json
+table: town.town_name
 title: 町名の索引
 description: |-
   町字ごとの名前・丁目・小字と、その町字にある番号の索引です。市区町村名を書かない住所から、その住所を持つ市区町村を引くのに使います。
@@ -30,3 +31,4 @@ fields:
   - name: numbers
     title: 町字にある番号
     description: "住居表示の街区符号・地番の本番・位置参照情報の街区と地番の番号の一覧（小さい順）"
+---

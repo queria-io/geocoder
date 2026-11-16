@@ -2,9 +2,9 @@
 
 使い方: uv run python scripts/local-version.py <作業場のカタログ> <書き出す先>
 
-書き出す先は fdl checkout がデータファイルを書くフォルダ。そこに fdl.json・refs/heads/main・
+書き出す先は fdl clone がデータファイルを書くフォルダ。そこに fdl.json・refs/heads/main・
 versions/pr/ を置く。files.json のパスは、作り直した表が書き出す先からの相対パス、
-作り直していない表が本番のファイルの URL (checkout が絶対パスにしたもの) になる。
+作り直していない表が本番のファイルの URL (clone が絶対パスにしたもの) になる。
 """
 
 import json

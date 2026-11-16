@@ -128,7 +128,7 @@ const resolve = async (bucket: R2Bucket, source: string, pin: string): Promise<R
   ]);
   return fromVersion(
     source,
-    config.data_dir ?? "data/",
+    config.data_dir ?? "tables/",
     JSON.parse(record) as VersionRecord,
     JSON.parse(list) as FileList,
   );

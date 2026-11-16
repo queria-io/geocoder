@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { cityPoint, keptSteps, locateSteps, pointOf, stepIf, withStep } from "../src/evidence";
 import type { Located } from "../src/locate/locate";
+import { atPref } from "../src/locate/result";
 import { emptyIDs, emptyMachiaza, emptySA, type MatchedResult } from "../src/model/model";
 
 const result = (over: Partial<MatchedResult> = {}): MatchedResult => ({
@@ -107,5 +108,27 @@ describe("keptSteps", () => {
       "city_inferred",
     ]);
     expect(keptSteps(undefined)).toEqual([]);
+  });
+});
+
+describe("atPref", () => {
+  const ibaraki = { lgCode: "080004", prefCode: "08", prefName: "茨城県", lon: 140.4, lat: 36.3 };
+
+  it("都道府県だけ当たった答えに、都道府県の代表点を付ける", () => {
+    const r = atPref(
+      result({ match_level: "pref", ids: { ...emptyIDs(), lg_code: "080004" } }),
+      ibaraki,
+    );
+    expect(r.coordinates).toEqual([140.4, 36.3]);
+    expect(r.coordinate_level).toBe("pref");
+    expect(r.evidence_point?.point_type).toBe("pref");
+  });
+
+  it("都道府県より細かく当たった答えや、代表点の無い都道府県はそのまま返す", () => {
+    const city = result({ match_level: "city" });
+    expect(atPref(city, ibaraki)).toBe(city);
+    const pref = result({ match_level: "pref" });
+    expect(atPref(pref, { ...ibaraki, lon: null, lat: null })).toBe(pref);
+    expect(atPref(pref, undefined)).toBe(pref);
   });
 });

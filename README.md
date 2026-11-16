@@ -4,8 +4,8 @@
 
 - API の説明: https://geocoder.queria.io/docs
 - API 仕様（OpenAPI）: https://geocoder.queria.io/openapi.json
-- 精度の比較と照合の規則: 日本の住所 1,420 件でほかの無料のジオコーダーと比較した結果と、Queria Geocoder の照合の規則（[BENCHMARK.md](BENCHMARK.md)）
-- 設計方針: 改修で守る 5 つの観点（精度・処理速度・メモリ使用量・データモデル・説明可能性）（[DESIGN.md](DESIGN.md)）
+- 精度の比較と照合の規則: 日本の住所 1,420 件でほかの無料のジオコーダーと比較した結果と、Queria Geocoder の照合の規則（[BENCHMARK.md](https://github.com/queria-io/geocoder/blob/main/BENCHMARK.md)）
+- 設計方針: 改修で守る 5 つの観点（精度・処理速度・メモリ使用量・データモデル・説明可能性）（[DESIGN.md](https://github.com/queria-io/geocoder/blob/main/DESIGN.md)）
 
 ```bash
 curl -s -G https://geocoder.queria.io/v1/forward --data-urlencode "address=東京都千代田区紀尾井町1-3"
@@ -20,7 +20,7 @@ curl -s -G https://geocoder.queria.io/v1/forward --data-urlencode "address=東�
 
 ## 市区町村名のない住所
 
-「守山3-7-5」のように市区町村名を書かない住所は、町字の名前からその町字を持つ市区町村を探して照合する。候補にするのは、住所に書かれた町名・小字・丁目・番号（住居表示の街区符号か地番の本番）が最も深くまで実在する市区町村である（「天神1-8-35」なら、天神 1 丁目に 8 番がある市区町村）。候補が複数あるときは、座標の細かさの順（号・地番の点を持つ候補が先、町字の代表点しかない候補が後）、同じ細かさなら人口の多い順に並べて返し、各結果の `ambiguous` を `true`、`candidates` を候補の数にする。照合し直すのは人口の多い順に、`limit` の上限と同じ 10 の市区町村までで、それより多い候補は返さないが `candidates` には数える。
+「守山3-7-5」のように市区町村名を書かない住所は、町字の名前からその町字を持つ市区町村を探して照合する。候補にするのは、住所に書かれた町名・小字・丁目・番号（住居表示の街区符号か地番の本番）が最も深くまで実在する市区町村である（「天神1-8-35」なら、天神 1 丁目に 8 番がある市区町村）。候補が複数あるときは、座標の細かさの順（号・地番の点を持つ候補が先、町字の代表点しかない候補が後）、同じ細かさなら人口の多い順に並べて返し、各結果の `ambiguous` を `true`、`candidates` を候補の数にする。丁目を省いた町名（「学園南」）は、その町名の丁目を持つ市区町村をすべて候補にする。照合し直すのは人口の多い順に、`limit` の上限と同じ 10 の市区町村までで、それより多い候補は返さないが `candidates` には数える。
 
 - `/v1/forward` と `/v1/forward/batch` は `limit` の数まで候補を返す（既定の `limit=1` では先頭の 1 件）。`/v1/forward/batch` は住所ごとに `/v1/forward` と同じ `{ "address", "results" }` を、渡した住所と同じ順・同じ数で返す
 - 市区町村名のある住所でも、甲乙丙丁を書かない番号が甲乙丙丁だけ違う複数の地番に当たるとき（「甲288」と「乙288」があって「288」と書いた住所）は、すべてを候補として返し、`ambiguous` を `true` にする
@@ -83,7 +83,7 @@ pnpm self-host
 
 `https://geocoder.<アカウントのサブドメイン>.workers.dev` で API が動く。データ (住所の表と境界タイル) は Queria が公開している `https://data.queria.io/geocoder/` と `https://assets.queria.io/boundaries/` から HTTP の Range で読むので、データのコピーもバケットも要らない。住所の表は Queria の毎月の更新にそのまま追従する。境界タイルは設定の `BOUNDARY_TILES_FILE` が指すファイルに固定されるので、新しい境界を使うときはこの値を書き換えてデプロイし直す。入力の住所や座標は Queria に送られない。ただし Queria はファイルのどの範囲が読まれたかを受け取り、そこから問い合わせた市区町村 (正引き) やおおよその位置 (逆引きのタイル) が分かる。これも避けるときは、下の自分の R2 に取り込む形にする。
 
-設定は [`worker/wrangler.self-host.jsonc`](worker/wrangler.self-host.jsonc) にある。
+設定は [`worker/wrangler.self-host.jsonc`](https://github.com/queria-io/geocoder/blob/main/worker/wrangler.self-host.jsonc) にある。
 
 - Queria に依存せずに動かすときは、R2 のバケットを作り (`npx wrangler r2 bucket create geocoder-data`)、設定の `r2_buckets` と `triggers` のコメントを外してデプロイし直す。毎日 1 回、新しいバージョンがあれば自分のバケットに取り込み (約 4GB)、そこから読む。取り込みが終わるまでは公開の URL から読む
 - リクエストのログは記録しない。回数の上限 (IP ごと) も付けていない
@@ -91,10 +91,10 @@ pnpm self-host
 ## このリポジトリ
 
 - 直下: ジオコーダーが読む表を作る Queria のデータセット `geocoder`（このページの以下）
-- [`worker/`](worker/README.md): geocoder.queria.io を出す Cloudflare Worker（API と API の説明のページ）
-- [`examples/addresses.csv`](examples/addresses.csv): `POST /v1/forward/batch` を試すための住所の CSV（役所などの住所と、郡や都道府県を省いたものなど書き方を変えたもの）
+- [`worker/`](https://github.com/queria-io/geocoder/blob/main/worker/README.md): geocoder.queria.io を出す Cloudflare Worker（API と API の説明のページ）
+- [`examples/addresses.csv`](https://github.com/queria-io/geocoder/blob/main/examples/addresses.csv): `POST /v1/forward/batch` を試すための住所の CSV（役所などの住所と、郡や都道府県を省いたものなど書き方を変えたもの）
 
-ライセンスは [MIT](LICENSE)。住所の照合の規則は [abr-geocoder](https://github.com/digital-go-jp/abr-geocoder)（デジタル庁、MIT ライセンス）を元にしている（[`worker/upstream/`](worker/upstream/README.md)）。
+ライセンスは [MIT](https://github.com/queria-io/geocoder/blob/main/LICENSE)。住所の照合の規則は [abr-geocoder](https://github.com/digital-go-jp/abr-geocoder)（デジタル庁、MIT ライセンス）を元にしている（[`worker/upstream/`](https://github.com/queria-io/geocoder/blob/main/worker/upstream/README.md)）。
 
 ## データセット
 
@@ -112,7 +112,7 @@ pnpm self-host
 | `address_point_candidate` | 住所ごとの代表点の候補（出典ごとに 1 行） |
 | `address_point` | 住所ごとに選択した代表点（代表点のある住所のみ。出典が複数あれば優先順位の高い 1 つ） |
 | `point_priority` | 代表点の種類・出典ごとの優先順位と、地価公示の標準地で計測した誤差 |
-| `match_area` | 住所の照合に使う区域の索引。大字・町、丁目、小字を連結した名前を、ABR と位置参照情報（過去の版を含む）の表記のまま持つ |
+| `match_area` | 住所の照合に使う区域の索引。大字・町、丁目、小字を連結した名前を、ABR と位置参照情報（過去の版を含む）の表記のまま持つ。丁目に分かれた大字・町は、丁目を省いた名前も持つ |
 | `match_number` | 住所の照合に使う番号の索引のうち、町字の表に無い番号の点（番号を振る区域で引く地番、地番の親番、位置参照情報の街区・地番）。区域・番号・出典ごとに 1 行 |
 
 住居表示・地番のテーブルと番号の索引（`rsdtdsp`・`parcel`・`match_number`）は市区町村（`lg_code`）ごと、町字のテーブルと照合の区域（`town`・`match_area`）は都道府県（`pref_code`）ごと、町名の索引（`town_name`）は名前の 1 文字目の文字コードを 64 で割った余り（`name_bucket`）ごとにファイルを分けてある。ファイルの中は、町字のテーブルと `match_area` は `lg_code` の順、住居表示・地番のテーブルは町字ごとのキーの順、`match_number` は `area_id` の順、`town_name` は `name_key` の順に並べてある。市区町村や町字で絞って読むと、Parquet のフッターの統計から当たる行グループだけを読めばよい。行グループの大きさは `dbt_project.yml` で決めている。座標は `geometry` ではなく `lng` / `lat` の数値の列で持つ。
@@ -133,7 +133,7 @@ pnpm self-host
 ```bash
 git submodule update --init
 uv sync
-scripts/build.sh   # fdl checkout → dbt → fdl commit で公開まで行う
+scripts/build.sh   # fdl clone → dbt → fdl commit で公開まで行う
 ```
 
 address_br の更新（毎月）の翌日に、`.github/workflows/sync.yml` が作り直し、作り直したデータを置き直すために本番のビルドを流す。

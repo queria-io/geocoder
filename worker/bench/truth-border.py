@@ -8,7 +8,7 @@ n = int(sys.argv[1]) if len(sys.argv) > 1 else 3000
 data = "https://data.queria.io/datasets/queria"
 c = duckdb.connect()
 c.sql("INSTALL spatial; LOAD spatial; INSTALL ducklake; INSTALL httpfs")
-c.sql(f"ATTACH 'ducklake:{data}/e_stat/ducklake.duckdb' AS e_stat (READ_ONLY)")
+c.sql(f"ATTACH 'ducklake:{data}/e_stat/metadata.db' AS e_stat (READ_ONLY)")
 c.sql("""CREATE TABLE areas AS
   SELECT CAST(key_code AS VARCHAR) AS code, geometry FROM e_stat.boundary.small_area""")
 c.sql(f"""

@@ -80,7 +80,7 @@ candidate AS (
         NULL,
         lng,
         lat
-    FROM nlftp.isj.block
+    FROM {{ ref('stg_nlftp_block') }}
     WHERE lg_code IS NOT NULL
     QUALIFY row_number() OVER (
         PARTITION BY lg_code, oaza_chome_name, koaza_name, block_number, is_residential_address
@@ -97,9 +97,9 @@ candidate AS (
         NULL,
         lng,
         lat
-    FROM nlftp.isj.block_history
+    FROM {{ ref('stg_nlftp_block_history') }}
     WHERE lg_code IS NOT NULL
-        AND last_edition_year < (SELECT max(last_edition_year) FROM nlftp.isj.block_history)
+        AND last_edition_year < (SELECT max(last_edition_year) FROM {{ ref('stg_nlftp_block_history') }})
 )
 -- 同じ区域と番号に出典が複数あれば、その全部を優先順に並べて持つ。Worker は先頭の行の点を使う。
 -- 町字の表の点と合わせて 1 行に絞るのも Worker で行う (point_priority の rank の小さいもの)

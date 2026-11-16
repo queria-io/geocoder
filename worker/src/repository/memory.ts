@@ -7,7 +7,12 @@ import { findResidentialBestMatch, machiazaKey, type RsdtdspRow } from "./rsdtds
 import type { BasicResult, CityResult, PrefectureResult, Repository } from "./types";
 
 export type CityRow = CityResult & { prefCode: string; normalizedAddress: string };
-export type PrefRow = PrefectureResult & { prefCode: string };
+/** 都道府県の行。代表点は都道府県だけ当たった答えに付ける (上流の FindPrefecture は返さない) */
+export type PrefRow = PrefectureResult & {
+  prefCode: string;
+  lon: number | null;
+  lat: number | null;
+};
 
 const prefCodeOf = (lgCode: string): string => lgCode.slice(0, 2);
 const anyPref = (p: string): boolean => p === "" || p === All;

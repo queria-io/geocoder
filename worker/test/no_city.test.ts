@@ -272,6 +272,31 @@ describe("withoutCity", () => {
     ]);
   });
 
+  it("再照合で上流が市区町村までしか照合しなかった市区町村も、町字から先を引き直して候補にする", async () => {
+    const located: string[] = [];
+    const got = await withoutCity(
+      unmatched(),
+      "学園南",
+      names([row("学園南", "072010"), row("学園南", "202011")]),
+      Object.values(cities),
+      // 上流は別の市区町村の答えも返す。引き直すのは、その市区町村の市区町村までの答えだけ
+      async (a) =>
+        a.startsWith("福島県")
+          ? [hit("072010", "machiaza"), hit("202011", "city")]
+          : [hit("202011", "city"), hit("072010", "city")],
+      async (r, a) => {
+        located.push(`${r.ids.lg_code} ${a}`);
+        // 甲乙丙丁の候補の数は外す
+        return [{ ...r, match_level: "machiaza", candidates: 2 }];
+      },
+    );
+    expect(located).toEqual(["202011 長野県長野市学園南"]);
+    expect(got.map((x) => [x.ids.lg_code, x.candidates])).toEqual([
+      ["202011", 2],
+      ["072010", 2],
+    ]);
+  });
+
   it("番号まで照合できても点が町字の代表点なら、親番の点を持つ候補より後ろに並べる", async () => {
     const got = await withoutCity(
       unmatched(),

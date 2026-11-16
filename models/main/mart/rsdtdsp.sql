@@ -5,7 +5,7 @@
 -- machiaza_key (lg_code と machiaza_id をつないだもの) の順に並べ、行グループの最小・最大で絞れるようにする
 WITH town AS (
     SELECT DISTINCT lg_code, machiaza_id
-    FROM address_br.main.mart_town
+    FROM {{ ref('stg_address_br_town') }}
     WHERE status_flg <> '3' AND rsdt_addr_flg = '1'
 )
 SELECT * FROM (

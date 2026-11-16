@@ -195,15 +195,30 @@ const byCity = (
   return each.length > 1 ? each.map((x) => ({ ...x, candidates: each.length })) : each;
 };
 
-/** 市区町村を補った住所で当て直し、その市区町村の町字まで当たったものだけを残す */
+/** 照合の索引で町字から先を引き直す口 (src/locate/result.ts の withLocated) */
+export type Locate = (r: MatchedResult, address: string) => Promise<MatchedResult[]>;
+
+/**
+ * 市区町村を補った住所で当て直し、その市区町村の町字まで当たったものだけを残す。
+ * 上流が市区町村までしか当てなかった答えは、照合の索引 (locate) で町字から先を引き直す。上流は丁目を省いた
+ * 町名 (「学園南」) を丁目に分かれた町字に当てないため。甲乙丙丁の候補の数は、座標を引くときに数え直すので外す
+ */
 const retry = async (
   c: CityResult,
   rest: string,
   match: (address: string) => Promise<MatchedResult[]>,
-): Promise<MatchedResult[]> =>
-  (await match(cityName(c) + rest)).filter(
-    (x) => x.ids.lg_code === c.lgCode && Detail(x.match_level) >= Detail("machiaza"),
+  locate: Locate,
+): Promise<MatchedResult[]> => {
+  const address = cityName(c) + rest;
+  const mine = (await match(address)).filter((x) => x.ids.lg_code === c.lgCode);
+  const located = await Promise.all(
+    mine.map((x) => (x.match_level === "city" ? locate(x, address) : [x])),
   );
+  return located
+    .flat()
+    .filter((x) => x.ids.lg_code === c.lgCode && Detail(x.match_level) >= Detail("machiaza"))
+    .map((x) => ({ ...x, candidates: undefined }));
+};
 
 export const withoutCity = async (
   r: MatchedResult,
@@ -211,6 +226,7 @@ export const withoutCity = async (
   names: (key: string) => Promise<TownNameRow[]>,
   cities: readonly CityResult[],
   match: (address: string) => Promise<MatchedResult[]>,
+  locate: Locate = async (x) => [x],
 ): Promise<MatchedResult[]> => {
   if (Detail(r.match_level) >= Detail("city")) return [r];
   const prefCode = r.match_level === "pref" ? r.ids.lg_code?.slice(0, 2) : undefined;
@@ -231,7 +247,7 @@ export const withoutCity = async (
   if (prefCode !== undefined && new Set(wards.map((c) => c.city)).size === 1) {
     const [w] = wards;
     const tail = rest.slice((w.ward ?? "").length);
-    const found = uniqueStrongest(await retry(w, tail, match), tail);
+    const found = uniqueStrongest(await retry(w, tail, match, locate), tail);
     if (found !== undefined && compareResultStrength(found, r) < 0)
       return [withStep({ ...found, steps: r.steps }, "ward_inferred")];
   }
@@ -256,7 +272,7 @@ export const withoutCity = async (
     .map((d) => d.city)
     .toSorted((a, b) => (b.population ?? 0) - (a.population ?? 0));
   const tried = (
-    await Promise.all(candidates.slice(0, MAX_LIMIT).map((c) => retry(c, rest, match)))
+    await Promise.all(candidates.slice(0, MAX_LIMIT).map((c) => retry(c, rest, match, locate)))
   ).flat();
   if (tried.length === 0) return [r];
   const found = byCity(tried, town, (code) => byCode.get(code)?.population ?? 0);

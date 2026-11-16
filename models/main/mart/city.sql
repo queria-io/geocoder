@@ -4,7 +4,7 @@
 -- 全国で 2,000 行ほどなので、まるごと読む。人口は、市区町村名の無い住所で候補が複数あるときの並び順に使う
 WITH population AS (
     SELECT area, max(value) AS population
-    FROM e_stat.census.census_small_area_age
+    FROM {{ ref('stg_e_stat_census_small_area_age') }}
     WHERE area_level = 'municipality' AND cat01 = '0010'
     GROUP BY area
 )
@@ -18,6 +18,6 @@ SELECT
     ST_X(geometry) AS lng,
     ST_Y(geometry) AS lat,
     CAST(p.population AS BIGINT) AS population
-FROM address_br.main.mart_city
+FROM {{ ref('stg_address_br_city') }}
 LEFT JOIN population p ON p.area = left(lg_code, 5)
 ORDER BY lg_code
