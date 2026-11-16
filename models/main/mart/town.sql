@@ -11,7 +11,7 @@ WITH town AS (
         -- 位置参照情報の大字・町丁目と突き合わせる名前 (頭の「大字」を外し、数字は漢数字)。
         -- 頭の「大字」は ABR と位置参照情報のどちらにも、書く所と書かない所があるので両方で外す
         {{ kanji_numerals("regexp_replace(oaza_cho, '^大字', '') || coalesce(chome, '')") }} AS isj_name
-    FROM address_br.main.mart_town
+    FROM {{ ref('stg_address_br_town') }}
     -- 状態フラグ 3 は存在しない町字
     WHERE status_flg <> '3'
     QUALIFY row_number() OVER (
@@ -41,7 +41,7 @@ isj_oaza AS (
         lg_code,
         {{ kanji_numerals("regexp_replace(oaza_chome_name, '^大字', '')") }} AS name,
         ST_Point(any_value(lng), any_value(lat)) AS geometry
-    FROM nlftp.isj.oaza
+    FROM {{ ref('stg_nlftp_oaza') }}
     GROUP BY ALL
     HAVING count(*) = 1
 ),
@@ -141,14 +141,14 @@ numbering_area AS (
     LEFT JOIN koaza_numbered k ON k.lg_code = n.lg_code AND k.oaza_id = left(n.numbering_id, 4)
 ),
 small_area AS (
-    SELECT CAST(key_code AS VARCHAR) AS small_area_code, geometry FROM e_stat.boundary.small_area
+    SELECT CAST(key_code AS VARCHAR) AS small_area_code, geometry FROM {{ ref('stg_e_stat_small_area') }}
 ),
 -- ABR の町字マスタは多くの町字で郵便番号が空なので、japan_address_code の町字と郵便番号の対応で補う。
 -- 町域名が一致したもの (name)、町域が細分されていて全部同じ番号のもの (sub)、ABR の番号 (abr) だけを使い、
 -- 町字 1 つに番号が 1 つに決まるものに限る。町域名の前方一致 (prefix) と市区町村全体の番号 (city) は使わない
 postal AS (
     SELECT lg_code, machiaza_id, any_value(zipcode) AS post_code
-    FROM japan_address_code.main.town_postal_code
+    FROM {{ ref('stg_japan_address_code_town_postal_code') }}
     WHERE match_type IN ('abr', 'name', 'sub')
     GROUP BY lg_code, machiaza_id
     HAVING count(DISTINCT zipcode) = 1

@@ -24,6 +24,10 @@ models:
       +pre-hook:
         - "CALL geocoder.set_option('parquet_row_group_size', 30720, schema => 'main')"
         - "CALL geocoder.set_option('parquet_compression', 'zstd', schema => 'main')"
+      # 他のデータセットの表を読む stg。ビューにすると利用者の手元に無いカタログを指し、
+      # テーブルにすると同じ行を 2 重に持つので、ephemeral にする
+      stg:
+        +materialized: ephemeral
       mart:
         +materialized: table
         # Worker はファイルを丸ごと読む (Workers の静的アセットは Range を受けない)。1 ファイルを数 MB に収めるよう、

@@ -8,5 +8,5 @@ SELECT
     blk_num,
     ST_X(geometry) AS lng,
     ST_Y(geometry) AS lat
-FROM address_br.main.mart_rsdtdsp_blk
+FROM {{ ref('stg_address_br_rsdtdsp_blk') }}
 ORDER BY lg_code, machiaza_id, blk_id

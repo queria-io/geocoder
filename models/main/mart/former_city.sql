@@ -14,7 +14,7 @@ WITH former AS (
         m.suffix,
         m.current_lg_code,
         unnest(m.name_variants) AS variant
-    FROM codh.city.municipality m
+    FROM {{ ref('stg_codh_municipality') }} m
     WHERE NOT m.is_current
 ),
 successor AS (
@@ -23,7 +23,7 @@ successor AS (
         coalesce(o.current_lg_code, f.current_lg_code) AS lg_code,
         coalesce(o.past_share, 1.0) AS share
     FROM former f
-    LEFT JOIN codh.city.current_overlap o
+    LEFT JOIN {{ ref('stg_codh_current_overlap') }} o
         ON o.geoshape_city_id = f.geoshape_city_id AND o.past_share >= 0.1
 ),
 named AS (
