@@ -6,6 +6,8 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { httpStore, open, tableFiles } from "@queria-io/fdl-js";
+
 const repo = (
   process.argv[2] ??
   process.env.GEOCODER_DATA_URL ??
@@ -37,26 +39,36 @@ const get = async (path, read) => {
     }
   }
 };
-const json = (r) => r.json();
 
-const { data_dir: dataDir = "data/" } = await get("fdl.json", json);
-const id = (await get("refs/heads/main", (r) => r.text())).trim();
-const record = await get(`versions/${id}/version.json`, json);
-const list = await get(`versions/${id}/files.json`, json);
+/** fdl-js の読み (fdl.json・refs・version.json・tables.json) も、get と同じく間をあけて 3 回まで試す */
+const retryingFetch = async (url, init) => {
+  for (let i = 0; ; i++) {
+    try {
+      const r = await fetch(url, init);
+      if (r.status < 500 || i >= 2) return r;
+    } catch (e) {
+      if (i >= 2) throw e;
+    }
+    await sleep(1000 * 2 ** i);
+  }
+};
+
+// refs/heads/main が指すバージョンの tables.json を読む
+const version = await open(httpStore(repo, { fetch: retryingFetch }), "refs/heads/main");
+const { record } = version;
 
 const files = Object.entries(tables).map(([name, fdl]) => {
-  const table = list.tables[fdl];
-  if (!table) return [name, []];
-  if (table.renamed_columns || table.files.some((f) => f.deletes))
+  const table = tableFiles(version, fdl) ?? [];
+  if (version.files.tables[fdl]?.renamed_columns || table.some((f) => f.deletes))
     throw new Error(`${fdl} has deletes or renamed columns`);
   // Worker はフッターの長さが分かっている前提で開く (src/data/parquet.ts の openSized)
-  for (const f of table.files)
-    if (f.path === undefined || f.bytes === undefined || f.footer_bytes === undefined)
-      throw new Error(`${fdl} has a file without path, bytes or footer_bytes`);
-  return [name, table.files];
+  if (table.some((f) => f.footerBytes === undefined))
+    throw new Error(`${fdl} has a file without footer_bytes`);
+  return [name, table];
 });
 
-const keyOf = (f) => `data/${dataDir}${f.path}`;
+// f.key はデータセットの置き場からのパス (data_dir を含む)
+const keyOf = (f) => `data/${f.key}`;
 const all = files.flatMap(([, fs]) => fs);
 const big = all.filter((f) => f.bytes > MAX_BYTES);
 if (big.length > 0) {
@@ -85,9 +97,9 @@ const fetchOne = async (f) => {
   const dest = new URL(keyOf(f), out);
   const have = await stat(dest).catch(() => null);
   if (have?.size === f.bytes) return;
-  const body = await get(dataDir + f.path, async (r) => {
+  const body = await get(f.key, async (r) => {
     const b = Buffer.from(await r.arrayBuffer());
-    if (b.length !== f.bytes) throw new Error(`size mismatch: ${f.path}`);
+    if (b.length !== f.bytes) throw new Error(`size mismatch: ${f.key}`);
     return b;
   });
   await mkdir(dirname(fileURLToPath(dest)), { recursive: true });
@@ -104,7 +116,7 @@ await Promise.all(
 const manifest = {
   version: `geocoder-${record.created_at.slice(0, 10).replaceAll("-", "")}-${record.id.slice(0, 8)}`,
   tables: Object.fromEntries(files.map(([name, fs]) => [name, fs.map(keyOf)])),
-  sizes: Object.fromEntries(all.map((f) => [keyOf(f), { bytes: f.bytes, footer: f.footer_bytes }])),
+  sizes: Object.fromEntries(all.map((f) => [keyOf(f), { bytes: f.bytes, footer: f.footerBytes }])),
 };
 await mkdir(dataUrl, { recursive: true });
 await writeFile(manifestUrl, JSON.stringify(manifest));
