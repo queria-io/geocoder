@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { filesFor, fromManifest, fromVersion, nameBucket, tablesFile } from "../src/data/source";
+import type { Version } from "@queria-io/fdl-js";
+
+import { filesFor, fromManifest, fromVersion, nameBucket } from "../src/data/source";
 
 describe("fromManifest", () => {
   it("目録からの相対パスにし、無い表は空にする", () => {
@@ -13,54 +15,44 @@ describe("fromManifest", () => {
 
 describe("fromVersion", () => {
   const record = { id: "01a196c3-445e-72dd-a258-2c4a98588ebd", created_at: "2026-11-01T11:04:40Z" };
-  const list = {
-    tables: {
-      "main.parcel": { files: [{ path: "main/p1.parquet" }, { path: "main/p2.parquet" }] },
-    },
-  };
+  const version = (dataDir: string, tables: object) =>
+    ({
+      config: { fdl: "0.1", data_dir: dataDir },
+      record,
+      files: { tables },
+    }) as unknown as Version;
+  const parcel = (files: object[], extra = {}) => ({ "main.parcel": { files, ...extra } });
 
   it("FDL の tables.json から表ごとのキーを作る", () => {
-    const r = fromVersion("root/", "ducklake.duckdb.files/", record, list);
+    const v = version("data/", parcel([{ path: "main/p1.parquet" }, { path: "main/p2.parquet" }]));
+    const r = fromVersion("root/", v);
     expect(r.version).toBe("geocoder-20261101-01a196c3");
-    expect(r.tables.parcel).toEqual([
-      "root/ducklake.duckdb.files/main/p1.parquet",
-      "root/ducklake.duckdb.files/main/p2.parquet",
-    ]);
+    expect(r.tables.parcel).toEqual(["root/data/main/p1.parquet", "root/data/main/p2.parquet"]);
     expect(r.tables.town).toEqual([]);
   });
 
   it("tables.json にファイルの大きさとフッターの長さがあれば、キーごとに持つ", () => {
-    const sized = {
-      tables: {
-        "main.parcel": {
-          files: [
-            { path: "main/p1.parquet", bytes: 1000, footer_bytes: 100 },
-            { path: "main/p2.parquet" },
-          ],
-        },
-      },
-    };
-    expect(fromVersion("root/", "d/", record, sized).sizes).toEqual({
+    const v = version(
+      "d/",
+      parcel([
+        { path: "main/p1.parquet", bytes: 1000, footer_bytes: 100 },
+        { path: "main/p2.parquet" },
+      ]),
+    );
+    expect(fromVersion("root/", v).sizes).toEqual({
       "root/d/main/p1.parquet": { bytes: 1000, footer: 100 },
     });
   });
 
-  it("削除ファイルや列の改名がある表は読まない", () => {
-    const deletes = {
-      tables: { "main.parcel": { files: [{ path: "p", deletes: { path: "d" } }] } },
-    };
-    expect(() => fromVersion("root/", "data/", record, deletes)).toThrow();
-    const renamed = { tables: { "main.parcel": { renamed_columns: true, files: [] } } };
-    expect(() => fromVersion("root/", "data/", record, renamed)).toThrow();
-  });
-});
-
-describe("tablesFile", () => {
-  it("version.json の tables.path を返し、フォルダの外を指すものや無いものは読まない", () => {
-    const v = { id: "v", created_at: "" };
-    expect(tablesFile({ ...v, tables: { path: "tables.json" } })).toBe("tables.json");
-    expect(() => tablesFile({ ...v, tables: { path: "../x.json" } })).toThrow();
-    expect(() => tablesFile(v)).toThrow();
+  it("削除ファイルや列の改名がある表、置き場の外のファイルは読まない", () => {
+    const deletes = { path: "d", rows: 1, bytes: 1 };
+    expect(() =>
+      fromVersion("root/", version("data/", parcel([{ path: "p", deletes }]))),
+    ).toThrow();
+    const renamed = parcel([], { renamed_columns: true, columns: [] });
+    expect(() => fromVersion("root/", version("data/", renamed))).toThrow();
+    const outside = parcel([{ path: "../p.parquet" }]);
+    expect(() => fromVersion("root/", version("data/", outside))).toThrow();
   });
 });
 

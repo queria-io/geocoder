@@ -1,16 +1,15 @@
-"""作業場のカタログを、Worker が読める FDL のリポジトリの形で手元に書き出す (精度チェック用)。
+"""作業場のカタログの表のファイルを、Worker が読む目録 (geocoder.json) にして手元に書き出す (精度チェック用)。
 
 使い方: uv run python scripts/local-version.py <作業場のカタログ> <書き出す先>
 
-書き出す先は fdl clone がデータファイルを書くフォルダ。そこに fdl.json・refs/heads/main・
-versions/pr/ を置く。tables.json のパスは、作り直した表が書き出す先からの相対パス、
+書き出す先は fdl clone がデータファイルを書くフォルダ。目録のパスは、作り直した表が書き出す先からの相対パス、
 作り直していない表が本番のファイルの URL (clone が絶対パスにしたもの) になる。
+Worker の DATA_SOURCE を geocoder.json にすると、この目録から読む (worker/src/data/source.ts)。
 """
 
 import json
 import sqlite3
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 LIVE = "end_snapshot IS NULL"
@@ -40,21 +39,25 @@ def table_files(con: sqlite3.Connection) -> dict[str, dict]:
     return tables
 
 
+TABLES = Path(__file__).parent.parent / "worker" / "src" / "data" / "tables.json"
+
+
 def main(working: str, out: str) -> None:
-    root = Path(out)
     with sqlite3.connect(working) as con:
         tables = table_files(con)
-    version = root / "versions" / "pr"
-    version.mkdir(parents=True, exist_ok=True)
-    (root / "refs" / "heads").mkdir(parents=True, exist_ok=True)
-    (root / "fdl.json").write_text(json.dumps({"data_dir": ""}))
-    (root / "refs" / "heads" / "main").write_text("pr\n")
-    created = datetime.now(timezone.utc).isoformat()
-    (version / "version.json").write_text(json.dumps({"id": "pr", "created_at": created, "tables": {"path": "tables.json"}}))
-    (version / "tables.json").write_text(json.dumps({"tables": tables}, ensure_ascii=False, indent=2))
     for name, table in tables.items():
+        if any(f.get("deletes") for f in table["files"]):
+            raise SystemExit(f"{name} has deletes")
         local = sum(not f["path"].startswith("https://") for f in table["files"])
         print(f"{name}: {len(table['files'])} files ({local} rebuilt)")
+    names = json.loads(TABLES.read_text())
+    manifest = {
+        "version": "pr",
+        "tables": {
+            worker: [f["path"] for f in tables.get(fdl, {"files": []})["files"]] for worker, fdl in names.items()
+        },
+    }
+    (Path(out) / "geocoder.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
