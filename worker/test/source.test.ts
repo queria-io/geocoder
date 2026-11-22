@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { filesFor, fromManifest, fromVersion, nameBucket } from "../src/data/source";
+import { filesFor, fromManifest, fromVersion, nameBucket, tablesFile } from "../src/data/source";
 
 describe("fromManifest", () => {
   it("目録からの相対パスにし、無い表は空にする", () => {
@@ -19,7 +19,7 @@ describe("fromVersion", () => {
     },
   };
 
-  it("FDL の files.json から表ごとのキーを作る", () => {
+  it("FDL の tables.json から表ごとのキーを作る", () => {
     const r = fromVersion("root/", "ducklake.duckdb.files/", record, list);
     expect(r.version).toBe("geocoder-20261101-01a196c3");
     expect(r.tables.parcel).toEqual([
@@ -29,7 +29,7 @@ describe("fromVersion", () => {
     expect(r.tables.town).toEqual([]);
   });
 
-  it("files.json にファイルの大きさとフッターの長さがあれば、キーごとに持つ", () => {
+  it("tables.json にファイルの大きさとフッターの長さがあれば、キーごとに持つ", () => {
     const sized = {
       tables: {
         "main.parcel": {
@@ -52,6 +52,15 @@ describe("fromVersion", () => {
     expect(() => fromVersion("root/", "data/", record, deletes)).toThrow();
     const renamed = { tables: { "main.parcel": { renamed_columns: true, files: [] } } };
     expect(() => fromVersion("root/", "data/", record, renamed)).toThrow();
+  });
+});
+
+describe("tablesFile", () => {
+  it("version.json の tables.path を返し、フォルダの外を指すものや無いものは読まない", () => {
+    const v = { id: "v", created_at: "" };
+    expect(tablesFile({ ...v, tables: { path: "tables.json" } })).toBe("tables.json");
+    expect(() => tablesFile({ ...v, tables: { path: "../x.json" } })).toThrow();
+    expect(() => tablesFile(v)).toThrow();
   });
 });
 

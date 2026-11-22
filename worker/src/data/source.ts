@@ -1,7 +1,7 @@
 // どの表をどのファイルから読むかを決める。Worker が知るのは置き場 (DATA_SOURCE) だけにする。
 //   - 「….json」: 目録。{ "version": "…", "tables": { "town": ["town.parquet"], … } }。
 //     パスは目録からの相対。セルフホストで自分の Parquet を読ませるときはこれを置く
-//   - 「…/」: FDL のリポジトリ。refs/heads/main が指すバージョンの files.json (表ごとのファイル一覧) から引く。
+//   - 「…/」: FDL のデータセット。refs/heads/main が指すバージョンの tables.json (表ごとのファイル一覧) から引く。
 //     Sync で main が進めば、デプロイなしで読む先が切り替わる
 import { retryOnce } from "./parquet";
 import tables from "./tables.json";
@@ -37,7 +37,7 @@ export type FileSize = { bytes: number; footer: number };
 
 /**
  * 表ごとの R2 キー (読む順)。空の配列は「その段は流さない」。
- * sizes は FDL の files.json にあるファイルの大きさ (目録には無い)
+ * sizes は FDL の tables.json にあるファイルの大きさ (目録には無い)
  */
 export type Resolved = {
   version: string;
@@ -46,8 +46,8 @@ export type Resolved = {
 };
 
 type Manifest = { version: string; tables: Partial<Record<TableName, string[]>> };
-/** FDL の versions/<ID>/files.json (カタログから作った表ごとのファイル一覧) */
-export type FileList = {
+/** FDL の versions/<ID>/tables.json (表ごとのファイル一覧) */
+export type TableList = {
   tables: Record<
     string,
     {
@@ -62,7 +62,16 @@ export type FileList = {
     }
   >;
 };
-type VersionRecord = { id: string; created_at: string };
+/** FDL の versions/<ID>/version.json。tables.path が tables.json のファイル名 */
+export type VersionRecord = { id: string; created_at: string; tables?: { path: string } };
+
+/** version.json が指す tables.json のファイル名。バージョンのフォルダの外を指すものは読まない */
+export const tablesFile = (v: VersionRecord): string => {
+  const path = v.tables?.path;
+  if (!path || /[/\\]/.test(path) || path === "." || path === "..")
+    throw new Error(`version ${v.id} has no tables.json`);
+  return path;
+};
 
 const dirOf = (key: string) => key.slice(0, key.lastIndexOf("/") + 1);
 
@@ -88,7 +97,7 @@ export const fromVersion = (
   root: string,
   dataDir: string,
   v: VersionRecord,
-  list: FileList,
+  list: TableList,
 ): Resolved => ({
   // 前のバージョンの答えと同じ形 (geocoder-日付-ID の頭 8 桁) にそろえる
   version: `geocoder-${v.created_at.slice(0, 10).replaceAll("-", "")}-${v.id.slice(0, 8)}`,
@@ -121,17 +130,9 @@ const resolve = async (bucket: R2Bucket, source: string, pin: string): Promise<R
   // pin があればそのバージョンに固定する (新しいバージョンに問題があったときの逃げ道)
   const id = pin || (await getText(bucket, source + "refs/heads/main")).trim();
   const dir = `${source}versions/${id}/`;
-  const [record, list] = await Promise.all([
-    getText(bucket, dir + "version.json"),
-    // files.json の無いバージョン (fdl-cli 0.16 より前) は読めない
-    getText(bucket, dir + "files.json"),
-  ]);
-  return fromVersion(
-    source,
-    config.data_dir ?? "tables/",
-    JSON.parse(record) as VersionRecord,
-    JSON.parse(list) as FileList,
-  );
+  const record = JSON.parse(await getText(bucket, dir + "version.json")) as VersionRecord;
+  const list = JSON.parse(await getText(bucket, dir + tablesFile(record))) as TableList;
+  return fromVersion(source, config.data_dir ?? "tables/", record, list);
 };
 
 /** 読む先を覚えておく時間。Sync のあと、遅くともこれだけたてば新しいバージョンを読む */

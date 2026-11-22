@@ -42,7 +42,8 @@ const json = (r) => r.json();
 const { data_dir: dataDir = "data/" } = await get("fdl.json", json);
 const id = (await get("refs/heads/main", (r) => r.text())).trim();
 const record = await get(`versions/${id}/version.json`, json);
-const list = await get(`versions/${id}/files.json`, json);
+// version.json の tables.path が tables.json のファイル名
+const list = await get(`versions/${id}/${record.tables.path}`, json);
 
 const files = Object.entries(tables).map(([name, fdl]) => {
   const table = list.tables[fdl];

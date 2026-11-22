@@ -21,8 +21,9 @@ const version = (id: string, paths: string[]) => ({
   [`geocoder/versions/${id}/version.json`]: JSON.stringify({
     id,
     created_at: "2026-11-04T00:00:00Z",
+    tables: { path: "tables.json" },
   }),
-  [`geocoder/versions/${id}/files.json`]: JSON.stringify({
+  [`geocoder/versions/${id}/tables.json`]: JSON.stringify({
     tables: { "town.town": { files: paths.map((path) => ({ path })) } },
   }),
   ...Object.fromEntries(paths.map((p) => [`geocoder/data/${p}`, `parquet ${p}`])),
@@ -90,7 +91,7 @@ describe("mirror", () => {
     await mirror(origin(repo("v1", version("v1", ["town/a.parquet"]))), env.DATA, "geocoder/");
     const v2 = {
       ...repo("v2", version("v2", [])),
-      "geocoder/versions/v2/files.json": JSON.stringify({
+      "geocoder/versions/v2/tables.json": JSON.stringify({
         tables: { "town.town": { files: [{ path: "town/b.parquet", deletes: [{}] }] } },
       }),
     };

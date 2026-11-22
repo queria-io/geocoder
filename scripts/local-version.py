@@ -3,7 +3,7 @@
 使い方: uv run python scripts/local-version.py <作業場のカタログ> <書き出す先>
 
 書き出す先は fdl clone がデータファイルを書くフォルダ。そこに fdl.json・refs/heads/main・
-versions/pr/ を置く。files.json のパスは、作り直した表が書き出す先からの相対パス、
+versions/pr/ を置く。tables.json のパスは、作り直した表が書き出す先からの相対パス、
 作り直していない表が本番のファイルの URL (clone が絶対パスにしたもの) になる。
 """
 
@@ -50,8 +50,8 @@ def main(working: str, out: str) -> None:
     (root / "fdl.json").write_text(json.dumps({"data_dir": ""}))
     (root / "refs" / "heads" / "main").write_text("pr\n")
     created = datetime.now(timezone.utc).isoformat()
-    (version / "version.json").write_text(json.dumps({"id": "pr", "created_at": created}))
-    (version / "files.json").write_text(json.dumps({"tables": tables}, ensure_ascii=False, indent=2))
+    (version / "version.json").write_text(json.dumps({"id": "pr", "created_at": created, "tables": {"path": "tables.json"}}))
+    (version / "tables.json").write_text(json.dumps({"tables": tables}, ensure_ascii=False, indent=2))
     for name, table in tables.items():
         local = sum(not f["path"].startswith("https://") for f in table["files"])
         print(f"{name}: {len(table['files'])} files ({local} rebuilt)")

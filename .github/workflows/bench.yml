@@ -64,7 +64,7 @@ jobs:
           exit 1
       - name: Sync の後は Worker が新しいバージョンを読むまで待つ
         if: github.event_name == 'workflow_run'
-        run: sleep 360 # Worker は refs と files.json を 5 分キャッシュする
+        run: sleep 360 # Worker は refs と tables.json を 5 分キャッシュする
       - name: 本番に住所を送って評価する
         env:
           # 25 件まとめは 1 回の CPU が上限に当たりやすい。5 件ずつ 4 本並べる
