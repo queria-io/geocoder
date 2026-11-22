@@ -45,12 +45,13 @@ TABLES = Path(__file__).parent.parent / "worker" / "src" / "data" / "tables.json
 def main(working: str, out: str) -> None:
     with sqlite3.connect(working) as con:
         tables = table_files(con)
+    names = json.loads(TABLES.read_text())
     for name, table in tables.items():
-        if any(f.get("deletes") for f in table["files"]):
+        # Worker が読む表だけを止める (Worker の fromVersion と同じ)
+        if name in names.values() and any(f.get("deletes") for f in table["files"]):
             raise SystemExit(f"{name} has deletes")
         local = sum(not f["path"].startswith("https://") for f in table["files"])
         print(f"{name}: {len(table['files'])} files ({local} rebuilt)")
-    names = json.loads(TABLES.read_text())
     manifest = {
         "version": "pr",
         "tables": {

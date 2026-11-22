@@ -62,6 +62,15 @@ export const mirror = async (
   const tables = version.record.tables?.path;
   if (!tables) throw new Error(`version ${latest} has no tables.json`);
   const files = dataFiles(source, version);
+  // 今と 1 つ前のバージョンが読むファイルだけを残す (切り替えの直後に前のバージョンを読む Worker があるため)。
+  // 前のバージョンが写していないときだけ、前のファイルを残さない。refs/heads/main を書く前に読み、読めなければ止める
+  const previous = current
+    ? await readVersion(r2Store(store, source), current).catch((e: unknown) => {
+        if (e instanceof NotFoundError) return null;
+        throw e;
+      })
+    : null;
+  const keep = new Set([...files, ...(previous ? dataFiles(source, previous) : [])]);
   const dir = `${source}versions/${latest}/`;
   await copy(origin, store, dir + "version.json");
   await copy(origin, store, dir + tables);
@@ -71,16 +80,6 @@ export const mirror = async (
   await store.put(source + "fdl.json", config);
   await store.put(ref, latest + "\n");
 
-  // 今と 1 つ前のバージョンが読むファイルだけを残す (切り替えの直後に前のバージョンを読む Worker があるため)。
-  // 前のバージョンが写していないときだけ、前のファイルを残さない
-  const keep = new Set(files);
-  if (current) {
-    const previous = await readVersion(r2Store(store, source), current).catch((e: unknown) => {
-      if (e instanceof NotFoundError) return null;
-      throw e;
-    });
-    if (previous) for (const k of dataFiles(source, previous)) keep.add(k);
-  }
   const stale = (await listAll(store, source + version.config.data_dir)).filter(
     (k) => !keep.has(k),
   );

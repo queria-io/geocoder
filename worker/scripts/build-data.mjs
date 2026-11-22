@@ -40,8 +40,21 @@ const get = async (path, read) => {
   }
 };
 
+/** fdl-js の読み (fdl.json・refs・version.json・tables.json) も、get と同じく間をあけて 3 回まで試す */
+const retryingFetch = async (url, init) => {
+  for (let i = 0; ; i++) {
+    try {
+      const r = await fetch(url, init);
+      if (r.status < 500 || i >= 2) return r;
+    } catch (e) {
+      if (i >= 2) throw e;
+    }
+    await sleep(1000 * 2 ** i);
+  }
+};
+
 // refs/heads/main が指すバージョンの tables.json を読む
-const version = await open(httpStore(repo), "refs/heads/main");
+const version = await open(httpStore(repo, { fetch: retryingFetch }), "refs/heads/main");
 const { record } = version;
 
 const files = Object.entries(tables).map(([name, fdl]) => {
