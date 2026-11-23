@@ -1,13 +1,11 @@
----
-$schema: https://queria.io/schemas/table/v1.json
-table: main.point_priority
+$schema: https://tabledoc.queria.io/schemas/table/v1.json
 title: 住所の点の優先順
 description: |-
   住所の代表点の種類と出典ごとの優先順位と、計測した誤差です。address_point の代表点はこの順で選びます。
-keywords:
+topics:
   - 住所
   - ジオコーディング
-fields:
+columns:
   - name: point_type
     title: 点の種類
     description: "parcel は筆、parcel_parent は親番、rsdt は住居表示の号、block は街区、history は位置参照情報の過去の版にだけある街区・地番"
@@ -22,4 +20,3 @@ fields:
     description: "地価公示の地点に当てたときの距離の中央値。測っていないものは NULL"
   - name: measured_on
     title: 測った日
----
