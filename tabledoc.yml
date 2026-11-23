@@ -12,7 +12,6 @@ topics:
   - 町字
   - 住居表示
   - 小地域
-homepage: https://github.com/queria-io/geocoder
 language: ja
 licenses:
   - JP-DIGITAL-ADDRESS-BR
