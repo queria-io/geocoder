@@ -82,7 +82,7 @@ jobs:
           uv sync
           # 本番のバージョンを作業場に取り出す。作り直さない表は本番のファイルを指したまま残る
           # fdl clone はバージョンの説明 (dataset.json と README.md など) を実行したフォルダに書き、
-          # 同じ名前のファイルがあると止まる。説明はこのリポジトリの queria.yml なので、空のフォルダで実行する
+          # 同じ名前のファイルがあると止まる。説明はこのリポジトリの tabledoc.yml なので、空のフォルダで実行する
           (here="$PWD"; cd "$(mktemp -d)" && uv run --project "$here" fdl clone https://data.queria.io/datasets/queria/geocoder/ "$here/.fdl/work.sqlite")
           # fdl clone が新しいデータファイルを置くフォルダ。今の fdl は work.sqlite.fdl/data/、0.34 までは work.sqlite.data/
           data=.fdl/work.sqlite.fdl/data

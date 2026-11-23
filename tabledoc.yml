@@ -1,0 +1,57 @@
+$schema: https://tabledoc.queria.io/schemas/dataset/v1.json
+name: geocoder
+title: ジオコーダー用 住所マスタ
+description: |-
+  住所の文字列と座標・地域コードを相互に引くための住所マスタです。Queria のジオコーダー（geocoder.queria.io）がこのテーブルを読みます。
+
+  出典：「アドレス・ベース・レジストリ」（デジタル庁）、「国勢調査 町丁・字等別境界データ」（総務省統計局）、「街区レベル位置参照情報」（国土交通省）、「郵便番号データ」（日本郵便）。Queria が加工したものです。
+topics:
+  - 住所
+  - ジオコーディング
+  - 町字
+  - 住居表示
+  - 小地域
+homepage: https://github.com/queria-io/geocoder
+language: ja
+licenses:
+  - JP-DIGITAL-ADDRESS-BR
+  - JP-GOV-STD-2.0
+  - JP-MLIT-NLFTP
+
+sources:
+  - id: dataset
+    title: アドレス・ベース・レジストリ（デジタル庁）
+    path: https://dataset.address-br.digital.go.jp/
+  - id: gis
+    title: 国勢調査 町丁・字等別境界データ（総務省統計局）
+    path: https://www.e-stat.go.jp/gis
+  - id: isj
+    title: 街区レベル位置参照情報（国土交通省）
+    path: https://nlftp.mlit.go.jp/isj/
+  - id: download
+    title: 郵便番号データ（日本郵便）
+    path: https://www.post.japanpost.jp/zipcode/download.html
+
+contributors:
+  - id: digital
+    title: デジタル庁
+    path: https://www.digital.go.jp/
+    roles: [rightsHolder]
+  - id: stat
+    title: 総務省統計局
+    path: https://www.stat.go.jp/
+    roles: [rightsHolder]
+  - id: mlit
+    title: 国土交通省
+    path: https://www.mlit.go.jp/
+    roles: [rightsHolder]
+
+spatial_coverage: [JP]
+update_frequency: monthly
+schemas:
+  - name: main
+    title: メイン
+  - name: town
+    title: 町字
+
+synonyms: [ジオコーダー, ジオコーディング, 住所マスタ]

@@ -2,9 +2,6 @@ version: 2
 
 models:
   - name: parcel
-    description: |
-      地番の住所（「○番地」「○番○」）と代表点。住居表示でない町字の分。座標の付く筆は一部だけ。
-      「アドレス・ベース・レジストリ」（デジタル庁）（https://dataset.address-br.digital.go.jp/）を加工して作成。
     access: public
     columns:
       - name: machiaza_key

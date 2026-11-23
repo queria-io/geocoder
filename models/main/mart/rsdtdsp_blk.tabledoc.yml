@@ -1,42 +1,29 @@
----
-$schema: https://queria.io/schemas/table/v1.json
-table: main.rsdtdsp_rsdt
-title: 住居表示 住居
+$schema: https://tabledoc.queria.io/schemas/table/v1.json
+title: 住居表示 街区
 description: |-
-  住居表示の住居（「○丁目1番3号」の「3号」）と代表点です。
-keywords:
+  住居表示の街区（「○丁目1番」の「1番」）と代表点です。
+topics:
   - 住所
   - 住居表示
-  - 住居
+  - 街区
   - ジオコーディング
-sources:
-  - path: https://dataset.address-br.digital.go.jp/
-fields:
+sources: [dataset]
+columns:
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）"
-    semantic: {role: entity, name: city}
+    entity: {type: foreign, name: city}
   - name: machiaza_id
     title: 町字ID
     description: "town と lg_code・machiaza_id で結合する"
   - name: blk_id
     title: 街区ID
-  - name: rsdt_id
-    title: 住居ID
-  - name: rsdt2_id
-    title: 住居2ID
   - name: blk_num
     title: 街区符号
     description: "住所の「○番」の部分"
-  - name: rsdt_num
-    title: 住居番号
-    description: "住所の「○号」の部分"
-  - name: rsdt_num2
-    title: 住居番号2
   - name: lng
     title: 経度
     description: "代表点の経度。元データ (ABR 位置参照拡張) のまま。代表点の無い行は NULL"
   - name: lat
     title: 緯度
     description: "代表点の緯度。元データ (ABR 位置参照拡張) のまま。代表点の無い行は NULL"
----
