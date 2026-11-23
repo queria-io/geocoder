@@ -1,25 +1,22 @@
----
-$schema: https://queria.io/schemas/table/v1.json
-table: main.rsdtdsp
+$schema: https://tabledoc.queria.io/schemas/table/v1.json
 title: 住居表示の住所
 description: |-
   住居表示の住所（「○番」「○番○号」）と代表点です。街区だけの行と、街区と住居の行を 1 つのテーブルにまとめています。
 
   - 住居表示を実施した町字の分だけです
-keywords:
+topics:
   - 住所
   - 住居表示
   - ジオコーディング
-sources:
-  - path: https://dataset.address-br.digital.go.jp/
-fields:
+sources: [dataset]
+columns:
   - name: machiaza_key
     title: 町字キー
     description: "lg_code と machiaza_id をつないだもの (13桁)。この順に並ぶ"
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）"
-    semantic: {role: entity, name: city}
+    entity: city
   - name: machiaza_id
     title: 町字ID
     description: "town と lg_code・machiaza_id で結合する"
@@ -44,4 +41,3 @@ fields:
   - name: lat
     title: 緯度
     description: "代表点の緯度。代表点の無い行は NULL"
----

@@ -59,8 +59,7 @@ export const mirror = async (
 
   const config = await mustText(origin, source + "fdl.json");
   const version = await readVersion(r2Store(origin, source), latest);
-  const tables = version.record.tables?.path;
-  if (!tables) throw new Error(`version ${latest} has no tables.json`);
+  if (!version.record.tables) throw new Error(`version ${latest} has no tables.json`);
   const files = dataFiles(source, version);
   // 今と 1 つ前のバージョンが読むファイルだけを残す (切り替えの直後に前のバージョンを読む Worker があるため)。
   // 前のバージョンが写していないときだけ、前のファイルを残さない。refs/heads/main を書く前に読み、読めなければ止める
@@ -73,7 +72,7 @@ export const mirror = async (
   const keep = new Set([...files, ...(previous ? dataFiles(source, previous) : [])]);
   const dir = `${source}versions/${latest}/`;
   await copy(origin, store, dir + "version.json");
-  await copy(origin, store, dir + tables);
+  await copy(origin, store, dir + "tables.json");
   let copied = 0;
   for (const key of files) if (await copy(origin, store, key)) copied++;
   // fdl.json はバージョンごとのファイルでないので、あっても読んだ中身で書き直す (data_dir が変わったときのため)

@@ -7,12 +7,12 @@ import {
   open,
   r2Store,
   refreshing,
+  retryOnce,
   tableFiles,
   type DataFile,
   type Version,
 } from "@queria-io/fdl-js";
 
-import { retryOnce } from "./parquet";
 import tables from "./tables.json";
 
 /** ジオコーダーが読む表。FDL では右の名前 (スキーマ.表) で引く。scripts/build-data.mjs も同じ一覧を読む */

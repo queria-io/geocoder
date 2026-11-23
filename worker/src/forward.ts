@@ -1,21 +1,19 @@
 // 住所 → 町字の正引き。geocoder の表の Parquet を読み、abr-geocoder から写した当て方 (matching/) に渡す。
 // 表は Worker の静的アセットにあればそこから丸ごと、無ければ R2 から Range で読む。
 // 町字と照合の区域は都道府県ごと、住居表示・地番・番号は市区町村ごと、町名の索引は頭の文字ごとのファイルに
-// 分かれていて、要るファイルだけを開く。開いたファイル (フッター) は isolate の中で使い回し、読んだ行と
-// 静的アセットから取ったファイルの中身は問い合わせが終われば手放す
+// 分かれていて、要るファイルだけを開く。開いたファイル (フッター)、読んだ行、静的アセットから取ったファイルの
+// 中身は問い合わせが終われば手放す (isolate には残さない)
 import { preNormalize } from "./matching/pre_normalize";
-import { parquetReadObjects } from "hyparquet";
-
 import {
-  assetsBuffer,
-  compressors,
-  type Keep,
-  openR2Table,
-  openSized,
-  readWhere,
-  type Table,
-  valueOf,
-} from "./data/parquet";
+  type FooterCache,
+  memoryFooterCache,
+  type ParquetFile,
+  r2Store,
+  readRows,
+  type Store,
+} from "@queria-io/fdl-js";
+
+import { assetsStore, openFile, readWhere, valueOf } from "./data/parquet";
 import { Match } from "./matching/match_core";
 import { NewMatcher, type Impl } from "./matching/matcher";
 import { Detail, type MatchedResult } from "./model/model";
@@ -107,14 +105,17 @@ const startRequest = () => {
   stats = emptyStats();
 };
 
-/** 静的アセットから取ったファイルの中身。1 件の問い合わせ (Session) ごとに持ち、終われば手放す */
-type Files = Map<string, Promise<ArrayBuffer>>;
+/**
+ * 1 件の問い合わせ (Session) で開いたファイルと、読む先 (store)。静的アセットの store は取ったファイルの中身を
+ * 持つので、問い合わせごとに作り、終われば手放す
+ */
+type Files = { store: Store; opened: Map<string, Promise<ParquetFile>> };
 
 /** 行を絞って読む表 (市区町村と都道府県の表は丸ごと読む) */
 type KeyedTable = Exclude<TableName, "city" | "pref">;
 
 /** 表ごとの、行グループを絞る列と読む列 */
-const KEEP: Record<KeyedTable, Keep & { sortKey: string; columns: string[] }> = {
+const KEEP: Record<KeyedTable, { sortKey: string; columns: string[] }> = {
   town: { sortKey: "lg_code", columns: TOWN_COLUMNS },
   match_area: { sortKey: "lg_code", columns: MATCH_AREA_COLUMNS },
   match_number: { sortKey: "area_id", columns: MATCH_NUMBER_COLUMNS },
@@ -133,41 +134,38 @@ const cityPart = (lgCode: string): Partition => ({
   lg_code: lgCode,
 });
 
-/** 丸ごと読む表 (市区町村・都道府県) は全部の列を残す */
-const keepOf = (name: TableName): Keep | undefined =>
-  name === "city" || name === "pref" ? undefined : KEEP[name];
-
-const readAll = async <T>(t: Table): Promise<T[]> =>
-  (await parquetReadObjects({ file: t.file, metadata: t.metadata, compressors })) as T[];
-
 const prefOf = (lgCode: string) => lgCode.slice(0, 2);
 
-/**
- * 表のファイルを開く口。静的アセットか R2 か。open で開いた表 (フッター) は isolate の中で使い回し、
- * 読むときは bind で問い合わせの files に結び直す (静的アセットの中身を問い合わせごとに持つため)
- */
+/** 表を読む先。静的アセットか R2 か。問い合わせごとに files を作る */
 type Opener = {
-  open: (key: string, keep: Keep | undefined, files: Files) => Promise<Table>;
-  bind: (key: string, table: Table, files: Files) => Table;
+  files: () => Files;
+  sizes: Resolved["sizes"];
+  onRead?: typeof countRead;
+  /**
+   * フッターと大きさを isolate の中で持つか。R2 では読み直すと 1 ファイルにつき R2 の読み込みが 1 回増えるので
+   * 持つ。フッターは解釈したメタデータの 1/9 ほどの大きさで、全部のファイルでも約 11 MB。表のファイルが
+   * 変われば Built ごと作り直して手放す (前のバージョンのフッターを残さない)
+   */
+  keepFooters: boolean;
 };
 
-const r2Opener = (bucket: R2Bucket, sizes: Resolved["sizes"]): Opener => ({
-  open: (key, keep) => openR2Table(bucket, key, countRead, keep, sizes[key]),
-  bind: (_key, table) => table,
-});
-
-const assetsOpener = (assets: Fetcher, sizes: Resolved["sizes"]): Opener => {
-  const buffer = (key: string, bytes: number, files: Files) =>
-    assetsBuffer(assets, key, bytes, () => files, countRead);
+const r2Opener = (bucket: R2Bucket, sizes: Resolved["sizes"]): Opener => {
+  const store = r2Store(bucket);
   return {
-    open: (key, keep, files) => {
-      const size = sizes[key];
-      if (!size) return Promise.reject(new Error(`no size: ${key}`));
-      return openSized(buffer(key, size.bytes, files), size, keep);
-    },
-    bind: (key, table, files) => ({ ...table, file: buffer(key, table.file.byteLength, files) }),
+    files: () => ({ store, opened: new Map() }),
+    sizes,
+    onRead: countRead,
+    keepFooters: true,
   };
 };
+
+// 静的アセットの読みは、ファイルを丸ごと取るときに数える (切り出しは数えない)
+const assetsOpener = (assets: Fetcher, sizes: Resolved["sizes"]): Opener => ({
+  files: () => ({ store: assetsStore(assets, new Map(), countRead), opened: new Map() }),
+  sizes,
+  keepFooters: false,
+});
+
 /** isolate の中で使い回すもの。表のファイルが変われば作り直す */
 type Built = {
   /** 当て方の辞書 (市区町村の表から作る)。町字を読む口は問い合わせごとに差し替える */
@@ -176,8 +174,10 @@ type Built = {
   prefs: PrefRow[];
   city: (lgCode: string) => CityResult | undefined;
   pref: (lgCode: string) => PrefRow | undefined;
-  /** 表 name の、want の行が入るファイルを開き、問い合わせの files に結ぶ (一度開いたファイルは使い回す) */
-  open: (name: TableName, want: Partition, files: Files) => Promise<Table[]>;
+  /** 問い合わせごとの files を作る */
+  files: () => Files;
+  /** 表 name の、want の行が入るファイルを開く (問い合わせの中では 1 回だけ開く) */
+  open: (name: TableName, want: Partition, files: Files) => Promise<ParquetFile[]>;
   /** 町字を読むときに、町字から先で読む表のファイルも開いておくか。R2 では開くのはフッターだけなので読みを
    * 並べられる。静的アセットでは開くとファイルを丸ごと取るので、要るときまで開かない */
   prefetch: boolean;
@@ -187,28 +187,43 @@ type Built = {
 
 let cached: { key: string; built: Promise<Built> } | null = null;
 
-const build = async (openKey: Opener, { tables }: Resolved, prefetch: boolean): Promise<Built> => {
-  // 分けていない表のファイルはどの住所からも開くので、ファイルごとに 1 回だけ開く
-  const opened = new Map<string, Promise<Table>>();
-  const openFile = (name: TableName, key: string, files: Files) => {
+const build = async (opener: Opener, { tables }: Resolved, prefetch: boolean): Promise<Built> => {
+  const { onRead, keepFooters } = opener;
+  const cache: FooterCache | undefined = keepFooters ? memoryFooterCache() : undefined;
+  // 目録のファイルは大きさが分からない。問い合わせごとに大きさを問い合わせないよう、フッターと一緒に持つ
+  const bytes = new Map<string, Promise<number | null>>();
+  const sizeOf = (store: Store, key: string) => {
+    const known = opener.sizes[key];
+    if (known || !keepFooters) return known;
+    let p = bytes.get(key);
+    if (!p) {
+      p = store.size(key);
+      bytes.set(key, p);
+      p.catch(() => bytes.delete(key));
+    }
+    return p.then((n) => {
+      if (n !== null) return { bytes: n };
+      bytes.delete(key);
+      throw new Error(`not found: ${key}`);
+    });
+  };
+  const openOnce = ({ store, opened }: Files, key: string) => {
     const hit = opened.get(key);
     if (hit) return hit;
-    const p = openKey.open(key, keepOf(name), files);
+    const p = Promise.resolve(sizeOf(store, key)).then((size) =>
+      openFile(store, key, size, { onRead, cache }),
+    );
     opened.set(key, p);
-    // 開けなかったファイルは覚えずに、次の問い合わせで開き直す
+    // 開けなかったファイルは覚えずに、使うときに開き直す (先に開いておくのに失敗しても、問い合わせを落とさない)
     p.catch(() => opened.delete(key));
     return p;
   };
   const open = (name: TableName, want: Partition, files: Files) =>
-    Promise.all(
-      filesFor(tables[name], want).map(async (k) =>
-        openKey.bind(k, await openFile(name, k, files), files),
-      ),
-    );
-  const first: Files = new Map();
+    Promise.all(filesFor(tables[name], want).map((k) => openOnce(files, k)));
+  const first = opener.files();
   const [city, pref] = await Promise.all([open("city", {}, first), open("pref", {}, first)]);
-  const cities = (await Promise.all(city.map((t) => readAll<CityTableRow>(t)))).flat().map(toCity);
-  const prefs = (await Promise.all(pref.map((t) => readAll<PrefTableRow>(t)))).flat().map(toPref);
+  const cities = (await Promise.all(city.map((t) => readRows<CityTableRow>(t)))).flat().map(toCity);
+  const prefs = (await Promise.all(pref.map((t) => readRows<PrefTableRow>(t)))).flat().map(toPref);
   const cityByCode = new Map(cities.map((c) => [c.lgCode, c]));
   const prefByCode = new Map(prefs.map((p) => [p.lgCode, p]));
   return {
@@ -220,6 +235,7 @@ const build = async (openKey: Opener, { tables }: Resolved, prefetch: boolean): 
     prefs,
     city: (lgCode) => cityByCode.get(lgCode),
     pref: (lgCode) => prefByCode.get(lgCode),
+    files: opener.files,
     open,
     prefetch,
     hasIndex: tables.match_area.length > 0 && tables.match_number.length > 0,
@@ -282,7 +298,7 @@ type Session = {
 };
 
 const session = (built: Built): Session => {
-  const files: Files = new Map();
+  const files = built.files();
   const townRows = rowsOf<TownRow, string>(built, "town", files);
   /** 市区町村ごとの町字。まだ読んでいない市区町村は、都道府県ごとに 1 回の読みでまとめて読む */
   const kept = new Map<string, Promise<BasicResult[]>>();
@@ -357,7 +373,7 @@ export const dataVersion = async (env: ForwardEnv): Promise<string> =>
   (await sourceOf(env)).resolved.version;
 
 /** 表を読む先。静的アセットに置いてあればそこ、無ければ R2 */
-type Source = { resolved: Resolved; open: Opener; inAssets: boolean };
+type Source = { resolved: Resolved; opener: Opener; inAssets: boolean };
 
 const sourceOf = async (env: ForwardEnv): Promise<Source> => {
   const assets = env.ASSETS ? await resolveAssets(env.ASSETS).catch(() => null) : null;
@@ -367,15 +383,15 @@ const sourceOf = async (env: ForwardEnv): Promise<Source> => {
   // 静的アセットは、R2 で今読むバージョン (refs/heads/main か DATA_PIN) と同じときだけ使う。
   // Sync で main が進んだときや DATA_PIN で固定したときは、デプロイし直すまで R2 から読む
   if (env.ASSETS && assets?.version === resolved.version)
-    return { resolved: assets, open: assetsOpener(env.ASSETS, assets.sizes), inAssets: true };
-  return { resolved, open: r2Opener(env.DATA, resolved.sizes), inAssets: false };
+    return { resolved: assets, opener: assetsOpener(env.ASSETS, assets.sizes), inAssets: true };
+  return { resolved, opener: r2Opener(env.DATA, resolved.sizes), inAssets: false };
 };
 
 const builtFor = async (env: ForwardEnv): Promise<Built> => {
-  const { resolved, open, inAssets } = await sourceOf(env);
+  const { resolved, opener, inAssets } = await sourceOf(env);
   const key = JSON.stringify(resolved.tables);
   if (cached?.key !== key) {
-    const built = build(open, resolved, !inAssets);
+    const built = build(opener, resolved, !inAssets);
     built.catch(() => (cached = null));
     cached = { key, built };
   }
