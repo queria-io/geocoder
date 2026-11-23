@@ -16,7 +16,7 @@ columns:
   - name: lg_code
     title: 全国地方公共団体コード
     description: "6桁（検査数字あり）"
-    entity: {type: foreign, name: city}
+    entity: city
   - name: machiaza_id
     title: 町字ID
   - name: machiaza_type
@@ -87,7 +87,7 @@ columns:
   - name: small_area_code
     title: 小地域コード
     description: "代表点が入る国勢調査の小地域（KEY_CODE）"
-    entity: {type: foreign, name: small_area}
+    entity: small_area
   - name: pref_code
     title: 都道府県コード
     description: "lg_code の頭 2 桁。ファイルはこの値ごとに分かれる"

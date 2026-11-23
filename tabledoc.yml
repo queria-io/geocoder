@@ -22,29 +22,29 @@ licenses:
 sources:
   - id: dataset
     title: アドレス・ベース・レジストリ（デジタル庁）
-    path: https://dataset.address-br.digital.go.jp/
+    url: https://dataset.address-br.digital.go.jp/
   - id: gis
     title: 国勢調査 町丁・字等別境界データ（総務省統計局）
-    path: https://www.e-stat.go.jp/gis
+    url: https://www.e-stat.go.jp/gis
   - id: isj
     title: 街区レベル位置参照情報（国土交通省）
-    path: https://nlftp.mlit.go.jp/isj/
+    url: https://nlftp.mlit.go.jp/isj/
   - id: download
     title: 郵便番号データ（日本郵便）
-    path: https://www.post.japanpost.jp/zipcode/download.html
+    url: https://www.post.japanpost.jp/zipcode/download.html
 
 contributors:
   - id: digital
     title: デジタル庁
-    path: https://www.digital.go.jp/
+    url: https://www.digital.go.jp/
     roles: [rightsHolder]
   - id: stat
     title: 総務省統計局
-    path: https://www.stat.go.jp/
+    url: https://www.stat.go.jp/
     roles: [rightsHolder]
   - id: mlit
     title: 国土交通省
-    path: https://www.mlit.go.jp/
+    url: https://www.mlit.go.jp/
     roles: [rightsHolder]
 
 spatial_coverage: [JP]
