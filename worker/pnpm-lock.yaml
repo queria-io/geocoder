@@ -15,8 +15,8 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0
       '@queria-io/fdl-js':
-        specifier: ^0.14.1
-        version: 0.14.1
+        specifier: ^0.17.0
+        version: 0.17.0
       hono:
         specifier: ^4.13.14
         version: 4.13.14
@@ -1031,8 +1031,8 @@ packages:
   '@poppinss/exception@1.2.3':
     resolution: {integrity: sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw==}
 
-  '@queria-io/fdl-js@0.14.1':
-    resolution: {integrity: sha512-1I1kYXTgG0J7KnJBMc1XZnLb2Le57q92Dol7pVrk+GB1uVh1g0E2h8+5srOXGSwJBtfJRlF8GKPb8uN5N7rQJQ==}
+  '@queria-io/fdl-js@0.17.0':
+    resolution: {integrity: sha512-cMwOD+qhdD5DkGsEiF9McA6cE72+/YD+Lg6t1hgPEP8I/sN4+4J9hzbeLpvkavQ66Mr5EZ9NBmKU6fCgnH6aTw==}
     engines: {node: '>=20'}
 
   '@rolldown/binding-android-arm-eabi@1.2.16':
@@ -2242,7 +2242,7 @@ snapshots:
 
   '@poppinss/exception@1.2.3': {}
 
-  '@queria-io/fdl-js@0.14.1':
+  '@queria-io/fdl-js@0.17.0':
     dependencies:
       fzstd: 0.1.1
       hyparquet: 1.32.0

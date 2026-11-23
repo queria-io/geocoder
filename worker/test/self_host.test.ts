@@ -22,7 +22,7 @@ const version = (id: string, paths: string[]) => ({
     fdl: "0.1",
     id,
     created_at: "2026-11-04T00:00:00Z",
-    tables: { path: "tables.json" },
+    tables: { bytes: 0, sha256: "" },
   }),
   [`geocoder/versions/${id}/tables.json`]: JSON.stringify({
     tables: { "town.town": { files: paths.map((path) => ({ path })) } },

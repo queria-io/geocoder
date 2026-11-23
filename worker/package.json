@@ -18,7 +18,7 @@
   "dependencies": {
     "@hono/zod-openapi": "^1.6.3",
     "@mapbox/vector-tile": "^3.0.0",
-    "@queria-io/fdl-js": "^0.14.1",
+    "@queria-io/fdl-js": "^0.17.0",
     "hono": "^4.13.14",
     "pbf": "^5.1.2",
     "pmtiles": "^4.5.0",
