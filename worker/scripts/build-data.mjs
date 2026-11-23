@@ -61,7 +61,7 @@ const files = Object.entries(tables).map(([name, fdl]) => {
   const table = tableFiles(version, fdl) ?? [];
   if (version.files.tables[fdl]?.renamed_columns || table.some((f) => f.deletes))
     throw new Error(`${fdl} has deletes or renamed columns`);
-  // Worker はフッターの長さが分かっている前提で開く (src/data/parquet.ts の openSized)
+  // Worker はフッターの長さが分かっている前提で開く (src/data/parquet.ts の openFile)
   if (table.some((f) => f.footerBytes === undefined))
     throw new Error(`${fdl} has a file without footer_bytes`);
   return [name, table];
