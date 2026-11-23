@@ -19,17 +19,19 @@ const origin = (files: Record<string, string>): R2Bucket =>
 
 const version = (id: string, paths: string[]) => ({
   [`geocoder/versions/${id}/version.json`]: JSON.stringify({
+    fdl: "0.1",
     id,
     created_at: "2026-11-04T00:00:00Z",
+    tables: { path: "tables.json" },
   }),
-  [`geocoder/versions/${id}/files.json`]: JSON.stringify({
+  [`geocoder/versions/${id}/tables.json`]: JSON.stringify({
     tables: { "town.town": { files: paths.map((path) => ({ path })) } },
   }),
   ...Object.fromEntries(paths.map((p) => [`geocoder/data/${p}`, `parquet ${p}`])),
 });
 
 const repo = (id: string, versions: Record<string, string>) => ({
-  "geocoder/fdl.json": JSON.stringify({ data_dir: "data/" }),
+  "geocoder/fdl.json": JSON.stringify({ fdl: "0.1", data_dir: "data/" }),
   "geocoder/refs/heads/main": id + "\n",
   ...versions,
 });
@@ -80,7 +82,7 @@ describe("mirror", () => {
     await mirror(origin(repo("v1", version("v1", ["town/a.parquet"]))), env.DATA, "geocoder/");
     const v2 = {
       ...repo("v2", version("v2", ["town/b.parquet"])),
-      "geocoder/fdl.json": JSON.stringify({ data_dir: "data/", note: "v2" }),
+      "geocoder/fdl.json": JSON.stringify({ fdl: "0.1", data_dir: "data/", note: "v2" }),
     };
     await mirror(origin(v2), env.DATA, "geocoder/");
     expect(await text("geocoder/fdl.json")).toBe(v2["geocoder/fdl.json"]);
@@ -90,8 +92,14 @@ describe("mirror", () => {
     await mirror(origin(repo("v1", version("v1", ["town/a.parquet"]))), env.DATA, "geocoder/");
     const v2 = {
       ...repo("v2", version("v2", [])),
-      "geocoder/versions/v2/files.json": JSON.stringify({
-        tables: { "town.town": { files: [{ path: "town/b.parquet", deletes: [{}] }] } },
+      "geocoder/versions/v2/tables.json": JSON.stringify({
+        tables: {
+          "town.town": {
+            files: [
+              { path: "town/b.parquet", deletes: { path: "town/d.parquet", rows: 1, bytes: 1 } },
+            ],
+          },
+        },
       }),
     };
     await expect(mirror(origin(v2), env.DATA, "geocoder/")).rejects.toThrow("deletes");

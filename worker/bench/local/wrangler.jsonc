@@ -6,8 +6,8 @@
   "compatibility_date": "2025-12-01",
   "rules": [{ "type": "Text", "globs": ["**/*.tsv"], "fallthrough": true }],
   "vars": {
-    // serve.ts が返すフォルダの直下を FDL のリポジトリとして読む (scripts/local-version.py が書く)
-    "DATA_SOURCE": "",
+    // serve.ts が返すフォルダの直下の目録を読む (scripts/local-version.py が書く)
+    "DATA_SOURCE": "geocoder.json",
     "DATA_PIN": "",
     "LOCAL_DATA": "http://127.0.0.1:8788/",
   },

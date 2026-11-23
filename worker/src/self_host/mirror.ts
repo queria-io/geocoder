@@ -2,7 +2,9 @@
 // Queria に依存したくないときに Cron Trigger から呼ぶ。FDL のリポジトリの置き方 (fdl.json・refs/heads/main・
 // versions/<ID>/・データのファイル) をそのまま写し、refs/heads/main は最後に書き換える。
 // ファイルのパスはバージョンごとに変わらないので、既にあるものは写さない
-import { fromVersion, type FileList } from "../data/source";
+import { NotFoundError, r2Store, readVersion, type Version } from "@queria-io/fdl-js";
+
+import { fromVersion } from "../data/source";
 
 const textOf = async (bucket: R2Bucket, key: string): Promise<string | null> =>
   (await (await bucket.get(key))?.text()) ?? null;
@@ -27,8 +29,8 @@ const copy = async (from: R2Bucket, to: R2Bucket, key: string): Promise<boolean>
  * そのバージョンが読むデータのファイル (ジオコーダーが使う表だけ)。Worker と同じ fromVersion で引くので、
  * Worker が読めないバージョン (削除ファイル・列の改名・外のファイル) はここで止まり、refs/heads/main を進めない
  */
-const dataFiles = (source: string, dataDir: string, id: string, list: FileList): string[] =>
-  Object.values(fromVersion(source, dataDir, { id, created_at: "" }, list).tables).flat();
+const dataFiles = (source: string, v: Version): string[] =>
+  Object.values(fromVersion(source, v).tables).flat();
 
 const listAll = async (bucket: R2Bucket, prefix: string): Promise<string[]> => {
   const keys: string[] = [];
@@ -56,31 +58,31 @@ export const mirror = async (
   if (latest === current) return { version: latest, copied: 0, deleted: 0 };
 
   const config = await mustText(origin, source + "fdl.json");
-  const dataDir = (JSON.parse(config) as { data_dir?: string }).data_dir ?? "tables/";
+  const version = await readVersion(r2Store(origin, source), latest);
+  const tables = version.record.tables?.path;
+  if (!tables) throw new Error(`version ${latest} has no tables.json`);
+  const files = dataFiles(source, version);
+  // 今と 1 つ前のバージョンが読むファイルだけを残す (切り替えの直後に前のバージョンを読む Worker があるため)。
+  // 前のバージョンが写していないときだけ、前のファイルを残さない。refs/heads/main を書く前に読み、読めなければ止める
+  const previous = current
+    ? await readVersion(r2Store(store, source), current).catch((e: unknown) => {
+        if (e instanceof NotFoundError) return null;
+        throw e;
+      })
+    : null;
+  const keep = new Set([...files, ...(previous ? dataFiles(source, previous) : [])]);
   const dir = `${source}versions/${latest}/`;
   await copy(origin, store, dir + "version.json");
-  await copy(origin, store, dir + "files.json");
-  const files = dataFiles(
-    source,
-    dataDir,
-    latest,
-    JSON.parse(await mustText(store, dir + "files.json")) as FileList,
-  );
+  await copy(origin, store, dir + tables);
   let copied = 0;
   for (const key of files) if (await copy(origin, store, key)) copied++;
   // fdl.json はバージョンごとのファイルでないので、あっても読んだ中身で書き直す (data_dir が変わったときのため)
   await store.put(source + "fdl.json", config);
   await store.put(ref, latest + "\n");
 
-  // 今と 1 つ前のバージョンが読むファイルだけを残す (切り替えの直後に前のバージョンを読む Worker があるため)
-  const keep = new Set(files);
-  if (current) {
-    const previous = await textOf(store, `${source}versions/${current}/files.json`);
-    if (previous)
-      for (const k of dataFiles(source, dataDir, current, JSON.parse(previous) as FileList))
-        keep.add(k);
-  }
-  const stale = (await listAll(store, source + dataDir)).filter((k) => !keep.has(k));
+  const stale = (await listAll(store, source + version.config.data_dir)).filter(
+    (k) => !keep.has(k),
+  );
   for (let i = 0; i < stale.length; i += 1000) await store.delete(stale.slice(i, i + 1000));
   return { version: latest, copied, deleted: stale.length };
 };

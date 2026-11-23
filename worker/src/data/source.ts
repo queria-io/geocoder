@@ -1,8 +1,17 @@
 // どの表をどのファイルから読むかを決める。Worker が知るのは置き場 (DATA_SOURCE) だけにする。
 //   - 「….json」: 目録。{ "version": "…", "tables": { "town": ["town.parquet"], … } }。
 //     パスは目録からの相対。セルフホストで自分の Parquet を読ませるときはこれを置く
-//   - 「…/」: FDL のリポジトリ。refs/heads/main が指すバージョンの files.json (表ごとのファイル一覧) から引く。
+//   - 「…/」: FDL のデータセット。refs/heads/main が指すバージョンの tables.json (表ごとのファイル一覧) を fdl-js で引く。
 //     Sync で main が進めば、デプロイなしで読む先が切り替わる
+import {
+  open,
+  r2Store,
+  refreshing,
+  tableFiles,
+  type DataFile,
+  type Version,
+} from "@queria-io/fdl-js";
+
 import { retryOnce } from "./parquet";
 import tables from "./tables.json";
 
@@ -37,7 +46,7 @@ export type FileSize = { bytes: number; footer: number };
 
 /**
  * 表ごとの R2 キー (読む順)。空の配列は「その段は流さない」。
- * sizes は FDL の files.json にあるファイルの大きさ (目録には無い)
+ * sizes は FDL の tables.json にあるファイルの大きさ (目録には無い)
  */
 export type Resolved = {
   version: string;
@@ -46,23 +55,6 @@ export type Resolved = {
 };
 
 type Manifest = { version: string; tables: Partial<Record<TableName, string[]>> };
-/** FDL の versions/<ID>/files.json (カタログから作った表ごとのファイル一覧) */
-export type FileList = {
-  tables: Record<
-    string,
-    {
-      renamed_columns?: boolean;
-      files: {
-        path?: string;
-        url?: string;
-        deletes?: unknown;
-        bytes?: number;
-        footer_bytes?: number;
-      }[];
-    }
-  >;
-};
-type VersionRecord = { id: string; created_at: string };
 
 const dirOf = (key: string) => key.slice(0, key.lastIndexOf("/") + 1);
 
@@ -84,77 +76,58 @@ export const fromManifest = (key: string, m: Manifest): Resolved => ({
   sizes: {},
 });
 
-export const fromVersion = (
-  root: string,
-  dataDir: string,
-  v: VersionRecord,
-  list: FileList,
-): Resolved => ({
-  // 前のバージョンの答えと同じ形 (geocoder-日付-ID の頭 8 桁) にそろえる
-  version: `geocoder-${v.created_at.slice(0, 10).replaceAll("-", "")}-${v.id.slice(0, 8)}`,
-  tables: fill((t) => {
-    const table = list.tables[TABLES[t]];
-    if (!table) return [];
-    // 削除ファイルや列の改名は、Parquet だけを読むこの Worker では正しく読めない
-    if (table.renamed_columns || table.files.some((f) => f.deletes))
-      throw new Error(`${TABLES[t]} has deletes or renamed columns`);
-    return table.files.map((f) => {
-      if (!f.path) throw new Error(`${TABLES[t]} has a file outside the repository`);
-      return root + dataDir + f.path;
-    });
-  }),
-  sizes: Object.fromEntries(
-    Object.values(list.tables).flatMap(({ files }) =>
-      files.flatMap((f) =>
-        f.path !== undefined && f.bytes !== undefined && f.footer_bytes !== undefined
-          ? [[root + dataDir + f.path, { bytes: f.bytes, footer: f.footer_bytes }]]
-          : [],
+/**
+ * 表のデータファイル。削除ファイルや列の改名がある表は、Parquet だけを読むこの Worker では正しく読めないので止める
+ */
+const dataFiles = (v: Version, t: TableName): DataFile[] => {
+  const files = tableFiles(v, TABLES[t]) ?? [];
+  if (v.files.tables[TABLES[t]]?.renamed_columns || files.some((f) => f.deletes))
+    throw new Error(`${TABLES[t]} has deletes or renamed columns`);
+  return files;
+};
+
+/** FDL のバージョンの tables.json から、表ごとの R2 キーを引く。root はデータセットの置き場 (R2 のキーの頭) */
+export const fromVersion = (root: string, v: Version): Resolved => {
+  const files = (Object.keys(TABLES) as TableName[]).map((t) => [t, dataFiles(v, t)] as const);
+  return {
+    // 前のバージョンの答えと同じ形 (geocoder-日付-ID の頭 8 桁) にそろえる
+    version: `geocoder-${v.record.created_at.slice(0, 10).replaceAll("-", "")}-${v.record.id.slice(0, 8)}`,
+    tables: Object.fromEntries(files.map(([t, fs]) => [t, fs.map((f) => root + f.key)])) as Record<
+      TableName,
+      string[]
+    >,
+    sizes: Object.fromEntries(
+      files.flatMap(([, fs]) =>
+        fs.flatMap((f) =>
+          f.footerBytes !== undefined
+            ? [[root + f.key, { bytes: f.bytes, footer: f.footerBytes }]]
+            : [],
+        ),
       ),
     ),
-  ),
-});
+  };
+};
 
 const resolve = async (bucket: R2Bucket, source: string, pin: string): Promise<Resolved> => {
   if (source.endsWith(".json"))
     return fromManifest(source, JSON.parse(await getText(bucket, source)) as Manifest);
-  const config = JSON.parse(await getText(bucket, source + "fdl.json")) as { data_dir?: string };
   // pin があればそのバージョンに固定する (新しいバージョンに問題があったときの逃げ道)
-  const id = pin || (await getText(bucket, source + "refs/heads/main")).trim();
-  const dir = `${source}versions/${id}/`;
-  const [record, list] = await Promise.all([
-    getText(bucket, dir + "version.json"),
-    // files.json の無いバージョン (fdl-cli 0.16 より前) は読めない
-    getText(bucket, dir + "files.json"),
-  ]);
-  return fromVersion(
-    source,
-    config.data_dir ?? "tables/",
-    JSON.parse(record) as VersionRecord,
-    JSON.parse(list) as FileList,
-  );
+  return fromVersion(source, await open(r2Store(bucket, source), pin || "refs/heads/main"));
 };
 
 /** 読む先を覚えておく時間。Sync のあと、遅くともこれだけたてば新しいバージョンを読む */
 const TTL_MS = 5 * 60 * 1000;
-let cached: { source: string; at: number; value: Promise<Resolved> } | null = null;
+const loaders = new Map<string, () => Promise<Resolved>>();
 
-export const resetResolved = () => (cached = null);
-
-export const resolveTables = (
-  bucket: R2Bucket,
-  source: string,
-  pin = "",
-  now = Date.now(),
-): Promise<Resolved> => {
+/** 読む先。TTL_MS のあいだ覚え、読み直しに失敗したら前の読む先を使い続ける (refs を読めない一時の失敗で止めない) */
+export const resolveTables = (bucket: R2Bucket, source: string, pin = ""): Promise<Resolved> => {
   const key = source + "@" + pin;
-  if (cached?.source === key && now - cached.at < TTL_MS) return cached.value;
-  const value = resolve(bucket, source, pin);
-  // 読めなかったら前の読む先を使い続ける (refs を読めない一時の失敗で止めない)
-  const previous = cached?.source === key ? cached.value : null;
-  const guarded = previous ? value.catch(() => previous) : value;
-  cached = { source: key, at: now, value: guarded };
-  guarded.catch(() => (cached = null));
-  return guarded;
+  let loader = loaders.get(key);
+  if (!loader) {
+    loader = refreshing(() => resolve(bucket, source, pin), TTL_MS, { onError: console.error });
+    loaders.set(key, loader);
+  }
+  return loader();
 };
 
 /** Worker と一緒に置いたデータの目録 (pnpm build:data が public/data/ に書く)。キーは静的アセットのパス */
