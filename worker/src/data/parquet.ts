@@ -3,6 +3,7 @@
 // その列の最小・最大で、値が入る行グループだけを読む。DuckDB もカタログも使わない
 import {
   type FooterCache,
+  NotFoundError,
   type OnRead,
   openParquet,
   type ParquetFile,
@@ -10,9 +11,6 @@ import {
   rowRangesFor,
   type Store,
 } from "@queria-io/fdl-js";
-
-/** R2 はときどき一時的な内部エラー (10001) を返すので、1 回だけ叩き直す */
-export const retryOnce = <T>(f: () => Promise<T>): Promise<T> => f().catch(() => f());
 
 /**
  * 静的アセットを fdl-js の store にする。静的アセットは Range を受けないので、最初の読みでファイルを丸ごと取り、
@@ -28,7 +26,8 @@ export const assetsStore = (
     if (hit) return hit;
     const t0 = Date.now();
     const p = assets.fetch(new Request(`https://assets.local/${key}`)).then(async (r) => {
-      if (!r.ok) throw new Error(`not found: ${key}`);
+      if (r.status === 404) throw new NotFoundError(key);
+      if (!r.ok) throw new Error(`${r.status}: ${key}`);
       const body = await r.arrayBuffer();
       onRead?.(body.byteLength, Date.now() - t0);
       return body;
@@ -37,27 +36,35 @@ export const assetsStore = (
     p.catch(() => kept.delete(key));
     return p;
   };
+  // Store の約束どおり、無いファイルは text と size では null にする
+  const orNull = <T>(p: Promise<T>): Promise<T | null> =>
+    p.catch((e: unknown) => (e instanceof NotFoundError ? null : Promise.reject(e)));
   return {
-    text: async (key) => new TextDecoder().decode(await whole(key)),
-    size: async (key) => (await whole(key)).byteLength,
+    text: (key) => orNull(whole(key).then((b) => new TextDecoder().decode(b))),
+    size: (key) => orNull(whole(key).then((b) => b.byteLength)),
     range: async (key, offset, length) => (await whole(key)).slice(offset, offset + length),
   };
 };
 
-/** ファイルの大きさとフッター (メタデータ) の長さ。分かればフッターを 1 回の読みで取れる */
-export type FileSize = { bytes: number; footer: number };
-
-/** ファイルを開く (フッターを読む)。大きさが分からなければ store に問い合わせる */
+/**
+ * ファイルを開く (フッターを読む)。大きさが分からなければ store に問い合わせる。フッターの長さ (footer) も
+ * 分かれば、フッターを 1 回の読みで取れる
+ */
 export const openFile = async (
   store: Store,
   key: string,
-  size?: FileSize,
+  size?: { bytes: number; footer?: number },
   options: { onRead?: OnRead; cache?: FooterCache } = {},
 ): Promise<ParquetFile> => {
   const bytes = size?.bytes ?? (await store.size(key));
   if (bytes === null) throw new Error(`not found: ${key}`);
   // openParquet は行数を使わない (目録のファイルは行数が分からない)
-  const file = { key, rows: 0, bytes, ...(size ? { footerBytes: size.footer } : {}) };
+  const file = {
+    key,
+    rows: 0,
+    bytes,
+    ...(size?.footer !== undefined ? { footerBytes: size.footer } : {}),
+  };
   return openParquet(store, file, options);
 };
 

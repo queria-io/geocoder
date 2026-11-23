@@ -141,14 +141,13 @@ type Opener = {
   files: () => Files;
   sizes: Resolved["sizes"];
   onRead?: typeof countRead;
-  cache?: FooterCache;
+  /**
+   * フッターと大きさを isolate の中で持つか。R2 では読み直すと 1 ファイルにつき R2 の読み込みが 1 回増えるので
+   * 持つ。フッターは解釈したメタデータの 1/9 ほどの大きさで、全部のファイルでも約 11 MB。表のファイルが
+   * 変われば Built ごと作り直して手放す (前のバージョンのフッターを残さない)
+   */
+  keepFooters: boolean;
 };
-
-/**
- * R2 から読むときのフッター。ファイルは書き換えないので、キーだけで引ける。読み直すと 1 ファイルにつき R2 の
- * 読み込みが 1 回増えるので、isolate の中で持つ。解釈したメタデータの 1/9 ほどの大きさで、全部のファイルでも約 11 MB
- */
-const r2Footers = memoryFooterCache();
 
 const r2Opener = (bucket: R2Bucket, sizes: Resolved["sizes"]): Opener => {
   const store = r2Store(bucket);
@@ -156,7 +155,7 @@ const r2Opener = (bucket: R2Bucket, sizes: Resolved["sizes"]): Opener => {
     files: () => ({ store, opened: new Map() }),
     sizes,
     onRead: countRead,
-    cache: r2Footers,
+    keepFooters: true,
   };
 };
 
@@ -164,6 +163,7 @@ const r2Opener = (bucket: R2Bucket, sizes: Resolved["sizes"]): Opener => {
 const assetsOpener = (assets: Fetcher, sizes: Resolved["sizes"]): Opener => ({
   files: () => ({ store: assetsStore(assets, new Map(), countRead), opened: new Map() }),
   sizes,
+  keepFooters: false,
 });
 
 /** isolate の中で使い回すもの。表のファイルが変われば作り直す */
@@ -188,12 +188,34 @@ type Built = {
 let cached: { key: string; built: Promise<Built> } | null = null;
 
 const build = async (opener: Opener, { tables }: Resolved, prefetch: boolean): Promise<Built> => {
+  const { onRead, keepFooters } = opener;
+  const cache: FooterCache | undefined = keepFooters ? memoryFooterCache() : undefined;
+  // 目録のファイルは大きさが分からない。問い合わせごとに大きさを問い合わせないよう、フッターと一緒に持つ
+  const bytes = new Map<string, Promise<number | null>>();
+  const sizeOf = (store: Store, key: string) => {
+    const known = opener.sizes[key];
+    if (known || !keepFooters) return known;
+    let p = bytes.get(key);
+    if (!p) {
+      p = store.size(key);
+      bytes.set(key, p);
+      p.catch(() => bytes.delete(key));
+    }
+    return p.then((n) => {
+      if (n !== null) return { bytes: n };
+      bytes.delete(key);
+      throw new Error(`not found: ${key}`);
+    });
+  };
   const openOnce = ({ store, opened }: Files, key: string) => {
     const hit = opened.get(key);
     if (hit) return hit;
-    const { onRead, cache } = opener;
-    const p = openFile(store, key, opener.sizes[key], { onRead, cache });
+    const p = Promise.resolve(sizeOf(store, key)).then((size) =>
+      openFile(store, key, size, { onRead, cache }),
+    );
     opened.set(key, p);
+    // 開けなかったファイルは覚えずに、使うときに開き直す (先に開いておくのに失敗しても、問い合わせを落とさない)
+    p.catch(() => opened.delete(key));
     return p;
   };
   const open = (name: TableName, want: Partition, files: Files) =>

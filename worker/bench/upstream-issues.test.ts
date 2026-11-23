@@ -6,6 +6,7 @@
 //
 // 結果は bench/abr/upstream-results.json に書く
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { fileStore } from "@queria-io/fdl-js/node";
 
@@ -102,13 +103,13 @@ test("上流の matching/issues", async () => {
   // 住居表示の表 (2 千万行) はメモリに載せず、Worker と同じく町字ごとに Parquet から読む
   const rsdtdspFile = new URL("rsdtdsp.parquet", dir);
   const rsdtdsp = existsSync(rsdtdspFile)
-    ? await openFile(fileStore(new URL(".", dir).pathname), "rsdtdsp.parquet")
+    ? await openFile(fileStore(fileURLToPath(dir)), "rsdtdsp.parquet")
     : null;
   const loadMachiaza = async (lg: string, id: string): Promise<RsdtdspRow[]> =>
     rsdtdsp ? readWhere(rsdtdsp, "machiaza_key", [machiazaKey(lg, id)], RSDTDSP_COLUMNS) : [];
   const parcelFile = new URL("parcel.parquet", dir);
   const parcel = existsSync(parcelFile)
-    ? await openFile(fileStore(new URL(".", dir).pathname), "parcel.parquet")
+    ? await openFile(fileStore(fileURLToPath(dir)), "parcel.parquet")
     : null;
   const loadParcels = async (lg: string, id: string): Promise<ParcelRow[]> =>
     parcel ? readWhere(parcel, "machiaza_key", [machiazaKey(lg, id)], PARCEL_COLUMNS) : [];

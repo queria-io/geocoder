@@ -59,13 +59,14 @@ describe("readWhere", () => {
 
   it("値をまとめて渡すと、同じ行グループは 1 回だけ読む", async () => {
     const start = reads;
-    await readCity("131024");
     await readCity("132012");
-    const separate = reads - start;
+    const second = reads - start;
     const before = reads;
     const rows = await readWhere<Town>(table, "lg_code", ["131024", "132012"], cols);
     expect(rows).toHaveLength(3000);
-    expect(reads - before).toBeLessThan(separate);
+    // 131024 は 2 つ目、132012 は 2 つ目と 3 つ目の行グループに入る。2 つ目は 1 回だけ読むので、
+    // 132012 だけを読んだときと同じ回数で済む
+    expect(reads - before).toBe(second);
   });
 });
 
