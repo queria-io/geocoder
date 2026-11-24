@@ -463,7 +463,7 @@ const GeocodeResult = z
     }),
     coordinates_level: CoordinatesLevel.nullable().openapi({
       description:
-        "座標を取った代表点の階層。値の意味は match_level と同じ。番号まで照合できてもその代表点に座標が無ければ町字の代表点で埋め、machiaza になる。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、ABR の親番の筆の点、国交省の街区レベル位置参照情報の点、ABR の枝番の筆の点の平均の順に取る (ABR にその地番の点が無いとき)。どれも代表点で、建物の位置ではない",
+        "座標を取った代表点の階層。値の意味は match_level と同じ。番号まで照合できてもその代表点に座標が無ければ、地番は親番の点 (parcel_parent)、それも無ければ町字の代表点で埋め、machiaza になる。parcel_parent は地番の親番 (「28番地10」の「28」) の点で、ABR の親番の筆の点、国交省の街区レベル位置参照情報の点、ABR の枝番の筆の点の平均の順に取る (ABR にその地番の点が無いとき)。どれも代表点で、建物の位置ではない",
     }),
     lg_code: z
       .string()

@@ -119,7 +119,8 @@ export const pointOf = (
   lgCode: string,
   machiazaId: string | null,
 ): EvidencePoint | null => {
-  const n = found.number;
+  // 点の無い地番は親の番号の点を使ったので、点の出典は親の番号の点にする
+  const n = found.number?.parent ?? found.number;
   const keys = {
     lg_code: lgCode,
     machiaza_id: machiazaId,
@@ -137,7 +138,10 @@ export const pointOf = (
       rank: null,
       keys,
     };
-  const pointType = NUMBER_POINT_TYPES.find((t) => t === n.pointType);
+  const pointType =
+    found.number?.parent === undefined
+      ? NUMBER_POINT_TYPES.find((t) => t === n.pointType)
+      : "parcel_parent";
   const dataset = DATASETS[n.source];
   // point_priority に新しい種類や出典を足したら、ここと EvidencePoint・仕様書にも足す。足すまでは出典を示さない
   if (pointType === undefined || dataset === undefined) return null;

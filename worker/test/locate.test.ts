@@ -297,6 +297,40 @@ describe("locate", () => {
 });
 
 describe("numbersOf", () => {
+  it("点の無い地番は、親の番号の点で照合する", () => {
+    const parcel = (prc_id: string, n2: string | null, pt: [number, number] | null) => ({
+      lg_code: "011011",
+      machiaza_id: "0001000",
+      prc_id,
+      prc_num1: "45",
+      prc_num2: n2,
+      prc_num3: null,
+      lng: pt?.[0] ?? null,
+      lat: pt?.[1] ?? null,
+    });
+    const n = numbersOf({
+      rsdt: [],
+      parcel: [parcel("1", "11", null), parcel("2", "12", [141.9, 41.9])],
+      numbers: [
+        {
+          area_id: 2,
+          num: "45",
+          point_type: "parcel_parent",
+          source: "isj",
+          rank: 4,
+          machiaza_id: "0001000",
+          lng: 141.5,
+          lat: 41.5,
+        },
+      ],
+    });
+    const p = n.points.get("45-11");
+    expect(p?.point).toEqual([141.5, 41.5]);
+    expect(p?.parts).toEqual(["45", "11"]);
+    expect(p?.ids).toEqual({ prc_id: "1" });
+    expect(p?.parent?.parts).toEqual(["45"]);
+    expect(n.points.get("45-12")?.parent).toBeUndefined();
+  });
   it("住居表示の区域では、同じ番号の地番より住居表示の点を採る", () => {
     const n = numbersOf({
       rsdt: [
