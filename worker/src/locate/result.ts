@@ -164,10 +164,11 @@ const toResult = async (
     ids,
     structured_address: sa,
     coordinates: [found.point[0], found.point[1]],
-    ...(point === null || fromRsdt || fromParcel
+    ...(point === null || (point.parent === undefined && (fromRsdt || fromParcel))
       ? { coordinate_level: undefined, coordinate_source: undefined }
       : {
-          coordinate_level: LEVEL[point.rank] ?? "parcel_parent",
+          coordinate_level:
+            point.parent === undefined ? (LEVEL[point.rank] ?? "parcel_parent") : "parcel_parent",
           coordinate_source: point.source,
         }),
   };

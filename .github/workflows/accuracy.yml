@@ -41,8 +41,10 @@ jobs:
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
       - uses: actions/checkout@v4
         with:
-          submodules: true
           fetch-depth: 0
+      # 共通のスクリプト (dataset-shared) を main で取得する
+      - run: git clone --depth=1 https://github.com/queria-io/dataset-shared.git shared
+        working-directory: .
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -94,7 +96,7 @@ jobs:
           eval "$(scripts/pin-upstream.sh)"
           # 比較の基準は PR の分岐元のモデル (本番のデータは main から Sync が作る)
           git worktree add -q ../base "$BASE_SHA"
-          git -C ../base submodule update -q --init
+          rm -rf ../base/shared && ln -s "$PWD/shared" ../base/shared
           (cd ../base && uv run --project "$GITHUB_WORKSPACE" dbt deps -q && uv run --project "$GITHUB_WORKSPACE" dbt parse -q)
           uv run dbt deps -q
           # モデルを変えた PR では、Sync と同じく全部のモデルを作り直す。変えたモデルとその下流だけを作ると、

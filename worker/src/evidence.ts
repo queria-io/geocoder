@@ -119,10 +119,15 @@ export const pointOf = (
   lgCode: string,
   machiazaId: string | null,
 ): EvidencePoint | null => {
-  const n = found.number;
+  // 点の無い地番は親の番号の点を使ったので、点の出典は親の番号の点にする
+  const n = found.number?.parent ?? found.number;
   const keys = {
     lg_code: lgCode,
-    machiaza_id: machiazaId,
+    // 親の番号の点は、親の番号の行の町字で引く (区域の名前が同じ別の町字の行のこともある)
+    machiaza_id:
+      machiazaId === null || found.number?.parent === undefined
+        ? machiazaId
+        : (n?.machiazaId ?? machiazaId),
     blk_id: n?.ids?.blk_id ?? null,
     rsdt_id: n?.ids?.rsdt_id ?? null,
     rsdt2_id: n?.ids?.rsdt2_id ?? null,
@@ -137,7 +142,9 @@ export const pointOf = (
       rank: null,
       keys,
     };
-  const pointType = NUMBER_POINT_TYPES.find((t) => t === n.pointType);
+  // 親の番号の地番の点は親番の点として示す。位置参照情報の過去のバージョンの点 (history) などはその種類のまま
+  const own = NUMBER_POINT_TYPES.find((t) => t === n.pointType);
+  const pointType = found.number?.parent !== undefined && own === "parcel" ? "parcel_parent" : own;
   const dataset = DATASETS[n.source];
   // point_priority に新しい種類や出典を足したら、ここと EvidencePoint・仕様書にも足す。足すまでは出典を示さない
   if (pointType === undefined || dataset === undefined) return null;

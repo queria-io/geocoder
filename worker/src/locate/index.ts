@@ -97,7 +97,8 @@ const RESIDENTIAL = new Set(["rsdt", "block"]);
 /**
  * 区域の行から読んだ番号を、番号ごとに優先順の最も小さい点 1 つにまとめる。
  * 住居表示の区域 (住居表示の号・街区を持つ) では、同じ番号の地番より住居表示の点を先にする。
- * 住居表示の町字にも地番の点があり、番号が同じでも別の場所を指す
+ * 住居表示の町字にも地番の点があり、番号が同じでも別の場所を指す。
+ * 点の無い地番は、点のある親の番号 (住居表示の点を除く) の点を使う
  */
 export const numbersOf = ({ rsdt, parcel, numbers }: Loaded): Numbers => {
   const residential = rsdt.length > 0 || numbers.some((r) => r.point_type === "block");
@@ -147,5 +148,33 @@ export const numbersOf = ({ rsdt, parcel, numbers }: Loaded): Numbers => {
       parts,
     });
   }
+  // 点の無い地番 (「45-11」) は、点のある親の番号 (「45」) の点を使う。番号は町字の表にあるので照合する。
+  // 親の番号の点は同じ町字のもの (町字の決まらない位置参照情報の点を含む) だけを使う。
+  // 優先順は point_priority のどの点よりも後にする (同じ長さで当たった、自前の点を持つ番号を先に採る)
+  const borrowed = parcel.flatMap((r) => {
+    const parts = [r.prc_num1, r.prc_num2, r.prc_num3].filter((x): x is string => x !== null);
+    const key = numberKey(parts);
+    if (point(r.lng, r.lat) !== null || points.has(key)) return [];
+    const parent = parts
+      .map((_, i) => points.get(numberKey(parts.slice(0, parts.length - 1 - i))))
+      .find(
+        (p) =>
+          p !== undefined &&
+          !RESIDENTIAL.has(p.pointType) &&
+          (p.machiazaId === null || p.machiazaId === r.machiaza_id),
+      );
+    if (parent === undefined) return [];
+    const p: NumberPoint = {
+      ...parent,
+      rank: parent.rank + 100,
+      machiazaId: r.machiaza_id,
+      ids: { prc_id: r.prc_id },
+      pointType: "parcel",
+      parts,
+      parent,
+    };
+    return [[key, p] as const];
+  });
+  for (const [key, p] of borrowed) if (!points.has(key)) points.set(key, p);
   return { has: rsdt.length + parcel.length + numbers.length > 0, points };
 };
