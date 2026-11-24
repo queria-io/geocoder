@@ -412,7 +412,10 @@ const EvidencePoint = z
     keys: z
       .object({
         ...nullableStrings(["lg_code", "machiaza_id", "blk_id", "rsdt_id", "rsdt2_id", "prc_id"]),
-        number: z.string().nullable().openapi({ description: "照合した番号 (「3-1」)" }),
+        number: z.string().nullable().openapi({
+          description:
+            "点の行の番号 (「3-1」)。点の無い地番を親番の点で照合したときは、点を取った親番 (「45」)",
+        }),
       })
       .openapi({
         description:

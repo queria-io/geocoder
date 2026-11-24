@@ -148,17 +148,25 @@ export const numbersOf = ({ rsdt, parcel, numbers }: Loaded): Numbers => {
       parts,
     });
   }
-  // 点の無い地番 (「45-11」) は、点のある親の番号 (「45」) の点を使う。番号は町字の表にあるので照合する
+  // 点の無い地番 (「45-11」) は、点のある親の番号 (「45」) の点を使う。番号は町字の表にあるので照合する。
+  // 親の番号の点は同じ町字のもの (町字の決まらない位置参照情報の点を含む) だけを使う。
+  // 優先順は point_priority のどの点よりも後にする (同じ長さで当たった、自前の点を持つ番号を先に採る)
   const borrowed = parcel.flatMap((r) => {
     const parts = [r.prc_num1, r.prc_num2, r.prc_num3].filter((x): x is string => x !== null);
     const key = numberKey(parts);
     if (point(r.lng, r.lat) !== null || points.has(key)) return [];
     const parent = parts
       .map((_, i) => points.get(numberKey(parts.slice(0, parts.length - 1 - i))))
-      .find((p) => p !== undefined && !RESIDENTIAL.has(p.pointType));
+      .find(
+        (p) =>
+          p !== undefined &&
+          !RESIDENTIAL.has(p.pointType) &&
+          (p.machiazaId === null || p.machiazaId === r.machiaza_id),
+      );
     if (parent === undefined) return [];
     const p: NumberPoint = {
       ...parent,
+      rank: parent.rank + 100,
       machiazaId: r.machiaza_id,
       ids: { prc_id: r.prc_id },
       pointType: "parcel",

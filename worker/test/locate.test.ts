@@ -331,6 +331,72 @@ describe("numbersOf", () => {
     expect(p?.parent?.parts).toEqual(["45"]);
     expect(n.points.get("45-12")?.parent).toBeUndefined();
   });
+  it("別の町字の親の番号の点は使わない", () => {
+    const n = numbersOf({
+      rsdt: [],
+      parcel: [
+        {
+          lg_code: "011011",
+          machiaza_id: "0002000",
+          prc_id: "1",
+          prc_num1: "45",
+          prc_num2: "11",
+          prc_num3: null,
+          lng: null,
+          lat: null,
+        },
+        {
+          lg_code: "011011",
+          machiaza_id: "0001000",
+          prc_id: "2",
+          prc_num1: "45",
+          prc_num2: null,
+          prc_num3: null,
+          lng: 141.5,
+          lat: 41.5,
+        },
+      ],
+      numbers: [],
+    });
+    expect(n.points.get("45-11")).toBeUndefined();
+  });
+  it("親の番号の点を使った地番より、同じ番号の自前の点を先に採る", () => {
+    const prc = (mid: string, id: string, n2: string | null, pt: [number, number] | null) => ({
+      lg_code: "011011",
+      machiaza_id: mid,
+      prc_id: id,
+      prc_num1: "45",
+      prc_num2: n2,
+      prc_num3: null,
+      lng: pt?.[0] ?? null,
+      lat: pt?.[1] ?? null,
+    });
+    const index = cityIndex([
+      area(2, "本町", "0001000", [141, 41]),
+      area(3, "本町字上野", "0001002", [142, 42], "本町"),
+    ]);
+    const nums = new Map<string, Numbers>([
+      [
+        norm("本町字上野"),
+        numbersOf({
+          rsdt: [],
+          parcel: [prc("0001002", "k1", null, [142.5, 42.5]), prc("0001002", "k2", "11", null)],
+          numbers: [],
+        }),
+      ],
+      [
+        norm("本町"),
+        numbersOf({ rsdt: [], parcel: [prc("0001000", "o1", "11", [141.5, 41.5])], numbers: [] }),
+      ],
+    ]);
+    const r = locate(
+      norm("本町字上野45-11", true),
+      index.areas,
+      (k) => nums.get(k) ?? EMPTY_NUMBERS,
+    );
+    expect(r?.point).toEqual([141.5, 41.5]);
+    expect(r?.number?.parent).toBeUndefined();
+  });
   it("住居表示の区域では、同じ番号の地番より住居表示の点を採る", () => {
     const n = numbersOf({
       rsdt: [
