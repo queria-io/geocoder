@@ -19,3 +19,6 @@ package-lock.yml
 .env
 dist/
 .fdl/
+
+# 共通のスクリプト (git clone https://github.com/queria-io/dataset-shared.git shared)
+shared/
